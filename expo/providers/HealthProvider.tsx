@@ -10,6 +10,7 @@ import {
   HealthEventTarget,
 } from "@/types";
 import { useRanch } from "@/providers/RanchProvider";
+import { requireRanch } from "@/utils/ranchGuard";
 
 const STORAGE_KEYS = {
   healthEvents: "ranchtrack_health_events",
@@ -103,7 +104,7 @@ export const [HealthProvider, useHealth] = createContextHook(() => {
 
   const createEventMutation = useMutation({
     mutationFn: async (event: Omit<HealthEvent, "id" | "ranchId" | "status" | "createdAt" | "updatedAt">) => {
-      if (!activeRanchId) throw new Error("Cannot create health event without an active ranch");
+      requireRanch(activeRanchId, "create health event");
       const newEvent: HealthEvent = {
         ...event,
         id: generateId(),
@@ -179,7 +180,7 @@ export const [HealthProvider, useHealth] = createContextHook(() => {
 
   const createTemplateMutation = useMutation({
     mutationFn: async (template: Omit<HealthEventTemplate, "id" | "ranchId" | "createdAt">) => {
-      if (!activeRanchId) throw new Error("Cannot create health event template without an active ranch");
+      requireRanch(activeRanchId, "create health event template");
       const newTemplate: HealthEventTemplate = {
         ...template,
         id: generateId(),

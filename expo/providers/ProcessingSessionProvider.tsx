@@ -10,6 +10,7 @@ import {
   HealthEventType,
 } from "@/types";
 import { useRanch } from "@/providers/RanchProvider";
+import { requireRanch } from "@/utils/ranchGuard";
 
 const STORAGE_KEY = "ranchtrack_processing_sessions";
 
@@ -83,7 +84,7 @@ export const [ProcessingSessionProvider, useProcessingSessions] = createContextH
       groups: Omit<SessionGroup, "id">[];
       notes: string;
     }) => {
-      if (!activeRanchId) throw new Error("Cannot create processing session without an active ranch");
+      requireRanch(activeRanchId, "create processing session");
       const newSession: ProcessingSession = {
         id: generateId(),
         ranchId: activeRanchId,

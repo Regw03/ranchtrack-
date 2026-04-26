@@ -3,6 +3,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useMemo } from "react";
 import { parseBirthDate } from "@/utils/helpers";
+import { requireRanch } from "@/utils/ranchGuard";
 // eslint-disable-next-line rork/general-context-optimization
 import {
   Animal,
@@ -426,6 +427,7 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
 
   const addAnimalMutation = useMutation({
     mutationFn: async (animal: Omit<Animal, "id" | "ranchId" | "createdAt" | "updatedAt">) => {
+      requireRanch(ranch.id, "add animal");
       const newAnimal: Animal = {
         ...animal,
         id: generateId(),
@@ -1550,7 +1552,7 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
 
   const addDoctoringEventMutation = useMutation({
     mutationFn: async (event: Omit<DoctoringEvent, "id" | "ranchId" | "createdAt" | "updatedAt">) => {
-      if (!ranch.id) throw new Error("Cannot create doctoring event without an active ranch");
+      requireRanch(ranch.id, "create doctoring event");
       const newEvent: DoctoringEvent = {
         ...event,
         id: generateId(),
@@ -1623,7 +1625,7 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
 
   const addRanchNoteMutation = useMutation({
     mutationFn: async (text: string) => {
-      if (!ranch.id) throw new Error("Cannot create note without an active ranch");
+      requireRanch(ranch.id, "create note");
       const trimmed = text.trim();
       if (!trimmed) throw new Error("Note text cannot be empty");
       const newNote: RanchNote = {
