@@ -162,7 +162,7 @@ export const HERD_GROUP_CONFIG: Record<HerdGroup, { label: string; emoji: string
 export const [RanchProvider, useRanch] = createContextHook(() => {
   const queryClient = useQueryClient();
   const currentUserId = "user-1";
-  const currentUserName = "You";
+  const currentUserName = "Jake Morrison";
 
   const ranchQuery = useQuery({
     queryKey: ["ranch"],
