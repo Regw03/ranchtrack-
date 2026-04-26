@@ -1,4 +1,5 @@
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { QueryClient, QueryClientProvider, MutationCache, QueryCache } from "@tanstack/react-query";
+import { isNoActiveRanchError } from "@/utils/ranchGuard";
 import { Stack, useRouter, useSegments } from "expo-router";
 import * as ScreenOrientation from "expo-screen-orientation";
 import * as SplashScreen from "expo-splash-screen";
@@ -14,7 +15,36 @@ import { useRanch } from "@/providers/RanchProvider";
 
 void SplashScreen.preventAutoHideAsync();
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      retry: (failureCount, error) => {
+        if (isNoActiveRanchError(error)) return false;
+        return failureCount < 2;
+      },
+      refetchOnWindowFocus: false,
+    },
+    mutations: {
+      retry: false,
+    },
+  },
+  queryCache: new QueryCache({
+    onError: (error) => {
+      if (isNoActiveRanchError(error)) {
+        console.log("[queryCache] silenced NoActiveRanchError");
+        return;
+      }
+    },
+  }),
+  mutationCache: new MutationCache({
+    onError: (error) => {
+      if (isNoActiveRanchError(error)) {
+        console.log("[mutationCache] silenced NoActiveRanchError");
+        return;
+      }
+    },
+  }),
+});
 
 function RootLayoutNav() {
   const Colors = useColors();

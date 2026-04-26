@@ -1,7 +1,6 @@
-import { Alert, Platform } from "react-native";
 import { router } from "expo-router";
 
-let alertShown = false;
+let redirectPending = false;
 
 export class NoActiveRanchError extends Error {
   constructor() {
@@ -10,43 +9,19 @@ export class NoActiveRanchError extends Error {
   }
 }
 
-function notifyAndRedirect(action: string): void {
-  if (alertShown) return;
-  alertShown = true;
-  const reset = () => {
-    alertShown = false;
-  };
-  const goToSetup = () => {
+function silentRedirect(action: string): void {
+  console.log(`[ranchGuard] Blocked ${action} - no active ranch`);
+  if (redirectPending) return;
+  redirectPending = true;
+  setTimeout(() => {
     try {
       router.replace("/onboarding/ranch-name");
     } catch (e) {
       console.log("ranchGuard: failed to redirect", e);
     } finally {
-      reset();
+      redirectPending = false;
     }
-  };
-
-  console.log(`[ranchGuard] Blocked ${action} - no active ranch`);
-
-  if (Platform.OS === "web") {
-    if (typeof window !== "undefined" && typeof window.alert === "function") {
-      window.alert("Please set up your ranch before continuing.");
-    }
-    goToSetup();
-    return;
-  }
-
-  Alert.alert(
-    "No ranch selected",
-    "Please set up your ranch before continuing.",
-    [
-      {
-        text: "Set up ranch",
-        onPress: goToSetup,
-      },
-    ],
-    { onDismiss: reset },
-  );
+  }, 0);
 }
 
 export function requireRanch(
@@ -54,7 +29,7 @@ export function requireRanch(
   action: string,
 ): asserts ranchId is string {
   if (!ranchId) {
-    notifyAndRedirect(action);
+    silentRedirect(action);
     throw new NoActiveRanchError();
   }
 }
