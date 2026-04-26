@@ -2,7 +2,7 @@ import { Stack } from "expo-router";
 import { useRouter } from "expo-router";
 import React, { useMemo, useCallback } from "react";
 import { TouchableOpacity, Platform, View } from "react-native";
-import { Settings } from "lucide-react-native";
+import { Settings, Users } from "lucide-react-native";
 import * as Haptics from "expo-haptics";
 import { useColors } from "@/providers/ThemeProvider";
 
@@ -22,6 +22,11 @@ export default function DashboardLayout() {
     router.push("/settings");
   }, [router]);
 
+  const handleRanchProfilePress = useCallback(() => {
+    if (Platform.OS !== "web") void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    router.push("/ranch-profile");
+  }, [router]);
+
   return (
     <Stack screenOptions={screenOptions}>
       <Stack.Screen
@@ -29,21 +34,24 @@ export default function DashboardLayout() {
         options={{
           title: "Dashboard",
           headerRight: () => (
-            <TouchableOpacity
-              onPress={handleSettingsPress}
-              activeOpacity={0.5}
-              testID="settings-button"
-              style={{
-                marginRight: 8,
-                padding: 6,
-                backgroundColor: 'transparent',
-                borderWidth: 0,
-                borderRadius: 0,
-                overflow: 'visible',
-              }}
-            >
-              <Settings size={20} color={Colors.textSecondary} strokeWidth={1.8} />
-            </TouchableOpacity>
+            <View style={{ flexDirection: 'row', alignItems: 'center', marginRight: 4 }}>
+              <TouchableOpacity
+                onPress={handleRanchProfilePress}
+                activeOpacity={0.5}
+                testID="ranch-profile-button"
+                style={{ padding: 8 }}
+              >
+                <Users size={20} color={Colors.textSecondary} strokeWidth={1.8} />
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={handleSettingsPress}
+                activeOpacity={0.5}
+                testID="settings-button"
+                style={{ padding: 8 }}
+              >
+                <Settings size={20} color={Colors.textSecondary} strokeWidth={1.8} />
+              </TouchableOpacity>
+            </View>
           ),
         }}
       />

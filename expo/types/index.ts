@@ -1,4 +1,10 @@
-export type UserRole = "owner" | "manager" | "worker";
+export type UserRole = "owner" | "manager" | "worker" | "member";
+
+export interface User {
+  id: string;
+  name: string;
+  createdAt: string;
+}
 
 export interface RanchMember {
   userId: string;

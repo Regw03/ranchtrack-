@@ -15,6 +15,8 @@ import {
   ActivityLogEntry,
   Message,
   Ranch,
+  RanchMember,
+  User,
   CustomList,
   CalvingGroup,
   BreedingGroup,
@@ -76,6 +78,8 @@ const STORAGE_KEYS = {
   deceasedSnapshots: "ranchtrack_deceased_snapshots",
   doctoringEvents: "ranchtrack_doctoring_events",
   ranchNotes: "ranchtrack_ranch_notes",
+  users: "ranchtrack_users",
+  currentUserIdValue: "ranchtrack_current_user_id",
 } as const;
 
 async function loadFromStorage<T>(key: string, fallback: T): Promise<T> {
@@ -161,8 +165,24 @@ export const HERD_GROUP_CONFIG: Record<HerdGroup, { label: string; emoji: string
 // eslint-disable-next-line rork/general-context-optimization
 export const [RanchProvider, useRanch] = createContextHook(() => {
   const queryClient = useQueryClient();
-  const currentUserId = "user-1";
-  const currentUserName = "Jake Morrison";
+
+  const usersQuery = useQuery({
+    queryKey: ["users"],
+    queryFn: () => loadFromStorage<User[]>(STORAGE_KEYS.users, []),
+  });
+  const users = usersQuery.data ?? [];
+
+  const currentUserIdQuery = useQuery({
+    queryKey: ["currentUserId"],
+    queryFn: () => loadFromStorage<string>(STORAGE_KEYS.currentUserIdValue, ""),
+  });
+  const currentUserId = currentUserIdQuery.data ?? "";
+  const currentUser = useMemo(
+    () => users.find((u) => u.id === currentUserId),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [users.length, currentUserId],
+  );
+  const currentUserName = currentUser?.name ?? "";
 
   const ranchQuery = useQuery({
     queryKey: ["ranch"],
@@ -1623,6 +1643,129 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
     },
   });
 
+  const setupRanchMutation = useMutation({
+    mutationFn: async ({ userName, ranchName }: { userName: string; ranchName: string }) => {
+      const trimmedUserName = userName.trim();
+      const trimmedRanchName = ranchName.trim();
+      if (!trimmedUserName) throw new Error("User name cannot be empty");
+      if (!trimmedRanchName) throw new Error("Ranch name cannot be empty");
+
+      const newUser: User = {
+        id: generateId(),
+        name: trimmedUserName,
+        createdAt: new Date().toISOString(),
+      };
+      const currentUsers = queryClient.getQueryData<User[]>(["users"]) ?? [];
+      const updatedUsers = [...currentUsers, newUser];
+      await saveToStorage(STORAGE_KEYS.users, updatedUsers);
+      await saveToStorage(STORAGE_KEYS.currentUserIdValue, newUser.id);
+
+      const newRanch: Ranch = {
+        id: generateId(),
+        name: trimmedRanchName,
+        ownerId: newUser.id,
+        members: [
+          {
+            userId: newUser.id,
+            name: newUser.name,
+            role: "owner",
+            joinedAt: new Date().toISOString(),
+          },
+        ],
+        inviteCode: "",
+        createdAt: new Date().toISOString(),
+      };
+      await saveToStorage(STORAGE_KEYS.ranch, newRanch);
+
+      console.log("[setupRanch] created", newUser.name, "at", newRanch.name);
+      return { newUser, newRanch, updatedUsers };
+    },
+    onSuccess: ({ newUser, newRanch, updatedUsers }) => {
+      queryClient.setQueryData(["users"], updatedUsers);
+      queryClient.setQueryData(["currentUserId"], newUser.id);
+      queryClient.setQueryData(["ranch"], newRanch);
+    },
+  });
+
+  const updateUserNameMutation = useMutation({
+    mutationFn: async ({ userId, name }: { userId: string; name: string }) => {
+      const trimmed = name.trim();
+      if (!trimmed) throw new Error("Name cannot be empty");
+      const currentUsers = queryClient.getQueryData<User[]>(["users"]) ?? [];
+      const updatedUsers = currentUsers.map((u) =>
+        u.id === userId ? { ...u, name: trimmed } : u,
+      );
+      await saveToStorage(STORAGE_KEYS.users, updatedUsers);
+
+      const currentRanch = queryClient.getQueryData<Ranch>(["ranch"]) ?? ranch;
+      const updatedMembers: RanchMember[] = currentRanch.members.map((m) =>
+        m.userId === userId ? { ...m, name: trimmed } : m,
+      );
+      const updatedRanch: Ranch = { ...currentRanch, members: updatedMembers };
+      await saveToStorage(STORAGE_KEYS.ranch, updatedRanch);
+
+      return { updatedUsers, updatedRanch };
+    },
+    onSuccess: ({ updatedUsers, updatedRanch }) => {
+      queryClient.setQueryData(["users"], updatedUsers);
+      queryClient.setQueryData(["ranch"], updatedRanch);
+    },
+  });
+
+  const setActiveUserMutation = useMutation({
+    mutationFn: async (userId: string) => {
+      await saveToStorage(STORAGE_KEYS.currentUserIdValue, userId);
+      return userId;
+    },
+    onSuccess: (userId) => {
+      queryClient.setQueryData(["currentUserId"], userId);
+    },
+  });
+
+  const addUserMutation = useMutation({
+    mutationFn: async (name: string) => {
+      const trimmed = name.trim();
+      if (!trimmed) throw new Error("User name cannot be empty");
+
+      const newUser: User = {
+        id: generateId(),
+        name: trimmed,
+        createdAt: new Date().toISOString(),
+      };
+      const currentUsers = queryClient.getQueryData<User[]>(["users"]) ?? [];
+      const updatedUsers = [...currentUsers, newUser];
+      await saveToStorage(STORAGE_KEYS.users, updatedUsers);
+
+      const currentRanch = queryClient.getQueryData<Ranch>(["ranch"]) ?? ranch;
+      const alreadyMember = currentRanch.members.some((m) => m.userId === newUser.id);
+      const updatedRanch: Ranch = alreadyMember
+        ? currentRanch
+        : {
+            ...currentRanch,
+            members: [
+              ...currentRanch.members,
+              {
+                userId: newUser.id,
+                name: newUser.name,
+                role: "member",
+                joinedAt: new Date().toISOString(),
+              },
+            ],
+          };
+      if (!alreadyMember) {
+        await saveToStorage(STORAGE_KEYS.ranch, updatedRanch);
+      }
+      await saveToStorage(STORAGE_KEYS.currentUserIdValue, newUser.id);
+
+      return { newUser, updatedUsers, updatedRanch };
+    },
+    onSuccess: ({ newUser, updatedUsers, updatedRanch }) => {
+      queryClient.setQueryData(["users"], updatedUsers);
+      queryClient.setQueryData(["ranch"], updatedRanch);
+      queryClient.setQueryData(["currentUserId"], newUser.id);
+    },
+  });
+
   const addRanchNoteMutation = useMutation({
     mutationFn: async (text: string) => {
       requireRanch(ranch.id, "create note");
@@ -1690,6 +1833,15 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
     setRanchName: setRanchNameMutation.mutateAsync,
     isSettingRanchName: setRanchNameMutation.isPending,
     ranchNotes,
+    users,
+    currentUser,
+    setupRanch: setupRanchMutation.mutateAsync,
+    isSettingUpRanch: setupRanchMutation.isPending,
+    updateUserName: updateUserNameMutation.mutateAsync,
+    isUpdatingUserName: updateUserNameMutation.isPending,
+    setActiveUser: setActiveUserMutation.mutateAsync,
+    addUserAndSwitch: addUserMutation.mutateAsync,
+    isAddingUser: addUserMutation.isPending,
     addRanchNote: addRanchNoteMutation.mutateAsync,
     updateRanchNote: updateRanchNoteMutation.mutateAsync,
     deleteRanchNote: deleteRanchNoteMutation.mutateAsync,

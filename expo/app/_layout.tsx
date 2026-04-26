@@ -184,6 +184,10 @@ function RootLayoutNav() {
         options={{ title: "Settings" }}
       />
       <Stack.Screen
+        name="ranch-profile"
+        options={{ title: "Ranch Profile" }}
+      />
+      <Stack.Screen
         name="onboarding"
         options={{ headerShown: false }}
       />
@@ -193,7 +197,7 @@ function RootLayoutNav() {
 }
 
 function OnboardingGate() {
-  const { isOnboardingComplete, isLoading } = useOnboarding();
+  const { isLoading } = useOnboarding();
   const { ranch, isLoading: isRanchLoading } = useRanch();
   const segments = useSegments();
   const router = useRouter();
@@ -201,21 +205,14 @@ function OnboardingGate() {
   useEffect(() => {
     if (isLoading || isRanchLoading) return;
 
-    const inOnboarding = segments[0] === "onboarding";
-    const onRanchName = segments[0] === "onboarding" && segments[1] === "ranch-name";
+    const onSetup = segments[0] === "onboarding" && segments[1] === "ranch-name";
     const hasRanch = !!ranch?.name && !!ranch?.id;
 
-    if (!hasRanch && !onRanchName) {
-      console.log("No ranch profile yet, redirecting to ranch-name");
+    if (!hasRanch && !onSetup) {
+      console.log("No ranch profile yet, redirecting to setup");
       router.replace("/onboarding/ranch-name");
-      return;
     }
-
-    if (hasRanch && !isOnboardingComplete && !inOnboarding) {
-      console.log("Onboarding not complete, redirecting to welcome");
-      router.replace("/onboarding/welcome");
-    }
-  }, [isOnboardingComplete, isLoading, isRanchLoading, ranch, segments, router]);
+  }, [isLoading, isRanchLoading, ranch, segments, router]);
 
   return null;
 }
