@@ -10,6 +10,7 @@ import { HealthProvider } from "@/providers/HealthProvider";
 import { ProcessingSessionProvider } from "@/providers/ProcessingSessionProvider";
 import { ThemeProvider, useColors } from "@/providers/ThemeProvider";
 import { OnboardingProvider, useOnboarding } from "@/providers/OnboardingProvider";
+import { useRanch } from "@/providers/RanchProvider";
 
 void SplashScreen.preventAutoHideAsync();
 
@@ -163,19 +164,28 @@ function RootLayoutNav() {
 
 function OnboardingGate() {
   const { isOnboardingComplete, isLoading } = useOnboarding();
+  const { ranch, isLoading: isRanchLoading } = useRanch();
   const segments = useSegments();
   const router = useRouter();
 
   useEffect(() => {
-    if (isLoading) return;
+    if (isLoading || isRanchLoading) return;
 
     const inOnboarding = segments[0] === "onboarding";
+    const onRanchName = segments[0] === "onboarding" && segments[1] === "ranch-name";
+    const hasRanch = !!ranch?.name && !!ranch?.id;
 
-    if (!isOnboardingComplete && !inOnboarding) {
+    if (!hasRanch && !onRanchName) {
+      console.log("No ranch profile yet, redirecting to ranch-name");
+      router.replace("/onboarding/ranch-name");
+      return;
+    }
+
+    if (hasRanch && !isOnboardingComplete && !inOnboarding) {
       console.log("Onboarding not complete, redirecting to welcome");
       router.replace("/onboarding/welcome");
     }
-  }, [isOnboardingComplete, isLoading, segments, router]);
+  }, [isOnboardingComplete, isLoading, isRanchLoading, ranch, segments, router]);
 
   return null;
 }

@@ -208,6 +208,7 @@ export type DoctoringEventType = "injury" | "illness" | "lameness" | "infection"
 
 export interface DoctoringEvent {
   id: string;
+  ranchId: string;
   animalId: string;
   date: string;
   type: DoctoringEventType;
@@ -216,6 +217,15 @@ export interface DoctoringEvent {
   treatment?: string;
   followUpNeeded: boolean;
   resolved: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface RanchNote {
+  id: string;
+  ranchId: string;
+  text: string;
+  createdBy: string;
   createdAt: string;
   updatedAt: string;
 }

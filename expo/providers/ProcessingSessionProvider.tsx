@@ -9,6 +9,7 @@ import {
   SessionGroupStatus,
   HealthEventType,
 } from "@/types";
+import { useRanch } from "@/providers/RanchProvider";
 
 const STORAGE_KEY = "ranchtrack_processing_sessions";
 
@@ -49,6 +50,7 @@ function computeSessionProgress(session: ProcessingSession): { completed: number
 // eslint-disable-next-line rork/general-context-optimization
 export const [ProcessingSessionProvider, useProcessingSessions] = createContextHook(() => {
   const queryClient = useQueryClient();
+  const { activeRanchId } = useRanch();
 
   const sessionsQuery = useQuery({
     queryKey: ["processingSessions"],
@@ -81,9 +83,10 @@ export const [ProcessingSessionProvider, useProcessingSessions] = createContextH
       groups: Omit<SessionGroup, "id">[];
       notes: string;
     }) => {
+      if (!activeRanchId) throw new Error("Cannot create processing session without an active ranch");
       const newSession: ProcessingSession = {
         id: generateId(),
-        ranchId: "ranch-1",
+        ranchId: activeRanchId,
         name: data.name,
         businessYearId: data.businessYearId,
         groups: data.groups.map((g) => ({ ...g, id: generateId() })),

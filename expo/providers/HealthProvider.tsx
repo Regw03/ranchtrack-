@@ -9,6 +9,7 @@ import {
   HealthEventType,
   HealthEventTarget,
 } from "@/types";
+import { useRanch } from "@/providers/RanchProvider";
 
 const STORAGE_KEYS = {
   healthEvents: "ranchtrack_health_events",
@@ -59,6 +60,7 @@ export const HEALTH_EVENT_TYPE_CONFIG: Record<HealthEventType, { label: string; 
 // eslint-disable-next-line rork/general-context-optimization
 export const [HealthProvider, useHealth] = createContextHook(() => {
   const queryClient = useQueryClient();
+  const { activeRanchId } = useRanch();
 
   const eventsQuery = useQuery({
     queryKey: ["healthEvents"],
@@ -101,10 +103,11 @@ export const [HealthProvider, useHealth] = createContextHook(() => {
 
   const createEventMutation = useMutation({
     mutationFn: async (event: Omit<HealthEvent, "id" | "ranchId" | "status" | "createdAt" | "updatedAt">) => {
+      if (!activeRanchId) throw new Error("Cannot create health event without an active ranch");
       const newEvent: HealthEvent = {
         ...event,
         id: generateId(),
-        ranchId: "ranch-1",
+        ranchId: activeRanchId,
         status: "upcoming",
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
@@ -176,10 +179,11 @@ export const [HealthProvider, useHealth] = createContextHook(() => {
 
   const createTemplateMutation = useMutation({
     mutationFn: async (template: Omit<HealthEventTemplate, "id" | "ranchId" | "createdAt">) => {
+      if (!activeRanchId) throw new Error("Cannot create health event template without an active ranch");
       const newTemplate: HealthEventTemplate = {
         ...template,
         id: generateId(),
-        ranchId: "ranch-1",
+        ranchId: activeRanchId,
         createdAt: new Date().toISOString(),
       };
       const current = queryClient.getQueryData<HealthEventTemplate[]>(["healthEventTemplates"]) ?? [];

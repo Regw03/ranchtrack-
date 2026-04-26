@@ -1,14 +1,12 @@
 import { Animal, WeightRecord, HealthRecord, BreedingRecord, ActivityLogEntry, Message, Ranch } from "@/types";
 
 export const MOCK_RANCH: Ranch = {
-  id: "ranch-1",
-  name: "My Ranch",
-  ownerId: "user-1",
-  members: [
-    { userId: "user-1", name: "Owner", role: "owner", joinedAt: new Date().toISOString() },
-  ],
+  id: "",
+  name: "",
+  ownerId: "",
+  members: [],
   inviteCode: "",
-  createdAt: new Date().toISOString(),
+  createdAt: "",
 };
 
 export const MOCK_ANIMALS: Animal[] = [];

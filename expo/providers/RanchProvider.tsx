@@ -21,6 +21,7 @@ import {
   IdentityStatus,
   GenerationConfidence,
   DoctoringEvent,
+  RanchNote,
 } from "@/types";
 import {
   MOCK_ANIMALS,
@@ -73,6 +74,7 @@ const STORAGE_KEYS = {
   breedingGroups: "ranchtrack_breeding_groups",
   deceasedSnapshots: "ranchtrack_deceased_snapshots",
   doctoringEvents: "ranchtrack_doctoring_events",
+  ranchNotes: "ranchtrack_ranch_notes",
 } as const;
 
 async function loadFromStorage<T>(key: string, fallback: T): Promise<T> {
@@ -243,6 +245,12 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
     queryFn: () => loadFromStorage<DoctoringEvent[]>(STORAGE_KEYS.doctoringEvents, []),
   });
   const doctoringEvents = doctoringEventsQuery.data ?? [];
+
+  const ranchNotesQuery = useQuery({
+    queryKey: ["ranchNotes"],
+    queryFn: () => loadFromStorage<RanchNote[]>(STORAGE_KEYS.ranchNotes, []),
+  });
+  const ranchNotes = ranchNotesQuery.data ?? [];
 
   const ranch = ranchQuery.data ?? MOCK_RANCH;
   const animals = animalsQuery.data ?? [];
@@ -1541,10 +1549,12 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
   });
 
   const addDoctoringEventMutation = useMutation({
-    mutationFn: async (event: Omit<DoctoringEvent, "id" | "createdAt" | "updatedAt">) => {
+    mutationFn: async (event: Omit<DoctoringEvent, "id" | "ranchId" | "createdAt" | "updatedAt">) => {
+      if (!ranch.id) throw new Error("Cannot create doctoring event without an active ranch");
       const newEvent: DoctoringEvent = {
         ...event,
         id: generateId(),
+        ranchId: ranch.id,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       };
@@ -1585,6 +1595,82 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
     [doctoringEvents.length],
   );
 
+  const setRanchNameMutation = useMutation({
+    mutationFn: async (name: string) => {
+      const trimmed = name.trim();
+      if (!trimmed) throw new Error("Ranch name cannot be empty");
+      const current = queryClient.getQueryData<Ranch>(["ranch"]) ?? ranch;
+      const ownerId = current.ownerId || currentUserId;
+      const members = current.members && current.members.length > 0
+        ? current.members
+        : [{ userId: ownerId, name: currentUserName, role: "owner" as const, joinedAt: new Date().toISOString() }];
+      const updated: Ranch = {
+        ...current,
+        id: current.id || generateId(),
+        name: trimmed,
+        ownerId,
+        members,
+        inviteCode: current.inviteCode ?? "",
+        createdAt: current.createdAt || new Date().toISOString(),
+      };
+      await saveToStorage(STORAGE_KEYS.ranch, updated);
+      return updated;
+    },
+    onSuccess: (updated) => {
+      queryClient.setQueryData(["ranch"], updated);
+    },
+  });
+
+  const addRanchNoteMutation = useMutation({
+    mutationFn: async (text: string) => {
+      if (!ranch.id) throw new Error("Cannot create note without an active ranch");
+      const trimmed = text.trim();
+      if (!trimmed) throw new Error("Note text cannot be empty");
+      const newNote: RanchNote = {
+        id: generateId(),
+        ranchId: ranch.id,
+        text: trimmed,
+        createdBy: currentUserId,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+      const current = queryClient.getQueryData<RanchNote[]>(["ranchNotes"]) ?? [];
+      const updated = [newNote, ...current];
+      await saveToStorage(STORAGE_KEYS.ranchNotes, updated);
+      return updated;
+    },
+    onSuccess: (updated) => {
+      queryClient.setQueryData(["ranchNotes"], updated);
+    },
+  });
+
+  const updateRanchNoteMutation = useMutation({
+    mutationFn: async ({ id, text }: { id: string; text: string }) => {
+      const trimmed = text.trim();
+      const current = queryClient.getQueryData<RanchNote[]>(["ranchNotes"]) ?? [];
+      const updated = current.map((n) =>
+        n.id === id ? { ...n, text: trimmed, updatedAt: new Date().toISOString() } : n,
+      );
+      await saveToStorage(STORAGE_KEYS.ranchNotes, updated);
+      return updated;
+    },
+    onSuccess: (updated) => {
+      queryClient.setQueryData(["ranchNotes"], updated);
+    },
+  });
+
+  const deleteRanchNoteMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const current = queryClient.getQueryData<RanchNote[]>(["ranchNotes"]) ?? [];
+      const updated = current.filter((n) => n.id !== id);
+      await saveToStorage(STORAGE_KEYS.ranchNotes, updated);
+      return updated;
+    },
+    onSuccess: (updated) => {
+      queryClient.setQueryData(["ranchNotes"], updated);
+    },
+  });
+
   const needsAttentionAnimals = useMemo(() => {
     const animalIdsNeedingAttention = new Set<string>();
     doctoringEvents.forEach((e) => {
@@ -1598,6 +1684,13 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
 
   return {
     ranch,
+    activeRanchId: ranch.id,
+    setRanchName: setRanchNameMutation.mutateAsync,
+    isSettingRanchName: setRanchNameMutation.isPending,
+    ranchNotes,
+    addRanchNote: addRanchNoteMutation.mutateAsync,
+    updateRanchNote: updateRanchNoteMutation.mutateAsync,
+    deleteRanchNote: deleteRanchNoteMutation.mutateAsync,
     animals,
     activeAnimals,
     calvingGroups,

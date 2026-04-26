@@ -16,6 +16,7 @@ export default function OnboardingLayout() {
 
   return (
     <Stack screenOptions={screenOptions}>
+      <Stack.Screen name="ranch-name" />
       <Stack.Screen name="welcome" />
       <Stack.Screen name="import-data" />
       <Stack.Screen name="manual-entry" />
