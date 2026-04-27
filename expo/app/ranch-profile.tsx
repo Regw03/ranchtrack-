@@ -13,7 +13,6 @@ import {
 } from "react-native";
 import {
   Pencil,
-  Check,
   Shield,
   UserPlus,
   UserCog,
@@ -158,50 +157,78 @@ export default function RanchProfileScreen() {
           <View style={styles.heroIcon}>
             <Text style={styles.heroIconText}>🏜️</Text>
           </View>
-          {editingRanchName ? (
-            <View style={styles.heroEditRow}>
+          <TouchableOpacity
+            style={styles.heroNameRow}
+            activeOpacity={0.7}
+            onPress={handleStartEditRanch}
+            testID="edit-ranch-name"
+            disabled={editingRanchName}
+          >
+            <Text style={styles.heroName} numberOfLines={2}>
+              {ranch.name || "Your Ranch"}
+            </Text>
+            {!editingRanchName && (
+              <View style={styles.editChip}>
+                <Pencil size={14} color={Colors.primary} />
+              </View>
+            )}
+          </TouchableOpacity>
+          <Text style={styles.heroSubtitle}>
+            Owned by {owner?.name ?? currentUser?.name ?? "\u2014"}
+          </Text>
+
+          {editingRanchName && (
+            <View style={styles.inlineEditCard}>
+              <Text style={styles.inlineEditLabel}>Ranch name</Text>
               <TextInput
                 value={ranchDraft}
                 onChangeText={setRanchDraft}
-                style={styles.heroInput}
+                style={styles.inlineEditInput}
                 autoFocus
                 autoCapitalize="words"
                 maxLength={60}
                 onSubmitEditing={handleSaveRanchName}
                 returnKeyType="done"
+                placeholder="e.g. Bar M Ranch"
+                placeholderTextColor={Colors.textTertiary}
                 testID="ranch-name-edit"
               />
-              <TouchableOpacity
-                style={styles.heroSaveBtn}
-                onPress={handleSaveRanchName}
-                disabled={isSettingRanchName}
-                activeOpacity={0.8}
-              >
-                {isSettingRanchName ? (
-                  <ActivityIndicator color="#fff" />
-                ) : (
-                  <Check size={20} color="#fff" />
-                )}
-              </TouchableOpacity>
-            </View>
-          ) : (
-            <TouchableOpacity
-              style={styles.heroNameRow}
-              activeOpacity={0.7}
-              onPress={handleStartEditRanch}
-              testID="edit-ranch-name"
-            >
-              <Text style={styles.heroName} numberOfLines={2}>
-                {ranch.name || "Your Ranch"}
-              </Text>
-              <View style={styles.editChip}>
-                <Pencil size={14} color={Colors.primary} />
+              <View style={styles.inlineEditActions}>
+                <TouchableOpacity
+                  style={styles.inlineCancelBtn}
+                  onPress={() => setEditingRanchName(false)}
+                  activeOpacity={0.8}
+                  disabled={isSettingRanchName}
+                  testID="cancel-ranch-name"
+                >
+                  <Text style={styles.inlineCancelText}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[
+                    styles.inlineSaveBtn,
+                    (isSettingRanchName ||
+                      ranchDraft.trim().length === 0 ||
+                      ranchDraft.trim() === ranch.name) &&
+                      styles.inlineSaveBtnDisabled,
+                  ]}
+                  onPress={handleSaveRanchName}
+                  disabled={
+                    isSettingRanchName ||
+                    ranchDraft.trim().length === 0 ||
+                    ranchDraft.trim() === ranch.name
+                  }
+                  activeOpacity={0.85}
+                  testID="save-ranch-name"
+                >
+                  {isSettingRanchName ? (
+                    <ActivityIndicator color="#fff" />
+                  ) : (
+                    <Text style={styles.inlineSaveText}>Save</Text>
+                  )}
+                </TouchableOpacity>
               </View>
-            </TouchableOpacity>
+            </View>
           )}
-          <Text style={styles.heroSubtitle}>
-            Owned by {owner?.name ?? currentUser?.name ?? "—"}
-          </Text>
         </View>
 
         <Section title="Team Members" Colors={Colors}>
@@ -279,11 +306,12 @@ export default function RanchProfileScreen() {
 
         <Section title="You" Colors={Colors}>
           {editingUserName ? (
-            <View style={styles.youEditCard}>
+            <View style={styles.inlineEditCard}>
+              <Text style={styles.inlineEditLabel}>Your name</Text>
               <TextInput
                 value={userDraft}
                 onChangeText={setUserDraft}
-                style={styles.youInput}
+                style={styles.inlineEditInput}
                 autoFocus
                 autoCapitalize="words"
                 maxLength={40}
@@ -293,24 +321,37 @@ export default function RanchProfileScreen() {
                 placeholderTextColor={Colors.textTertiary}
                 testID="user-name-edit"
               />
-              <View style={styles.youEditActions}>
+              <View style={styles.inlineEditActions}>
                 <TouchableOpacity
-                  style={styles.youCancelBtn}
+                  style={styles.inlineCancelBtn}
                   onPress={() => setEditingUserName(false)}
                   activeOpacity={0.8}
+                  disabled={isUpdatingUserName}
+                  testID="cancel-user-name"
                 >
-                  <Text style={styles.youCancelText}>Cancel</Text>
+                  <Text style={styles.inlineCancelText}>Cancel</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
-                  style={styles.youSaveBtn}
+                  style={[
+                    styles.inlineSaveBtn,
+                    (isUpdatingUserName ||
+                      userDraft.trim().length === 0 ||
+                      userDraft.trim() === (currentUser?.name ?? "")) &&
+                      styles.inlineSaveBtnDisabled,
+                  ]}
                   onPress={handleSaveUserName}
-                  disabled={isUpdatingUserName}
+                  disabled={
+                    isUpdatingUserName ||
+                    userDraft.trim().length === 0 ||
+                    userDraft.trim() === (currentUser?.name ?? "")
+                  }
                   activeOpacity={0.85}
+                  testID="save-user-name"
                 >
                   {isUpdatingUserName ? (
                     <ActivityIndicator color="#fff" />
                   ) : (
-                    <Text style={styles.youSaveText}>Save</Text>
+                    <Text style={styles.inlineSaveText}>Save</Text>
                   )}
                 </TouchableOpacity>
               </View>
@@ -574,32 +615,56 @@ function createStyles(Colors: ThemeColors) {
       letterSpacing: -0.4,
       textAlign: "center" as const,
     },
-    heroEditRow: {
-      flexDirection: "row" as const,
-      alignItems: "center" as const,
+    inlineEditCard: {
       width: "100%" as const,
-      gap: 10,
-    },
-    heroInput: {
-      flex: 1,
-      fontSize: 22,
-      fontWeight: "800" as const,
-      color: Colors.text,
+      marginTop: 16,
       backgroundColor: Colors.background,
-      paddingHorizontal: 14,
-      paddingVertical: 12,
-      borderRadius: 12,
+      borderRadius: 14,
+      padding: 14,
       borderWidth: 1.5,
       borderColor: Colors.primary,
     },
-    heroSaveBtn: {
-      width: 48,
-      height: 48,
+    inlineEditLabel: {
+      fontSize: 12,
+      fontWeight: "800" as const,
+      color: Colors.textSecondary,
+      textTransform: "uppercase" as const,
+      letterSpacing: 1,
+      marginBottom: 8,
+    },
+    inlineEditInput: {
+      fontSize: 18,
+      fontWeight: "600" as const,
+      color: Colors.text,
+      backgroundColor: Colors.surface,
+      paddingHorizontal: 14,
+      paddingVertical: 14,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: Colors.border,
+    },
+    inlineEditActions: {
+      flexDirection: "row" as const,
+      gap: 10,
+      marginTop: 12,
+    },
+    inlineCancelBtn: {
+      flex: 1,
+      paddingVertical: 14,
+      borderRadius: 12,
+      backgroundColor: Colors.backgroundDark,
+      alignItems: "center" as const,
+    },
+    inlineCancelText: { fontSize: 15, fontWeight: "700" as const, color: Colors.textSecondary },
+    inlineSaveBtn: {
+      flex: 1,
+      paddingVertical: 14,
       borderRadius: 12,
       backgroundColor: Colors.primary,
       alignItems: "center" as const,
-      justifyContent: "center" as const,
     },
+    inlineSaveBtnDisabled: { opacity: 0.5 },
+    inlineSaveText: { fontSize: 15, fontWeight: "800" as const, color: "#fff" },
     editChip: {
       width: 28,
       height: 28,
@@ -720,43 +785,6 @@ function createStyles(Colors: ThemeColors) {
     },
     youName: { fontSize: 17, fontWeight: "700" as const, color: Colors.text, marginTop: 2 },
 
-    youEditCard: {
-      backgroundColor: Colors.surface,
-      borderRadius: 14,
-      padding: 14,
-      borderWidth: 1.5,
-      borderColor: Colors.primary,
-    },
-    youInput: {
-      fontSize: 18,
-      fontWeight: "600" as const,
-      color: Colors.text,
-      paddingVertical: 12,
-      paddingHorizontal: 12,
-      backgroundColor: Colors.background,
-      borderRadius: 10,
-    },
-    youEditActions: {
-      flexDirection: "row" as const,
-      gap: 10,
-      marginTop: 12,
-    },
-    youCancelBtn: {
-      flex: 1,
-      paddingVertical: 14,
-      borderRadius: 12,
-      backgroundColor: Colors.backgroundDark,
-      alignItems: "center" as const,
-    },
-    youCancelText: { fontSize: 15, fontWeight: "700" as const, color: Colors.textSecondary },
-    youSaveBtn: {
-      flex: 1,
-      paddingVertical: 14,
-      borderRadius: 12,
-      backgroundColor: Colors.primary,
-      alignItems: "center" as const,
-    },
-    youSaveText: { fontSize: 15, fontWeight: "800" as const, color: "#fff" },
 
     actionRow: {
       flexDirection: "row" as const,
