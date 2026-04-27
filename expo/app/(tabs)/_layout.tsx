@@ -11,20 +11,22 @@ export default function TabLayout() {
     tabBarActiveTintColor: Colors.primary,
     tabBarInactiveTintColor: Colors.textTertiary,
     headerShown: false,
+    tabBarShowLabel: true,
+    tabBarLabelPosition: "below-icon" as const,
     tabBarStyle: {
       backgroundColor: Colors.surface,
       borderTopColor: Colors.borderLight,
       borderTopWidth: 1,
       paddingHorizontal: 12,
-      ...(Platform.OS === "web" ? { height: 60, paddingBottom: 8 } : {}),
+      ...(Platform.OS === "web" ? { height: 64, paddingBottom: 8, paddingTop: 8 } : {}),
     },
     tabBarLabelStyle: {
       fontSize: 12,
       fontWeight: "600" as const,
-      paddingBottom: Platform.OS === "web" ? 4 : 0,
+      marginTop: 2,
     },
-    tabBarItemStyle: {
-      paddingVertical: 4,
+    tabBarIconStyle: {
+      marginBottom: 0,
     },
   }), [Colors]);
 
