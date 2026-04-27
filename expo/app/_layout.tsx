@@ -206,12 +206,12 @@ function OnboardingGate() {
   useEffect(() => {
     if (isLoading || isRanchLoading) return;
 
-    const onSetup = segments[0] === "onboarding" && segments[1] === "ranch-name";
+    const inOnboarding = segments[0] === "onboarding";
     const hasRanch = !!ranch?.name && !!ranch?.id;
 
-    if (!hasRanch && !onSetup) {
-      console.log("No ranch profile yet, redirecting to setup");
-      router.replace("/onboarding/ranch-name");
+    if (!hasRanch && !inOnboarding) {
+      console.log("No ranch profile yet, redirecting to welcome");
+      router.replace("/onboarding/welcome");
     }
   }, [isLoading, isRanchLoading, ranch, segments, router]);
 
