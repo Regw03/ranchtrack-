@@ -99,6 +99,8 @@ export interface CalvingRecord {
   assisted: boolean;
   notes: string;
   businessYearId: string;
+  createdBy?: string;
+  createdByName?: string;
   createdAt: string;
 }
 
@@ -223,6 +225,8 @@ export interface DoctoringEvent {
   treatment?: string;
   followUpNeeded: boolean;
   resolved: boolean;
+  createdBy?: string;
+  createdByName?: string;
   createdAt: string;
   updatedAt: string;
 }

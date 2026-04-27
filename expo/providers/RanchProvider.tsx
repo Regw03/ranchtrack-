@@ -1,7 +1,7 @@
 import createContextHook from "@nkzw/create-context-hook";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useCallback, useMemo } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { parseBirthDate } from "@/utils/helpers";
 import { requireRanch } from "@/utils/ranchGuard";
 // eslint-disable-next-line rork/general-context-optimization
@@ -602,6 +602,8 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
         ...calvingData,
         id: generateId(),
         businessYearId: calvingData.businessYearId || activeBusinessYearId,
+        createdBy: currentUserId || undefined,
+        createdByName: currentUserName || undefined,
         createdAt: new Date().toISOString(),
       };
 
@@ -1571,12 +1573,14 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
   });
 
   const addDoctoringEventMutation = useMutation({
-    mutationFn: async (event: Omit<DoctoringEvent, "id" | "ranchId" | "createdAt" | "updatedAt">) => {
+    mutationFn: async (event: Omit<DoctoringEvent, "id" | "ranchId" | "createdAt" | "updatedAt" | "createdBy" | "createdByName">) => {
       requireRanch(ranch.id, "create doctoring event");
       const newEvent: DoctoringEvent = {
         ...event,
         id: generateId(),
         ranchId: ranch.id,
+        createdBy: currentUserId || undefined,
+        createdByName: currentUserName || undefined,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       };
@@ -1712,6 +1716,9 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
     },
   });
 
+  const [userSwitchToast, setUserSwitchToast] = useState<{ name: string; at: number } | null>(null);
+  const dismissUserSwitchToast = useCallback(() => setUserSwitchToast(null), []);
+
   const setActiveUserMutation = useMutation({
     mutationFn: async (userId: string) => {
       await saveToStorage(STORAGE_KEYS.currentUserIdValue, userId);
@@ -1719,6 +1726,11 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
     },
     onSuccess: (userId) => {
       queryClient.setQueryData(["currentUserId"], userId);
+      const usersList = queryClient.getQueryData<User[]>(["users"]) ?? [];
+      const switched = usersList.find((u) => u.id === userId);
+      if (switched) {
+        setUserSwitchToast({ name: switched.name, at: Date.now() });
+      }
     },
   });
 
@@ -1763,6 +1775,7 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
       queryClient.setQueryData(["users"], updatedUsers);
       queryClient.setQueryData(["ranch"], updatedRanch);
       queryClient.setQueryData(["currentUserId"], newUser.id);
+      setUserSwitchToast({ name: newUser.name, at: Date.now() });
     },
   });
 
@@ -1842,6 +1855,8 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
     setActiveUser: setActiveUserMutation.mutateAsync,
     addUserAndSwitch: addUserMutation.mutateAsync,
     isAddingUser: addUserMutation.isPending,
+    userSwitchToast,
+    dismissUserSwitchToast,
     addRanchNote: addRanchNoteMutation.mutateAsync,
     updateRanchNote: updateRanchNoteMutation.mutateAsync,
     deleteRanchNote: deleteRanchNoteMutation.mutateAsync,

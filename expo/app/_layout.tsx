@@ -12,6 +12,7 @@ import { ProcessingSessionProvider } from "@/providers/ProcessingSessionProvider
 import { ThemeProvider, useColors } from "@/providers/ThemeProvider";
 import { OnboardingProvider, useOnboarding } from "@/providers/OnboardingProvider";
 import { useRanch } from "@/providers/RanchProvider";
+import UserSwitchToast from "@/components/UserSwitchToast";
 
 void SplashScreen.preventAutoHideAsync();
 
@@ -237,6 +238,7 @@ export default function RootLayout() {
                 <ProcessingSessionProvider>
                   <OnboardingGate />
                   <RootLayoutNav />
+                  <UserSwitchToast />
                 </ProcessingSessionProvider>
               </HealthProvider>
             </RanchProvider>

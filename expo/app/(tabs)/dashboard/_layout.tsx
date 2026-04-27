@@ -1,8 +1,8 @@
 import { Stack } from "expo-router";
 import { useRouter } from "expo-router";
 import React, { useMemo, useCallback } from "react";
-import { TouchableOpacity, Platform, View } from "react-native";
-import { Settings, Users } from "lucide-react-native";
+import { TouchableOpacity, Platform, View, Text } from "react-native";
+import { UserCircle2 } from "lucide-react-native";
 import * as Haptics from "expo-haptics";
 import { useColors } from "@/providers/ThemeProvider";
 
@@ -17,11 +17,6 @@ export default function DashboardLayout() {
     contentStyle: { backgroundColor: Colors.background },
   }), [Colors]);
 
-  const handleSettingsPress = useCallback(() => {
-    if (Platform.OS !== "web") void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    router.push("/settings");
-  }, [router]);
-
   const handleRanchProfilePress = useCallback(() => {
     if (Platform.OS !== "web") void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     router.push("/ranch-profile");
@@ -34,24 +29,24 @@ export default function DashboardLayout() {
         options={{
           title: "Dashboard",
           headerRight: () => (
-            <View style={{ flexDirection: 'row', alignItems: 'center', marginRight: 4 }}>
-              <TouchableOpacity
-                onPress={handleRanchProfilePress}
-                activeOpacity={0.5}
-                testID="ranch-profile-button"
-                style={{ padding: 8 }}
-              >
-                <Users size={20} color={Colors.textSecondary} strokeWidth={1.8} />
-              </TouchableOpacity>
-              <TouchableOpacity
-                onPress={handleSettingsPress}
-                activeOpacity={0.5}
-                testID="settings-button"
-                style={{ padding: 8 }}
-              >
-                <Settings size={20} color={Colors.textSecondary} strokeWidth={1.8} />
-              </TouchableOpacity>
-            </View>
+            <TouchableOpacity
+              onPress={handleRanchProfilePress}
+              activeOpacity={0.6}
+              testID="ranch-profile-button"
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 6,
+                paddingHorizontal: 10,
+                paddingVertical: 6,
+                marginRight: 4,
+                borderRadius: 999,
+                backgroundColor: Colors.primary + '12',
+              }}
+            >
+              <UserCircle2 size={18} color={Colors.primary} strokeWidth={2} />
+              <Text style={{ fontSize: 13, fontWeight: '700', color: Colors.primary }}>Ranch</Text>
+            </TouchableOpacity>
           ),
         }}
       />

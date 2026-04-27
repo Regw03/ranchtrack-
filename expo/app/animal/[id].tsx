@@ -177,6 +177,9 @@ function DoctoringTimeline({ events, onResolve }: { events: DoctoringEvent[]; on
                   <Text style={styles.treatmentText}>{event.treatment}</Text>
                 </View>
               ) : null}
+              {event.createdByName ? (
+                <Text style={styles.attributionText}>By {event.createdByName}</Text>
+              ) : null}
               {event.followUpNeeded && !event.resolved && (
                 <TouchableOpacity style={styles.resolveBtn} onPress={() => onResolve(event)} activeOpacity={0.7}>
                   <CheckCircle2 size={14} color={Colors.success} />
@@ -725,6 +728,7 @@ const createStyles = (Colors: ThemeColors) => StyleSheet.create({
   treatmentRow: { flexDirection: "row" as const, alignItems: "flex-start" as const, gap: 4, marginTop: 6 },
   treatmentLabel: { fontSize: 12, fontWeight: "700" as const, color: Colors.primary },
   treatmentText: { fontSize: 13, color: Colors.textSecondary, flex: 1 },
+  attributionText: { fontSize: 11, fontWeight: "600" as const, color: Colors.textTertiary, marginTop: 8, fontStyle: "italic" as const },
   resolveBtn: { flexDirection: "row" as const, alignItems: "center" as const, gap: 4, marginTop: 8, alignSelf: "flex-start" as const, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8, backgroundColor: Colors.success + "15", borderWidth: 1, borderColor: Colors.success + "30" },
   resolveBtnText: { fontSize: 12, fontWeight: "600" as const, color: Colors.success },
   resolvedBadge: { flexDirection: "row" as const, alignItems: "center" as const, gap: 4, marginTop: 6, alignSelf: "flex-start" as const },

@@ -20,9 +20,12 @@ import {
   Plus,
   Crown,
   Mail,
+  Settings as SettingsIcon,
+  ChevronRight,
+  Check,
 } from "lucide-react-native";
 import * as Haptics from "expo-haptics";
-import { Stack } from "expo-router";
+import { Stack, useRouter } from "expo-router";
 import { ThemeColors } from "@/constants/colors";
 import { useColors } from "@/providers/ThemeProvider";
 import { useRanch } from "@/providers/RanchProvider";
@@ -30,6 +33,7 @@ import { getInitials } from "@/utils/helpers";
 
 export default function RanchProfileScreen() {
   const Colors = useColors();
+  const router = useRouter();
   const styles = useMemo(() => createStyles(Colors), [Colors]);
 
   const {
@@ -69,7 +73,7 @@ export default function RanchProfileScreen() {
   const handleSaveRanchName = useCallback(async () => {
     const trimmed = ranchDraft.trim();
     if (!trimmed) {
-      Alert.alert("Name required", "Ranch name can't be empty.");
+      setEditingRanchName(false);
       return;
     }
     if (trimmed === ranch.name) {
@@ -82,7 +86,7 @@ export default function RanchProfileScreen() {
       setEditingRanchName(false);
     } catch (e) {
       console.log("Failed to save ranch name", e);
-      Alert.alert("Couldn't save", "Please try again.");
+      setEditingRanchName(false);
     }
   }, [ranchDraft, ranch.name, setRanchName]);
 
@@ -95,10 +99,13 @@ export default function RanchProfileScreen() {
   const handleSaveUserName = useCallback(async () => {
     const trimmed = userDraft.trim();
     if (!trimmed) {
-      Alert.alert("Name required", "Your name can't be empty.");
+      setEditingUserName(false);
       return;
     }
-    if (!currentUserId) return;
+    if (!currentUserId) {
+      setEditingUserName(false);
+      return;
+    }
     if (trimmed === currentUser?.name) {
       setEditingUserName(false);
       return;
@@ -109,7 +116,7 @@ export default function RanchProfileScreen() {
       setEditingUserName(false);
     } catch (e) {
       console.log("Failed to save user name", e);
-      Alert.alert("Couldn't save", "Please try again.");
+      setEditingUserName(false);
     }
   }, [userDraft, currentUserId, currentUser?.name, updateUserName]);
 
@@ -236,10 +243,18 @@ export default function RanchProfileScreen() {
             const isOwner = m.userId === ranch.ownerId;
             const isYou = m.userId === currentUserId;
             return (
-              <View
+              <TouchableOpacity
                 key={m.userId}
                 style={styles.memberRow}
                 testID={`member-${m.userId}`}
+                activeOpacity={0.7}
+                onPress={() => {
+                  if (Platform.OS !== "web") void Haptics.selectionAsync();
+                  Alert.alert(
+                    m.name,
+                    `${isOwner ? "Owner" : "Member"}${isYou ? " \u2014 that's you" : ""}\n\nRoles & permissions are coming soon.`,
+                  );
+                }}
               >
                 <View
                   style={[
@@ -278,7 +293,7 @@ export default function RanchProfileScreen() {
                     </Text>
                   </View>
                 </View>
-              </View>
+              </TouchableOpacity>
             );
           })}
 
@@ -398,6 +413,25 @@ export default function RanchProfileScreen() {
               <Text style={styles.actionTitle}>Switch User</Text>
               <Text style={styles.actionSubtitle}>For testing — change active profile</Text>
             </View>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.actionRow}
+            activeOpacity={0.7}
+            onPress={() => {
+              if (Platform.OS !== "web") void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              router.push("/settings");
+            }}
+            testID="open-settings"
+          >
+            <View style={[styles.actionIcon, { backgroundColor: Colors.textSecondary + "18" }]}>
+              <SettingsIcon size={20} color={Colors.textSecondary} />
+            </View>
+            <View style={styles.actionBody}>
+              <Text style={styles.actionTitle}>App Settings</Text>
+              <Text style={styles.actionSubtitle}>Theme, business year, data</Text>
+            </View>
+            <ChevronRight size={18} color={Colors.textTertiary} />
           </TouchableOpacity>
 
           <View style={[styles.actionRow, styles.actionRowDisabled]}>
