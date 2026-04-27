@@ -1779,6 +1779,39 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
     },
   });
 
+  const resetAppMutation = useMutation({
+    mutationFn: async () => {
+      const keys = Object.values(STORAGE_KEYS);
+      await Promise.all([
+        ...keys.map((k) => AsyncStorage.removeItem(k)),
+        AsyncStorage.removeItem("ranchtrack_onboarding_complete"),
+        AsyncStorage.removeItem("ranchtrack_ranch_config"),
+      ]);
+      console.log("[resetApp] cleared all storage");
+      return true;
+    },
+    onSuccess: () => {
+      queryClient.setQueryData(["ranch"], MOCK_RANCH);
+      queryClient.setQueryData(["users"], []);
+      queryClient.setQueryData(["currentUserId"], "");
+      queryClient.setQueryData(["animals"], []);
+      queryClient.setQueryData(["weightRecords"], []);
+      queryClient.setQueryData(["healthRecords"], []);
+      queryClient.setQueryData(["breedingRecords"], []);
+      queryClient.setQueryData(["calvingRecords"], []);
+      queryClient.setQueryData(["activityLog"], []);
+      queryClient.setQueryData(["messages"], []);
+      queryClient.setQueryData(["customLists"], []);
+      queryClient.setQueryData(["calvingGroups"], []);
+      queryClient.setQueryData(["breedingGroups"], []);
+      queryClient.setQueryData(["soldSnapshots"], []);
+      queryClient.setQueryData(["deceasedSnapshots"], []);
+      queryClient.setQueryData(["doctoringEvents"], []);
+      queryClient.setQueryData(["ranchNotes"], []);
+      queryClient.setQueryData(["onboardingComplete"], false);
+    },
+  });
+
   const addRanchNoteMutation = useMutation({
     mutationFn: async (text: string) => {
       requireRanch(ranch.id, "create note");
@@ -1944,5 +1977,7 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
     getDoctoringEventsForAnimal,
     needsAttentionAnimals,
     isAddingDoctoringEvent: addDoctoringEventMutation.isPending,
+    resetApp: resetAppMutation.mutateAsync,
+    isResettingApp: resetAppMutation.isPending,
   };
 });

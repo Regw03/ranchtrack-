@@ -23,6 +23,7 @@ import {
   Settings as SettingsIcon,
   ChevronRight,
   Check,
+  RotateCcw,
 } from "lucide-react-native";
 import * as Haptics from "expo-haptics";
 import { Stack, useRouter } from "expo-router";
@@ -48,6 +49,8 @@ export default function RanchProfileScreen() {
     setActiveUser,
     addUserAndSwitch,
     isAddingUser,
+    resetApp,
+    isResettingApp,
   } = useRanch();
 
   const [editingRanchName, setEditingRanchName] = useState<boolean>(false);
@@ -150,6 +153,42 @@ export default function RanchProfileScreen() {
       Alert.alert("Couldn't create user", "Please try again.");
     }
   }, [newUserName, addUserAndSwitch]);
+
+  const handleResetApp = useCallback(() => {
+    if (Platform.OS !== "web") void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    const doReset = async () => {
+      try {
+        await resetApp();
+        if (Platform.OS !== "web")
+          void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        router.replace("/onboarding/welcome");
+      } catch (e) {
+        console.log("Failed to reset app", e);
+        Alert.alert("Couldn't reset", "Please try again.");
+      }
+    };
+    if (Platform.OS === "web") {
+      const ok = typeof window !== "undefined" && window.confirm(
+        "Reset app? This will delete all ranch data and return to the welcome screen.",
+      );
+      if (ok) void doReset();
+      return;
+    }
+    Alert.alert(
+      "Reset App?",
+      "This will delete all ranch data on this device and return to the welcome screen. This cannot be undone.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Reset",
+          style: "destructive",
+          onPress: () => {
+            void doReset();
+          },
+        },
+      ],
+    );
+  }, [resetApp, router]);
 
   return (
     <>
@@ -445,6 +484,28 @@ export default function RanchProfileScreen() {
               <Text style={styles.actionSubtitle}>Coming soon</Text>
             </View>
           </View>
+
+          <TouchableOpacity
+            style={[styles.actionRow, isResettingApp && styles.actionRowDisabled]}
+            activeOpacity={0.7}
+            onPress={handleResetApp}
+            disabled={isResettingApp}
+            testID="reset-app-btn"
+          >
+            <View style={[styles.actionIcon, { backgroundColor: Colors.error + "18" }]}>
+              {isResettingApp ? (
+                <ActivityIndicator color={Colors.error} />
+              ) : (
+                <RotateCcw size={20} color={Colors.error} />
+              )}
+            </View>
+            <View style={styles.actionBody}>
+              <Text style={[styles.actionTitle, { color: Colors.error }]}>Reset App</Text>
+              <Text style={styles.actionSubtitle}>
+                Clear all data and return to welcome screen
+              </Text>
+            </View>
+          </TouchableOpacity>
         </Section>
 
         <View style={{ height: 32 }} />
