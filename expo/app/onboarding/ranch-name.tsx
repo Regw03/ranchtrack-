@@ -24,8 +24,8 @@ import { useOnboarding } from "@/providers/OnboardingProvider";
 export default function RanchSetupScreen() {
   const Colors = useColors();
   const router = useRouter();
-  const { setupRanch, isSettingUpRanch } = useRanch();
-  const { completeOnboarding } = useOnboarding();
+  const { setupRanch, isSettingUpRanch, ranch } = useRanch();
+  const { completeOnboarding, isOnboardingComplete } = useOnboarding();
   const styles = useMemo(() => createStyles(Colors), [Colors]);
 
   const [userName, setUserName] = useState<string>("");
@@ -51,13 +51,19 @@ export default function RanchSetupScreen() {
     try {
       await setupRanch({ userName: trimmedUser, ranchName: trimmedRanch });
       await completeOnboarding();
-      console.log("Setup complete:", trimmedUser, "@", trimmedRanch);
-      router.replace("/(tabs)/dashboard");
+      console.log("[ranch-name] setup complete:", trimmedUser, "@", trimmedRanch);
     } catch (e) {
-      console.log("Failed to set up ranch", e);
+      console.log("[ranch-name] failed to set up ranch", e);
       Alert.alert("Couldn't save", "Please try again.");
     }
-  }, [canContinue, setupRanch, completeOnboarding, trimmedUser, trimmedRanch, router]);
+  }, [canContinue, setupRanch, completeOnboarding, trimmedUser, trimmedRanch]);
+
+  useEffect(() => {
+    if (isOnboardingComplete && !!ranch?.id && !!ranch?.name) {
+      console.log("[ranch-name] state ready, navigating to dashboard");
+      router.replace("/(tabs)/dashboard");
+    }
+  }, [isOnboardingComplete, ranch?.id, ranch?.name, router]);
 
   return (
     <View style={styles.container}>

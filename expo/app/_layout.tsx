@@ -209,10 +209,16 @@ function OnboardingGate() {
     const inOnboarding = segments[0] === "onboarding";
     const hasRanch = !!ranch?.name && !!ranch?.id;
 
-    if (isOnboardingComplete && hasRanch) return;
+    if (isOnboardingComplete && hasRanch) {
+      if (inOnboarding) {
+        console.log("[OnboardingGate] setup complete, leaving onboarding -> dashboard");
+        router.replace("/(tabs)/dashboard");
+      }
+      return;
+    }
 
     if (!hasRanch && !isOnboardingComplete && !inOnboarding) {
-      console.log("No ranch profile yet, redirecting to welcome");
+      console.log("[OnboardingGate] no ranch profile yet, redirecting to welcome");
       router.replace("/onboarding/welcome");
     }
   }, [isLoading, isRanchLoading, ranch, segments, router, isOnboardingComplete]);
