@@ -5,6 +5,11 @@
       "name": "RanchTrack",
       "path": "expo",
       "framework": "react-native"
+    },
+    {
+      "name": "Backend",
+      "path": "backend",
+      "framework": "supabase"
     }
   ]
 }

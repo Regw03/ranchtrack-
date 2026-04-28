@@ -52,6 +52,12 @@ export default function WelcomeScreen() {
     router.push("/onboarding/ranch-name");
   }, [router]);
 
+  const handleJoinRanch = useCallback(() => {
+    if (Platform.OS !== "web")
+      void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    router.push("/onboarding/join-ranch");
+  }, [router]);
+
   return (
     <View style={styles.container}>
       <SafeAreaView style={styles.safeArea}>
@@ -87,8 +93,16 @@ export default function WelcomeScreen() {
             activeOpacity={0.85}
             testID="welcome-get-started"
           >
-            <Text style={styles.ctaText}>Get Started</Text>
+            <Text style={styles.ctaText}>Create a New Ranch</Text>
             <ArrowRight size={22} color="#fff" />
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.secondaryCta}
+            onPress={handleJoinRanch}
+            activeOpacity={0.7}
+            testID="welcome-join-ranch"
+          >
+            <Text style={styles.secondaryCtaText}>Join an existing ranch</Text>
           </TouchableOpacity>
         </View>
       </SafeAreaView>
@@ -153,6 +167,18 @@ function createStyles(Colors: ThemeColors) {
       fontSize: 19,
       fontWeight: "800" as const,
       color: "#fff",
+      letterSpacing: 0.2,
+    },
+    secondaryCta: {
+      marginTop: 14,
+      paddingVertical: 14,
+      alignItems: "center" as const,
+      justifyContent: "center" as const,
+    },
+    secondaryCtaText: {
+      fontSize: 15,
+      fontWeight: "700" as const,
+      color: Colors.primary,
       letterSpacing: 0.2,
     },
   });

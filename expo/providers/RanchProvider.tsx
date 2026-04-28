@@ -4,6 +4,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useMemo, useState } from "react";
 import { parseBirthDate } from "@/utils/helpers";
 import { requireRanch } from "@/utils/ranchGuard";
+import { supabase, generateInviteCode } from "@/lib/supabase";
 // eslint-disable-next-line rork/general-context-optimization
 import {
   Animal,
@@ -1661,27 +1662,57 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
       };
       const currentUsers = queryClient.getQueryData<User[]>(["users"]) ?? [];
       const updatedUsers = [...currentUsers, newUser];
+
+      const inviteCode = generateInviteCode();
+      console.log("[setupRanch] creating ranch on backend with code", inviteCode);
+      const { data: ranchRow, error: ranchErr } = await supabase
+        .from("ranches")
+        .insert({
+          name: trimmedRanchName,
+          invite_code: inviteCode,
+          owner_id: newUser.id,
+        })
+        .select()
+        .single();
+      if (ranchErr || !ranchRow) {
+        console.error("[setupRanch] backend error", ranchErr);
+        throw new Error(ranchErr?.message ?? "Failed to create ranch");
+      }
+
+      const joinedAt = new Date().toISOString();
+      const { error: memberErr } = await supabase.from("ranch_members").insert({
+        ranch_id: ranchRow.id,
+        user_id: newUser.id,
+        name: newUser.name,
+        role: "owner",
+        joined_at: joinedAt,
+      });
+      if (memberErr) {
+        console.error("[setupRanch] failed to add owner member", memberErr);
+        throw new Error(memberErr.message);
+      }
+
       await saveToStorage(STORAGE_KEYS.users, updatedUsers);
       await saveToStorage(STORAGE_KEYS.currentUserIdValue, newUser.id);
 
       const newRanch: Ranch = {
-        id: generateId(),
-        name: trimmedRanchName,
+        id: ranchRow.id,
+        name: ranchRow.name,
         ownerId: newUser.id,
         members: [
           {
             userId: newUser.id,
             name: newUser.name,
             role: "owner",
-            joinedAt: new Date().toISOString(),
+            joinedAt,
           },
         ],
-        inviteCode: "",
-        createdAt: new Date().toISOString(),
+        inviteCode: ranchRow.invite_code,
+        createdAt: ranchRow.created_at,
       };
       await saveToStorage(STORAGE_KEYS.ranch, newRanch);
 
-      console.log("[setupRanch] created", newUser.name, "at", newRanch.name);
+      console.log("[setupRanch] created", newUser.name, "at", newRanch.name, "code:", newRanch.inviteCode);
       return { newUser, newRanch, updatedUsers };
     },
     onSuccess: ({ newUser, newRanch, updatedUsers }) => {
@@ -1799,6 +1830,22 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
       };
       const currentUsers = queryClient.getQueryData<User[]>(["users"]) ?? [];
       const updatedUsers = [...currentUsers, newUser];
+      const joinedAt = new Date().toISOString();
+
+      if (currentRanch.id && currentRanch.id !== MOCK_RANCH.id) {
+        const { error: memberErr } = await supabase.from("ranch_members").insert({
+          ranch_id: currentRanch.id,
+          user_id: newUser.id,
+          name: newUser.name,
+          role,
+          joined_at: joinedAt,
+        });
+        if (memberErr) {
+          console.error("[inviteTeammate] backend error", memberErr);
+          throw new Error(memberErr.message);
+        }
+      }
+
       await saveToStorage(STORAGE_KEYS.users, updatedUsers);
 
       const updatedRanch: Ranch = {
@@ -1809,7 +1856,7 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
             userId: newUser.id,
             name: newUser.name,
             role,
-            joinedAt: new Date().toISOString(),
+            joinedAt,
           },
         ],
       };
@@ -1820,6 +1867,137 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
     onSuccess: ({ updatedUsers, updatedRanch }) => {
       queryClient.setQueryData(["users"], updatedUsers);
       queryClient.setQueryData(["ranch"], updatedRanch);
+    },
+  });
+
+  const joinRanchMutation = useMutation({
+    mutationFn: async ({ userName, code }: { userName: string; code: string }) => {
+      const trimmedUserName = userName.trim();
+      const trimmedCode = code.trim().toUpperCase();
+      if (!trimmedUserName) throw new Error("Your name cannot be empty");
+      if (!trimmedCode) throw new Error("Ranch code cannot be empty");
+
+      console.log("[joinRanch] looking up code", trimmedCode);
+      const { data: ranchRow, error: ranchErr } = await supabase
+        .from("ranches")
+        .select("*")
+        .eq("invite_code", trimmedCode)
+        .maybeSingle();
+      if (ranchErr) {
+        console.error("[joinRanch] lookup error", ranchErr);
+        throw new Error(ranchErr.message);
+      }
+      if (!ranchRow) {
+        throw new Error("No ranch found with that code");
+      }
+
+      const newUser: User = {
+        id: generateId(),
+        name: trimmedUserName,
+        createdAt: new Date().toISOString(),
+      };
+      const joinedAt = new Date().toISOString();
+
+      const { error: memberErr } = await supabase.from("ranch_members").insert({
+        ranch_id: ranchRow.id,
+        user_id: newUser.id,
+        name: newUser.name,
+        role: "member",
+        joined_at: joinedAt,
+      });
+      if (memberErr) {
+        console.error("[joinRanch] failed to insert member", memberErr);
+        throw new Error(memberErr.message);
+      }
+
+      const { data: memberRows, error: listErr } = await supabase
+        .from("ranch_members")
+        .select("*")
+        .eq("ranch_id", ranchRow.id)
+        .order("joined_at", { ascending: true });
+      if (listErr) {
+        console.error("[joinRanch] failed to list members", listErr);
+        throw new Error(listErr.message);
+      }
+
+      const members: RanchMember[] = (memberRows ?? []).map((m) => ({
+        userId: m.user_id,
+        name: m.name,
+        role: m.role as RanchMember["role"],
+        joinedAt: m.joined_at,
+      }));
+
+      const currentUsers = queryClient.getQueryData<User[]>(["users"]) ?? [];
+      const updatedUsers = [...currentUsers, newUser];
+      await saveToStorage(STORAGE_KEYS.users, updatedUsers);
+      await saveToStorage(STORAGE_KEYS.currentUserIdValue, newUser.id);
+
+      const joinedRanch: Ranch = {
+        id: ranchRow.id,
+        name: ranchRow.name,
+        ownerId: ranchRow.owner_id,
+        members,
+        inviteCode: ranchRow.invite_code,
+        createdAt: ranchRow.created_at,
+      };
+      await saveToStorage(STORAGE_KEYS.ranch, joinedRanch);
+
+      console.log("[joinRanch] joined", joinedRanch.name, "as", newUser.name);
+      return { newUser, updatedUsers, joinedRanch };
+    },
+    onSuccess: ({ newUser, updatedUsers, joinedRanch }) => {
+      queryClient.setQueryData(["users"], updatedUsers);
+      queryClient.setQueryData(["currentUserId"], newUser.id);
+      queryClient.setQueryData(["ranch"], joinedRanch);
+    },
+  });
+
+  const refreshRanchMutation = useMutation({
+    mutationFn: async () => {
+      const current = queryClient.getQueryData<Ranch>(["ranch"]) ?? ranch;
+      if (!current.id || current.id === MOCK_RANCH.id) {
+        console.log("[refreshRanch] no remote ranch yet, skipping");
+        return null;
+      }
+      const [{ data: ranchRow, error: ranchErr }, { data: memberRows, error: listErr }] = await Promise.all([
+        supabase.from("ranches").select("*").eq("id", current.id).maybeSingle(),
+        supabase
+          .from("ranch_members")
+          .select("*")
+          .eq("ranch_id", current.id)
+          .order("joined_at", { ascending: true }),
+      ]);
+      if (ranchErr) {
+        console.error("[refreshRanch] ranch error", ranchErr);
+        throw new Error(ranchErr.message);
+      }
+      if (listErr) {
+        console.error("[refreshRanch] members error", listErr);
+        throw new Error(listErr.message);
+      }
+      if (!ranchRow) {
+        console.log("[refreshRanch] ranch not found on backend");
+        return null;
+      }
+      const members: RanchMember[] = (memberRows ?? []).map((m) => ({
+        userId: m.user_id,
+        name: m.name,
+        role: m.role as RanchMember["role"],
+        joinedAt: m.joined_at,
+      }));
+      const updated: Ranch = {
+        id: ranchRow.id,
+        name: ranchRow.name,
+        ownerId: ranchRow.owner_id,
+        members,
+        inviteCode: ranchRow.invite_code,
+        createdAt: ranchRow.created_at,
+      };
+      await saveToStorage(STORAGE_KEYS.ranch, updated);
+      return updated;
+    },
+    onSuccess: (updated) => {
+      if (updated) queryClient.setQueryData(["ranch"], updated);
     },
   });
 
@@ -1939,6 +2117,10 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
     currentUser,
     setupRanch: setupRanchMutation.mutateAsync,
     isSettingUpRanch: setupRanchMutation.isPending,
+    joinRanch: joinRanchMutation.mutateAsync,
+    isJoiningRanch: joinRanchMutation.isPending,
+    refreshRanch: refreshRanchMutation.mutateAsync,
+    isRefreshingRanch: refreshRanchMutation.isPending,
     updateUserName: updateUserNameMutation.mutateAsync,
     isUpdatingUserName: updateUserNameMutation.isPending,
     setActiveUser: setActiveUserMutation.mutateAsync,
