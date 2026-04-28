@@ -1779,6 +1779,50 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
     },
   });
 
+  const inviteTeammateMutation = useMutation({
+    mutationFn: async ({ name, role }: { name: string; role: "manager" | "member" }) => {
+      const trimmed = name.trim();
+      if (!trimmed) throw new Error("Name cannot be empty");
+
+      const currentRanch = queryClient.getQueryData<Ranch>(["ranch"]) ?? ranch;
+      const inviter = currentRanch.members.find((m) => m.userId === currentUserId);
+      const inviterRole = inviter?.role;
+      if (inviterRole !== "owner" && inviterRole !== "manager") {
+        console.log("[inviteTeammate] blocked — role:", inviterRole);
+        throw new Error("Only owners or managers can invite teammates");
+      }
+
+      const newUser: User = {
+        id: generateId(),
+        name: trimmed,
+        createdAt: new Date().toISOString(),
+      };
+      const currentUsers = queryClient.getQueryData<User[]>(["users"]) ?? [];
+      const updatedUsers = [...currentUsers, newUser];
+      await saveToStorage(STORAGE_KEYS.users, updatedUsers);
+
+      const updatedRanch: Ranch = {
+        ...currentRanch,
+        members: [
+          ...currentRanch.members,
+          {
+            userId: newUser.id,
+            name: newUser.name,
+            role,
+            joinedAt: new Date().toISOString(),
+          },
+        ],
+      };
+      await saveToStorage(STORAGE_KEYS.ranch, updatedRanch);
+      await logActivity(`Invited ${newUser.name} as ${role}`, "member", newUser.id);
+      return { newUser, updatedUsers, updatedRanch };
+    },
+    onSuccess: ({ updatedUsers, updatedRanch }) => {
+      queryClient.setQueryData(["users"], updatedUsers);
+      queryClient.setQueryData(["ranch"], updatedRanch);
+    },
+  });
+
   const resetAppMutation = useMutation({
     mutationFn: async () => {
       const keys = Object.values(STORAGE_KEYS);
@@ -1873,9 +1917,21 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [doctoringEvents.length, animalsSaleKey]);
 
+  const currentUserRole: "owner" | "manager" | "member" | "worker" | null = useMemo(() => {
+    const m = ranch.members.find((mm) => mm.userId === currentUserId);
+    return (m?.role ?? null) as "owner" | "manager" | "member" | "worker" | null;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ranch.members, currentUserId]);
+
+  const canInviteTeammates = currentUserRole === "owner" || currentUserRole === "manager";
+
   return {
     ranch,
     activeRanchId: ranch.id,
+    currentUserRole,
+    canInviteTeammates,
+    inviteTeammate: inviteTeammateMutation.mutateAsync,
+    isInvitingTeammate: inviteTeammateMutation.isPending,
     setRanchName: setRanchNameMutation.mutateAsync,
     isSettingRanchName: setRanchNameMutation.isPending,
     ranchNotes,

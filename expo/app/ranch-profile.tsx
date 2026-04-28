@@ -19,12 +19,14 @@ import {
   X,
   Plus,
   Crown,
-  Mail,
+  Star,
   Settings as SettingsIcon,
   ChevronRight,
   Check,
   RotateCcw,
+  Lock,
 } from "lucide-react-native";
+import type { UserRole, RanchMember } from "@/types";
 import * as Haptics from "expo-haptics";
 import { Stack, useRouter } from "expo-router";
 import { ThemeColors } from "@/constants/colors";
@@ -51,6 +53,10 @@ export default function RanchProfileScreen() {
     isAddingUser,
     resetApp,
     isResettingApp,
+    canInviteTeammates,
+    inviteTeammate,
+    isInvitingTeammate,
+    currentUserRole,
   } = useRanch();
 
   const [editingRanchName, setEditingRanchName] = useState<boolean>(false);
@@ -61,6 +67,10 @@ export default function RanchProfileScreen() {
 
   const [switchOpen, setSwitchOpen] = useState<boolean>(false);
   const [newUserName, setNewUserName] = useState<string>("");
+
+  const [inviteOpen, setInviteOpen] = useState<boolean>(false);
+  const [inviteName, setInviteName] = useState<string>("");
+  const [inviteRole, setInviteRole] = useState<"manager" | "member">("member");
 
   const owner = useMemo(
     () => ranch.members.find((m) => m.userId === ranch.ownerId),
@@ -153,6 +163,34 @@ export default function RanchProfileScreen() {
       Alert.alert("Couldn't create user", "Please try again.");
     }
   }, [newUserName, addUserAndSwitch]);
+
+  const handleOpenInvite = useCallback(() => {
+    if (!canInviteTeammates) {
+      if (Platform.OS !== "web") void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+      return;
+    }
+    if (Platform.OS !== "web") void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setInviteName("");
+    setInviteRole("member");
+    setInviteOpen(true);
+  }, [canInviteTeammates]);
+
+  const handleConfirmInvite = useCallback(async () => {
+    const trimmed = inviteName.trim();
+    if (!trimmed) return;
+    try {
+      await inviteTeammate({ name: trimmed, role: inviteRole });
+      if (Platform.OS !== "web") void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      setInviteOpen(false);
+      setInviteName("");
+    } catch (e) {
+      console.log("Failed to invite", e);
+      Alert.alert(
+        "Couldn't invite",
+        e instanceof Error ? e.message : "Please try again.",
+      );
+    }
+  }, [inviteName, inviteRole, inviteTeammate]);
 
   const handleResetApp = useCallback(() => {
     if (Platform.OS !== "web") void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -279,8 +317,8 @@ export default function RanchProfileScreen() {
 
         <Section title="Team Members" Colors={Colors}>
           {ranch.members.map((m) => {
-            const isOwner = m.userId === ranch.ownerId;
             const isYou = m.userId === currentUserId;
+            const meta = getRoleMeta(m.role, Colors);
             return (
               <TouchableOpacity
                 key={m.userId}
@@ -291,16 +329,14 @@ export default function RanchProfileScreen() {
                   if (Platform.OS !== "web") void Haptics.selectionAsync();
                   Alert.alert(
                     m.name,
-                    `${isOwner ? "Owner" : "Member"}${isYou ? " \u2014 that's you" : ""}\n\nRoles & permissions are coming soon.`,
+                    `${meta.label}${isYou ? " \u2014 that's you" : ""}\n\n${meta.description}`,
                   );
                 }}
               >
                 <View
                   style={[
                     styles.memberAvatar,
-                    {
-                      backgroundColor: isOwner ? Colors.accent : Colors.primary,
-                    },
+                    { backgroundColor: meta.avatarColor },
                   ]}
                 >
                   <Text style={styles.memberAvatarText}>{getInitials(m.name)}</Text>
@@ -317,19 +353,14 @@ export default function RanchProfileScreen() {
                     )}
                   </View>
                   <View style={styles.memberRoleRow}>
-                    {isOwner ? (
-                      <Crown size={13} color={Colors.accent} />
-                    ) : (
-                      <Shield size={13} color={Colors.textSecondary} />
-                    )}
-                    <Text
-                      style={[
-                        styles.memberRole,
-                        { color: isOwner ? Colors.accent : Colors.textSecondary },
-                      ]}
-                    >
-                      {isOwner ? "Owner" : "Member"}
-                    </Text>
+                    <View style={[styles.roleBadge, { backgroundColor: meta.color + "1F" }]}>
+                      {meta.icon === "crown" && <Crown size={12} color={meta.color} />}
+                      {meta.icon === "star" && <Star size={12} color={meta.color} />}
+                      {meta.icon === "shield" && <Shield size={12} color={meta.color} />}
+                      <Text style={[styles.roleBadgeText, { color: meta.color }]}>
+                        {meta.label}
+                      </Text>
+                    </View>
                   </View>
                 </View>
               </TouchableOpacity>
@@ -337,24 +368,44 @@ export default function RanchProfileScreen() {
           })}
 
           <TouchableOpacity
-            style={styles.invitePlaceholder}
-            activeOpacity={0.7}
-            onPress={() =>
-              Alert.alert(
-                "Coming soon",
-                "Invite teammates by email or code in a future update.",
-              )
-            }
-            testID="invite-member-placeholder"
+            style={[styles.inviteCta, !canInviteTeammates && styles.inviteCtaDisabled]}
+            activeOpacity={canInviteTeammates ? 0.7 : 1}
+            onPress={handleOpenInvite}
+            disabled={!canInviteTeammates}
+            testID="invite-teammate-btn"
           >
-            <View style={styles.inviteIcon}>
-              <Mail size={18} color={Colors.textTertiary} />
+            <View
+              style={[
+                styles.inviteIcon,
+                {
+                  backgroundColor: canInviteTeammates
+                    ? Colors.primary + "1F"
+                    : Colors.backgroundDark,
+                },
+              ]}
+            >
+              {canInviteTeammates ? (
+                <UserPlus size={18} color={Colors.primary} />
+              ) : (
+                <Lock size={16} color={Colors.textTertiary} />
+              )}
             </View>
             <View style={styles.inviteBody}>
-              <Text style={styles.inviteTitle}>Invite a teammate</Text>
-              <Text style={styles.inviteSubtitle}>Coming soon</Text>
+              <Text
+                style={[
+                  styles.inviteTitle,
+                  { color: canInviteTeammates ? Colors.text : Colors.textTertiary },
+                ]}
+              >
+                Invite a teammate
+              </Text>
+              <Text style={styles.inviteSubtitle}>
+                {canInviteTeammates
+                  ? "Add a new member to your ranch"
+                  : "Only owners or managers can invite teammates"}
+              </Text>
             </View>
-            <UserPlus size={18} color={Colors.textTertiary} />
+            {canInviteTeammates && <ChevronRight size={18} color={Colors.textTertiary} />}
           </TouchableOpacity>
         </Section>
 
@@ -473,18 +524,6 @@ export default function RanchProfileScreen() {
             <ChevronRight size={18} color={Colors.textTertiary} />
           </TouchableOpacity>
 
-          <View style={[styles.actionRow, styles.actionRowDisabled]}>
-            <View style={[styles.actionIcon, { backgroundColor: Colors.border }]}>
-              <UserPlus size={20} color={Colors.textTertiary} />
-            </View>
-            <View style={styles.actionBody}>
-              <Text style={[styles.actionTitle, { color: Colors.textTertiary }]}>
-                Invite Member
-              </Text>
-              <Text style={styles.actionSubtitle}>Coming soon</Text>
-            </View>
-          </View>
-
           <TouchableOpacity
             style={[styles.actionRow, isResettingApp && styles.actionRowDisabled]}
             activeOpacity={0.7}
@@ -523,7 +562,202 @@ export default function RanchProfileScreen() {
         isAddingUser={isAddingUser}
         Colors={Colors}
       />
+
+      <InviteTeammateModal
+        visible={inviteOpen}
+        onClose={() => setInviteOpen(false)}
+        name={inviteName}
+        setName={setInviteName}
+        role={inviteRole}
+        setRole={setInviteRole}
+        onConfirm={handleConfirmInvite}
+        isInviting={isInvitingTeammate}
+        canInvite={canInviteTeammates}
+        inviterRole={currentUserRole}
+        Colors={Colors}
+      />
     </>
+  );
+}
+
+function getRoleMeta(
+  role: UserRole,
+  Colors: ThemeColors,
+): {
+  label: string;
+  icon: "crown" | "star" | "shield";
+  color: string;
+  avatarColor: string;
+  description: string;
+} {
+  switch (role) {
+    case "owner":
+      return {
+        label: "Owner",
+        icon: "crown",
+        color: Colors.accent,
+        avatarColor: Colors.accent,
+        description: "Full control \u2014 can invite anyone and manage the ranch.",
+      };
+    case "manager":
+      return {
+        label: "Manager",
+        icon: "star",
+        color: Colors.primary,
+        avatarColor: Colors.primary,
+        description: "Can invite teammates and manage day-to-day work.",
+      };
+    case "worker":
+    case "member":
+    default:
+      return {
+        label: "Member",
+        icon: "shield",
+        color: Colors.textSecondary,
+        avatarColor: Colors.textSecondary,
+        description: "Can view and log work. Cannot invite teammates.",
+      };
+  }
+}
+
+function InviteTeammateModal({
+  visible,
+  onClose,
+  name,
+  setName,
+  role,
+  setRole,
+  onConfirm,
+  isInviting,
+  canInvite,
+  inviterRole,
+  Colors,
+}: {
+  visible: boolean;
+  onClose: () => void;
+  name: string;
+  setName: (s: string) => void;
+  role: "manager" | "member";
+  setRole: (r: "manager" | "member") => void;
+  onConfirm: () => void;
+  isInviting: boolean;
+  canInvite: boolean;
+  inviterRole: RanchMember["role"] | null;
+  Colors: ThemeColors;
+}) {
+  const styles = useMemo(() => createStyles(Colors), [Colors]);
+  const trimmed = name.trim();
+  const disabled = isInviting || trimmed.length === 0 || !canInvite;
+  return (
+    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
+      <View style={styles.modalBackdrop}>
+        <View style={styles.modalCard}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>Invite Teammate</Text>
+            <TouchableOpacity onPress={onClose} style={styles.modalClose} activeOpacity={0.7}>
+              <X size={20} color={Colors.textSecondary} />
+            </TouchableOpacity>
+          </View>
+
+          <Text style={styles.modalSubtitle}>
+            {canInvite
+              ? `Inviting as ${inviterRole === "owner" ? "Owner" : "Manager"}. New teammates can be added as Manager or Member.`
+              : "Only owners or managers can invite teammates."}
+          </Text>
+
+          <View style={styles.inviteFieldBlock}>
+            <Text style={styles.inviteFieldLabel}>Name</Text>
+            <TextInput
+              value={name}
+              onChangeText={setName}
+              placeholder="e.g. Sam"
+              placeholderTextColor={Colors.textTertiary}
+              style={styles.modalAddInput}
+              autoCapitalize="words"
+              maxLength={40}
+              autoFocus={canInvite}
+              editable={canInvite}
+              onSubmitEditing={onConfirm}
+              returnKeyType="done"
+              testID="invite-name-input"
+            />
+          </View>
+
+          <View style={styles.inviteFieldBlock}>
+            <Text style={styles.inviteFieldLabel}>Role</Text>
+            <View style={styles.roleOptions}>
+              {(
+                [
+                  { value: "member" as const, label: "Member", desc: "View and log work", icon: "shield" as const },
+                  { value: "manager" as const, label: "Manager", desc: "Can invite teammates", icon: "star" as const },
+                ]
+              ).map((opt) => {
+                const selected = role === opt.value;
+                return (
+                  <TouchableOpacity
+                    key={opt.value}
+                    style={[
+                      styles.roleOption,
+                      selected && {
+                        borderColor: Colors.primary,
+                        backgroundColor: Colors.primary + "12",
+                      },
+                    ]}
+                    activeOpacity={0.85}
+                    onPress={() => {
+                      if (Platform.OS !== "web") void Haptics.selectionAsync();
+                      setRole(opt.value);
+                    }}
+                    disabled={!canInvite}
+                    testID={`invite-role-${opt.value}`}
+                  >
+                    <View
+                      style={[
+                        styles.roleOptionIcon,
+                        {
+                          backgroundColor: selected ? Colors.primary : Colors.backgroundDark,
+                        },
+                      ]}
+                    >
+                      {opt.icon === "star" ? (
+                        <Star size={16} color={selected ? "#fff" : Colors.textSecondary} />
+                      ) : (
+                        <Shield size={16} color={selected ? "#fff" : Colors.textSecondary} />
+                      )}
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.roleOptionLabel}>{opt.label}</Text>
+                      <Text style={styles.roleOptionDesc}>{opt.desc}</Text>
+                    </View>
+                    {selected && <Check size={18} color={Colors.primary} />}
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          </View>
+
+          <TouchableOpacity
+            style={[
+              styles.inviteConfirmBtn,
+              { backgroundColor: disabled ? Colors.border : Colors.primary },
+            ]}
+            onPress={onConfirm}
+            disabled={disabled}
+            activeOpacity={0.85}
+            testID="confirm-invite-btn"
+          >
+            {isInviting ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <>
+                <UserPlus size={18} color="#fff" />
+                <Text style={styles.inviteConfirmText}>Send Invite</Text>
+              </>
+            )}
+          </TouchableOpacity>
+        </View>
+      </View>
+    </Modal>
   );
 }
 
@@ -830,7 +1064,7 @@ function createStyles(Colors: ThemeColors) {
     },
     youBadgeText: { fontSize: 11, fontWeight: "800" as const, color: "#fff" },
 
-    invitePlaceholder: {
+    inviteCta: {
       flexDirection: "row" as const,
       alignItems: "center" as const,
       backgroundColor: Colors.surface,
@@ -839,6 +1073,76 @@ function createStyles(Colors: ThemeColors) {
       borderWidth: 1,
       borderColor: Colors.borderLight,
       borderStyle: "dashed" as const,
+      gap: 4,
+    },
+    inviteCtaDisabled: { opacity: 0.85 },
+    roleBadge: {
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      gap: 5,
+      paddingHorizontal: 8,
+      paddingVertical: 3,
+      borderRadius: 999,
+    },
+    roleBadgeText: {
+      fontSize: 12,
+      fontWeight: "800" as const,
+      letterSpacing: 0.3,
+    },
+    inviteFieldBlock: {
+      marginTop: 14,
+    },
+    inviteFieldLabel: {
+      fontSize: 12,
+      fontWeight: "800" as const,
+      color: Colors.textSecondary,
+      textTransform: "uppercase" as const,
+      letterSpacing: 1.1,
+      marginBottom: 8,
+      marginLeft: 4,
+    },
+    roleOptions: { gap: 10 },
+    roleOption: {
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      gap: 12,
+      padding: 14,
+      borderRadius: 12,
+      borderWidth: 1.5,
+      borderColor: Colors.borderLight,
+      backgroundColor: Colors.surface,
+    },
+    roleOptionIcon: {
+      width: 36,
+      height: 36,
+      borderRadius: 10,
+      alignItems: "center" as const,
+      justifyContent: "center" as const,
+    },
+    roleOptionLabel: {
+      fontSize: 15,
+      fontWeight: "800" as const,
+      color: Colors.text,
+    },
+    roleOptionDesc: {
+      fontSize: 12,
+      fontWeight: "500" as const,
+      color: Colors.textSecondary,
+      marginTop: 2,
+    },
+    inviteConfirmBtn: {
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      justifyContent: "center" as const,
+      gap: 8,
+      paddingVertical: 16,
+      borderRadius: 14,
+      marginTop: 18,
+    },
+    inviteConfirmText: {
+      fontSize: 16,
+      fontWeight: "800" as const,
+      color: "#fff",
     },
     inviteIcon: {
       width: 40,
