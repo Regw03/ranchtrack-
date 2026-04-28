@@ -10,6 +10,7 @@ import {
   Platform,
   Modal,
   ActivityIndicator,
+  KeyboardAvoidingView,
 } from "react-native";
 import {
   Pencil,
@@ -650,7 +651,15 @@ function InviteTeammateModal({
   const disabled = isInviting || trimmed.length === 0 || !canInvite;
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
-      <View style={styles.modalBackdrop}>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        style={styles.modalBackdrop}
+      >
+        <ScrollView
+          contentContainerStyle={styles.modalScrollContent}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
         <View style={styles.modalCard}>
           <View style={styles.modalHeader}>
             <Text style={styles.modalTitle}>Invite Teammate</Text>
@@ -756,7 +765,8 @@ function InviteTeammateModal({
             )}
           </TouchableOpacity>
         </View>
-      </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }
@@ -1209,6 +1219,10 @@ function createStyles(Colors: ThemeColors) {
     modalBackdrop: {
       flex: 1,
       backgroundColor: "rgba(0,0,0,0.45)",
+      justifyContent: "flex-end" as const,
+    },
+    modalScrollContent: {
+      flexGrow: 1,
       justifyContent: "flex-end" as const,
     },
     modalCard: {
