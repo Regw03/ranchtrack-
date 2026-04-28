@@ -18,6 +18,47 @@ export type Database = {
   }
   public: {
     Tables: {
+      animals: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          data: Json
+          deleted: boolean
+          id: string
+          ranch_id: string
+          tag: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          data: Json
+          deleted?: boolean
+          id: string
+          ranch_id: string
+          tag: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          data?: Json
+          deleted?: boolean
+          id?: string
+          ranch_id?: string
+          tag?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "animals_ranch_id_fkey"
+            columns: ["ranch_id"]
+            isOneToOne: false
+            referencedRelation: "ranches"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       ranch_members: {
         Row: {
           joined_at: string

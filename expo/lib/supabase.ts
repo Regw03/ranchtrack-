@@ -1,4 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
+import type { Animal } from "@/types";
 
 const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL!;
 const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY!;
@@ -33,4 +34,103 @@ export interface RemoteRanchMemberRow {
   name: string;
   role: "owner" | "manager" | "member";
   joined_at: string;
+}
+
+export interface RemoteAnimalRow {
+  id: string;
+  ranch_id: string;
+  tag: string;
+  created_by: string | null;
+  data: Animal;
+  deleted: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+function isRemoteRanch(ranchId: string | undefined | null): ranchId is string {
+  return !!ranchId && ranchId.length > 0;
+}
+
+export async function pushAnimalToCloud(animal: Animal, createdBy: string | null): Promise<void> {
+  if (!isRemoteRanch(animal.ranchId)) return;
+  try {
+    const { error } = await supabase.from("animals").upsert(
+      {
+        id: animal.id,
+        ranch_id: animal.ranchId,
+        tag: animal.tagId,
+        created_by: createdBy,
+        data: animal,
+        deleted: false,
+        updated_at: animal.updatedAt,
+      },
+      { onConflict: "id" },
+    );
+    if (error) {
+      console.log("[sync] pushAnimal error", error.message);
+    }
+  } catch (e) {
+    console.log("[sync] pushAnimal exception", e);
+  }
+}
+
+export async function deleteAnimalInCloud(animalId: string, ranchId: string): Promise<void> {
+  if (!isRemoteRanch(ranchId)) return;
+  try {
+    const { error } = await supabase
+      .from("animals")
+      .update({ deleted: true, updated_at: new Date().toISOString() })
+      .eq("id", animalId);
+    if (error) {
+      console.log("[sync] deleteAnimal error", error.message);
+    }
+  } catch (e) {
+    console.log("[sync] deleteAnimal exception", e);
+  }
+}
+
+export interface AnimalSyncResult {
+  remoteRows: RemoteAnimalRow[];
+  error?: string;
+}
+
+export async function fetchRanchAnimals(ranchId: string): Promise<AnimalSyncResult> {
+  if (!isRemoteRanch(ranchId)) return { remoteRows: [] };
+  try {
+    const { data, error } = await supabase
+      .from("animals")
+      .select("*")
+      .eq("ranch_id", ranchId);
+    if (error) {
+      console.log("[sync] fetchAnimals error", error.message);
+      return { remoteRows: [], error: error.message };
+    }
+    return { remoteRows: (data ?? []) as RemoteAnimalRow[] };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "Unknown error";
+    console.log("[sync] fetchAnimals exception", msg);
+    return { remoteRows: [], error: msg };
+  }
+}
+
+export async function pushAnimalsBatchToCloud(animals: Animal[], createdBy: string | null): Promise<void> {
+  const remoteAnimals = animals.filter((a) => isRemoteRanch(a.ranchId));
+  if (remoteAnimals.length === 0) return;
+  try {
+    const rows = remoteAnimals.map((a) => ({
+      id: a.id,
+      ranch_id: a.ranchId,
+      tag: a.tagId,
+      created_by: createdBy,
+      data: a,
+      deleted: false,
+      updated_at: a.updatedAt,
+    }));
+    const { error } = await supabase.from("animals").upsert(rows, { onConflict: "id" });
+    if (error) {
+      console.log("[sync] pushAnimalsBatch error", error.message);
+    }
+  } catch (e) {
+    console.log("[sync] pushAnimalsBatch exception", e);
+  }
 }
