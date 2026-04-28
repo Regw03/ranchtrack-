@@ -242,8 +242,8 @@ export const [OnboardingProvider, useOnboarding] = createContextHook(() => {
   const isLoading = completedQuery.isLoading;
   const ranchConfig = configQuery.data ?? DEFAULT_CONFIG;
 
-  const completeOnboarding = useCallback(() => {
-    completeOnboardingMutation.mutate();
+  const completeOnboarding = useCallback(async () => {
+    await completeOnboardingMutation.mutateAsync();
   }, [completeOnboardingMutation]);
 
   const saveConfig = useCallback(

@@ -50,7 +50,7 @@ export default function RanchSetupScreen() {
     if (Platform.OS !== "web") void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     try {
       await setupRanch({ userName: trimmedUser, ranchName: trimmedRanch });
-      completeOnboarding();
+      await completeOnboarding();
       console.log("Setup complete:", trimmedUser, "@", trimmedRanch);
       router.replace("/(tabs)/dashboard");
     } catch (e) {

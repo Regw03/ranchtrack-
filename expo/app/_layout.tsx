@@ -198,7 +198,7 @@ function RootLayoutNav() {
 }
 
 function OnboardingGate() {
-  const { isLoading } = useOnboarding();
+  const { isLoading, isOnboardingComplete } = useOnboarding();
   const { ranch, isLoading: isRanchLoading } = useRanch();
   const segments = useSegments();
   const router = useRouter();
@@ -209,11 +209,13 @@ function OnboardingGate() {
     const inOnboarding = segments[0] === "onboarding";
     const hasRanch = !!ranch?.name && !!ranch?.id;
 
-    if (!hasRanch && !inOnboarding) {
+    if (isOnboardingComplete && hasRanch) return;
+
+    if (!hasRanch && !isOnboardingComplete && !inOnboarding) {
       console.log("No ranch profile yet, redirecting to welcome");
       router.replace("/onboarding/welcome");
     }
-  }, [isLoading, isRanchLoading, ranch, segments, router]);
+  }, [isLoading, isRanchLoading, ranch, segments, router, isOnboardingComplete]);
 
   return null;
 }
