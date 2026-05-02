@@ -116,6 +116,27 @@ function generateId(): string {
   return Date.now().toString(36) + Math.random().toString(36).substr(2, 9);
 }
 
+/**
+ * Generates an RFC4122 v4 UUID. Required for Supabase columns that are typed
+ * as `uuid` (e.g. ranch_members.user_id). Falls back to Math.random when
+ * crypto.randomUUID is unavailable.
+ */
+function generateUuid(): string {
+  const g = (globalThis as unknown as { crypto?: { randomUUID?: () => string } }).crypto;
+  if (g?.randomUUID) {
+    try {
+      return g.randomUUID();
+    } catch (e) {
+      console.log("[generateUuid] randomUUID failed, falling back", e);
+    }
+  }
+  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    const v = c === "x" ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
+  });
+}
+
 const DEFAULT_BUSINESS_YEAR: BusinessYear = {
   id: "by-default",
   name: "Spring Calving 2026",
@@ -1679,7 +1700,7 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
       if (!trimmedRanchName) throw new Error("Ranch name cannot be empty");
 
       const newUser: User = {
-        id: generateId(),
+        id: generateUuid(),
         name: trimmedUserName,
         createdAt: new Date().toISOString(),
       };
@@ -1847,7 +1868,7 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
       }
 
       const newUser: User = {
-        id: generateId(),
+        id: generateUuid(),
         name: trimmed,
         createdAt: new Date().toISOString(),
       };
@@ -1934,7 +1955,7 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
       }
 
       const newUser: User = {
-        id: generateId(),
+        id: generateUuid(),
         name: trimmedUserName,
         createdAt: new Date().toISOString(),
       };
