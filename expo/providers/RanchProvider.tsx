@@ -1856,6 +1856,11 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
       const joinedAt = new Date().toISOString();
 
       if (currentRanch.id && currentRanch.id !== MOCK_RANCH.id) {
+        console.log("[inviteTeammate] inserting member", {
+          ranch_id: currentRanch.id,
+          user_id: newUser.id,
+          role,
+        });
         const { error: memberErr } = await supabase.from("ranch_members").insert({
           ranch_id: currentRanch.id,
           user_id: newUser.id,
@@ -1864,8 +1869,22 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
           joined_at: joinedAt,
         });
         if (memberErr) {
-          console.error("[inviteTeammate] backend error", memberErr);
-          throw new Error(memberErr.message);
+          console.error(
+            "[inviteTeammate] backend error",
+            JSON.stringify({
+              message: memberErr.message,
+              code: (memberErr as { code?: string }).code,
+              details: (memberErr as { details?: string }).details,
+              hint: (memberErr as { hint?: string }).hint,
+            }),
+          );
+          const friendly =
+            (memberErr as { code?: string }).code === "23505"
+              ? "This teammate is already in the ranch."
+              : (memberErr as { code?: string }).code === "42501"
+                ? "You don't have permission to invite teammates. Check Supabase RLS policies for ranch_members."
+                : memberErr.message || "Failed to invite teammate";
+          throw new Error(friendly);
         }
       }
 
