@@ -121,6 +121,17 @@ function generateId(): string {
  * as `uuid` (e.g. ranch_members.user_id). Falls back to Math.random when
  * crypto.randomUUID is unavailable.
  */
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * Returns true when `value` is a valid v4-shaped UUID string. Used to guard
+ * Supabase inserts on columns typed as `uuid` so legacy locally-generated ids
+ * don't reach the backend.
+ */
+function isUuid(value: string | undefined | null): value is string {
+  return typeof value === "string" && UUID_REGEX.test(value);
+}
+
 function generateUuid(): string {
   const g = (globalThis as unknown as { crypto?: { randomUUID?: () => string } }).crypto;
   if (g?.randomUUID) {
@@ -1876,7 +1887,7 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
       const updatedUsers = [...currentUsers, newUser];
       const joinedAt = new Date().toISOString();
 
-      if (currentRanch.id && currentRanch.id !== MOCK_RANCH.id) {
+      if (currentRanch.id && currentRanch.id !== MOCK_RANCH.id && isUuid(currentRanch.id)) {
         console.log("[inviteTeammate] inserting member", {
           ranch_id: currentRanch.id,
           user_id: newUser.id,
@@ -1907,6 +1918,11 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
                 : memberErr.message || "Failed to invite teammate";
           throw new Error(friendly);
         }
+      } else if (currentRanch.id && !isUuid(currentRanch.id)) {
+        console.log(
+          "[inviteTeammate] skipping backend insert — legacy non-uuid ranch id",
+          currentRanch.id,
+        );
       }
 
       await saveToStorage(STORAGE_KEYS.users, updatedUsers);
