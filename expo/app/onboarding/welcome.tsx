@@ -10,9 +10,13 @@ import {
 import { useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import * as Haptics from "expo-haptics";
-import { ArrowRight } from "lucide-react-native";
+import { ArrowRight, LogIn } from "lucide-react-native";
 import { ThemeColors } from "@/constants/colors";
 import { useColors } from "@/providers/ThemeProvider";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { getCurrentAuthUserId } from "@/lib/supabase";
+
+const AUTH_STORAGE_KEY = "ranchtrack_auth_user_id";
 
 export default function WelcomeScreen() {
   const Colors = useColors();
@@ -44,18 +48,67 @@ export default function WelcomeScreen() {
         }),
       ]),
     ]).start();
+
+    // Check if user is already authenticated — if so skip straight past welcome
+    (async () => {
+      try {
+        const [storedId, authId] = await Promise.all([
+          AsyncStorage.getItem(AUTH_STORAGE_KEY),
+          getCurrentAuthUserId(),
+        ]);
+        if (storedId && authId) {
+          // Already logged in — the app layout will handle routing to dashboard
+          console.log("[welcome] user already authenticated, skipping welcome");
+        }
+      } catch (e) {
+        console.log("[welcome] auth check failed", e);
+      }
+    })();
   }, [fadeAnim, slideAnim, emojiScale]);
 
-  const handleGetStarted = useCallback(() => {
+  // --- New ranch: go to sign-up first, then ranch setup ---
+  const handleGetStarted = useCallback(async () => {
     if (Platform.OS !== "web")
       void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    router.push("/onboarding/ranch-name");
+
+    try {
+      // If already authenticated, skip sign-up and go straight to ranch name
+      const authId = await getCurrentAuthUserId();
+      if (authId) {
+        router.push("/onboarding/ranch-name");
+      } else {
+        router.push("/onboarding/sign-up");
+      }
+    } catch {
+      router.push("/onboarding/sign-up");
+    }
   }, [router]);
 
-  const handleJoinRanch = useCallback(() => {
+  // --- Join ranch: go to sign-up first, then join ---
+  const handleJoinRanch = useCallback(async () => {
     if (Platform.OS !== "web")
       void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    router.push("/onboarding/join-ranch");
+
+    try {
+      const authId = await getCurrentAuthUserId();
+      if (authId) {
+        router.push("/onboarding/join-ranch");
+      } else {
+        // Store intent so sign-up knows to redirect to join-ranch after
+        await AsyncStorage.setItem("ranchtrack_auth_intent", "join");
+        router.push("/onboarding/sign-up");
+      }
+    } catch {
+      await AsyncStorage.setItem("ranchtrack_auth_intent", "join");
+      router.push("/onboarding/sign-up");
+    }
+  }, [router]);
+
+  // --- Returning user: go straight to sign-in ---
+  const handleSignIn = useCallback(() => {
+    if (Platform.OS !== "web")
+      void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    router.push("/onboarding/sign-in");
   }, [router]);
 
   return (
@@ -63,10 +116,7 @@ export default function WelcomeScreen() {
       <SafeAreaView style={styles.safeArea}>
         <View style={styles.content}>
           <Animated.View
-            style={[
-              styles.heroBlock,
-              { transform: [{ scale: emojiScale }] },
-            ]}
+            style={[styles.heroBlock, { transform: [{ scale: emojiScale }] }]}
           >
             <View style={styles.emojiCircle}>
               <Text style={styles.brandEmoji}>🐂</Text>
@@ -81,12 +131,18 @@ export default function WelcomeScreen() {
           >
             <Text style={styles.title}>Ranch Tracker</Text>
             <Text style={styles.subtitle}>
-              Track your herd, calving, and work—fast and simple.
+              Track your herd, calving, and work — fast and simple.
             </Text>
           </Animated.View>
         </View>
 
-        <View style={styles.bottomBar}>
+        <Animated.View
+          style={[
+            styles.bottomBar,
+            { opacity: fadeAnim, transform: [{ translateY: slideAnim }] },
+          ]}
+        >
+          {/* Primary: Create a new ranch */}
           <TouchableOpacity
             style={styles.cta}
             onPress={handleGetStarted}
@@ -96,6 +152,8 @@ export default function WelcomeScreen() {
             <Text style={styles.ctaText}>Create a New Ranch</Text>
             <ArrowRight size={22} color="#fff" />
           </TouchableOpacity>
+
+          {/* Secondary: Join an existing ranch */}
           <TouchableOpacity
             style={styles.secondaryCta}
             onPress={handleJoinRanch}
@@ -104,7 +162,25 @@ export default function WelcomeScreen() {
           >
             <Text style={styles.secondaryCtaText}>Join an existing ranch</Text>
           </TouchableOpacity>
-        </View>
+
+          {/* Divider */}
+          <View style={styles.dividerRow}>
+            <View style={styles.dividerLine} />
+            <Text style={styles.dividerText}>already have an account?</Text>
+            <View style={styles.dividerLine} />
+          </View>
+
+          {/* Sign in for returning users */}
+          <TouchableOpacity
+            style={styles.signInBtn}
+            onPress={handleSignIn}
+            activeOpacity={0.7}
+            testID="welcome-sign-in"
+          >
+            <LogIn size={18} color={Colors.primary} />
+            <Text style={styles.signInBtnText}>Sign In</Text>
+          </TouchableOpacity>
+        </Animated.View>
       </SafeAreaView>
     </View>
   );
@@ -151,7 +227,7 @@ function createStyles(Colors: ThemeColors) {
     },
     bottomBar: {
       paddingHorizontal: 24,
-      paddingBottom: 20,
+      paddingBottom: 24,
       paddingTop: 8,
     },
     cta: {
@@ -180,6 +256,41 @@ function createStyles(Colors: ThemeColors) {
       fontWeight: "700" as const,
       color: Colors.primary,
       letterSpacing: 0.2,
+    },
+    dividerRow: {
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      marginTop: 20,
+      marginBottom: 16,
+      gap: 10,
+    },
+    dividerLine: {
+      flex: 1,
+      height: 1,
+      backgroundColor: Colors.border,
+    },
+    dividerText: {
+      fontSize: 12,
+      color: Colors.textTertiary,
+      fontWeight: "600" as const,
+      textTransform: "uppercase" as const,
+      letterSpacing: 0.8,
+    },
+    signInBtn: {
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      justifyContent: "center" as const,
+      gap: 8,
+      paddingVertical: 16,
+      borderRadius: 16,
+      borderWidth: 1.5,
+      borderColor: Colors.border,
+      backgroundColor: Colors.surface,
+    },
+    signInBtnText: {
+      fontSize: 16,
+      fontWeight: "700" as const,
+      color: Colors.primary,
     },
   });
 }
