@@ -3,7 +3,7 @@ import { isNoActiveRanchError } from "@/utils/ranchGuard";
 import { Stack, useRouter, useSegments } from "expo-router";
 import * as ScreenOrientation from "expo-screen-orientation";
 import * as SplashScreen from "expo-splash-screen";
-import React, { useEffect, useMemo } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { Platform } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { RanchProvider } from "@/providers/RanchProvider";
@@ -13,8 +13,12 @@ import { ThemeProvider, useColors } from "@/providers/ThemeProvider";
 import { OnboardingProvider, useOnboarding } from "@/providers/OnboardingProvider";
 import { useRanch } from "@/providers/RanchProvider";
 import UserSwitchToast from "@/components/UserSwitchToast";
+import { getCurrentAuthUserId } from "@/lib/supabase";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 void SplashScreen.preventAutoHideAsync();
+
+const AUTH_STORAGE_KEY = "ranchtrack_auth_user_id";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -192,7 +196,6 @@ function RootLayoutNav() {
         name="onboarding"
         options={{ headerShown: false }}
       />
-
     </Stack>
   );
 }
@@ -203,8 +206,30 @@ function OnboardingGate() {
   const segments = useSegments();
   const router = useRouter();
 
+  const [authChecked, setAuthChecked] = useState<boolean>(false);
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
+
   useEffect(() => {
-    if (isLoading || isRanchLoading) return;
+    (async () => {
+      try {
+        const [storedId, authId] = await Promise.all([
+          AsyncStorage.getItem(AUTH_STORAGE_KEY),
+          getCurrentAuthUserId(),
+        ]);
+        const authenticated = !!(storedId && authId);
+        console.log("[OnboardingGate] auth check —", authenticated ? "logged in" : "not logged in");
+        setIsAuthenticated(authenticated);
+      } catch (e) {
+        console.log("[OnboardingGate] auth check error", e);
+        setIsAuthenticated(false);
+      } finally {
+        setAuthChecked(true);
+      }
+    })();
+  }, []);
+
+  useEffect(() => {
+    if (isLoading || isRanchLoading || !authChecked) return;
 
     const inOnboarding = segments[0] === "onboarding";
     const hasRanch = !!ranch?.name && !!ranch?.id;
@@ -218,19 +243,24 @@ function OnboardingGate() {
     }
 
     if (!hasRanch && !isOnboardingComplete && !inOnboarding) {
-      console.log("[OnboardingGate] no ranch profile yet, redirecting to welcome");
-      router.replace("/onboarding/welcome");
+      if (isAuthenticated) {
+        console.log("[OnboardingGate] authenticated but no ranch -> sign-in");
+        router.replace("/onboarding/sign-in");
+      } else {
+        console.log("[OnboardingGate] no auth, no ranch -> welcome");
+        router.replace("/onboarding/welcome");
+      }
     }
-  }, [isLoading, isRanchLoading, ranch, segments, router, isOnboardingComplete]);
+  }, [isLoading, isRanchLoading, authChecked, ranch, segments, router, isOnboardingComplete, isAuthenticated]);
 
   return null;
 }
 
 export default function RootLayout() {
   useEffect(() => {
-    if (Platform.OS !== 'web') {
+    if (Platform.OS !== "web") {
       ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP).catch((err) =>
-        console.log('Failed to lock orientation:', err)
+        console.log("Failed to lock orientation:", err),
       );
     }
     void SplashScreen.hideAsync();
