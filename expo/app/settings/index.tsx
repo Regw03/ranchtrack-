@@ -26,12 +26,20 @@ import { ThemeColors } from "@/constants/colors";
 import { useColors } from "@/providers/ThemeProvider";
 import { useTheme } from "@/providers/ThemeProvider";
 import { useRanch } from "@/providers/RanchProvider";
+import { useOnboarding } from "@/providers/OnboardingProvider";
 import { getInitials } from "@/utils/helpers";
+import { signOut } from "@/lib/supabase";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useRouter } from "expo-router";
+
+const AUTH_STORAGE_KEY = "ranchtrack_auth_user_id";
 
 export default function SettingsScreen() {
   const Colors = useColors();
   const { isDark, toggleTheme } = useTheme();
-  const { ranch, currentUserId } = useRanch();
+  const { ranch, currentUserId, resetApp } = useRanch();
+  const { resetOnboarding } = useOnboarding();
+  const router = useRouter();
   const styles = useMemo(() => createStyles(Colors), [Colors]);
 
   const ROLE_LABELS: Record<string, string> = {
@@ -59,6 +67,43 @@ export default function SettingsScreen() {
     }
     toggleTheme();
   }, [toggleTheme]);
+
+  const handleSignOut = useCallback(() => {
+    Alert.alert(
+      "Sign Out",
+      "Are you sure you want to sign out? You can sign back in anytime with your email and password.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Sign Out",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              if (Platform.OS !== "web") {
+                void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+              }
+
+              await signOut();
+
+              await AsyncStorage.removeItem(AUTH_STORAGE_KEY);
+              await AsyncStorage.removeItem("ranchtrack_current_user_id");
+              await AsyncStorage.removeItem("ranchtrack_pending_user_name");
+              await AsyncStorage.removeItem("ranchtrack_auth_intent");
+
+              await resetApp();
+              await resetOnboarding();
+
+              router.replace("/onboarding/welcome");
+            } catch (e) {
+              const message =
+                e instanceof Error ? e.message : "Something went wrong signing out.";
+              Alert.alert("Sign Out Failed", message);
+            }
+          },
+        },
+      ],
+    );
+  }, [resetApp, resetOnboarding, router]);
 
   return (
     <ScrollView
@@ -191,7 +236,11 @@ export default function SettingsScreen() {
         ))}
       </View>
 
-      <TouchableOpacity style={styles.signOutButton} activeOpacity={0.7}>
+      <TouchableOpacity
+        style={styles.signOutButton}
+        onPress={handleSignOut}
+        activeOpacity={0.7}
+      >
         <LogOut size={18} color={Colors.error} />
         <Text style={styles.signOutText}>Sign Out</Text>
       </TouchableOpacity>

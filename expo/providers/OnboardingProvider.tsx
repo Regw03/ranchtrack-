@@ -246,6 +246,22 @@ export const [OnboardingProvider, useOnboarding] = createContextHook(() => {
     await completeOnboardingMutation.mutateAsync();
   }, [completeOnboardingMutation]);
 
+  const resetOnboardingMutation = useMutation({
+    mutationFn: async () => {
+      await AsyncStorage.removeItem(ONBOARDING_KEY);
+      await AsyncStorage.removeItem(RANCH_CONFIG_KEY);
+      return true;
+    },
+    onSuccess: () => {
+      queryClient.setQueryData(["onboardingComplete"], false);
+      queryClient.setQueryData(["ranchConfig"], DEFAULT_CONFIG);
+    },
+  });
+
+  const resetOnboarding = useCallback(async () => {
+    await resetOnboardingMutation.mutateAsync();
+  }, [resetOnboardingMutation]);
+
   const saveConfig = useCallback(
     (config: RanchConfig) => {
       saveConfigMutation.mutate(config);
@@ -260,7 +276,8 @@ export const [OnboardingProvider, useOnboarding] = createContextHook(() => {
       ranchConfig,
       completeOnboarding,
       saveConfig,
+      resetOnboarding,
     }),
-    [isOnboardingComplete, isLoading, ranchConfig, completeOnboarding, saveConfig],
+    [isOnboardingComplete, isLoading, ranchConfig, completeOnboarding, saveConfig, resetOnboarding],
   );
 });
