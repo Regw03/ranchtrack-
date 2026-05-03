@@ -6,10 +6,54 @@ const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY!;
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
-    persistSession: false,
-    autoRefreshToken: false,
+    persistSession: true,
+    autoRefreshToken: true,
+    detectSessionInUrl: false,
   },
 });
+
+// ─── Auth helpers ────────────────────────────────────────────────────────────
+
+/** Sign up a new user with email + password. Returns the user's UUID. */
+export async function signUpWithEmail(
+  email: string,
+  password: string,
+): Promise<string> {
+  const { data, error } = await supabase.auth.signUp({ email, password });
+  if (error) throw new Error(error.message);
+  const userId = data.user?.id;
+  if (!userId) throw new Error("Sign up succeeded but no user ID was returned.");
+  return userId;
+}
+
+/** Sign in a returning user with email + password. Returns the user's UUID. */
+export async function signInWithEmail(
+  email: string,
+  password: string,
+): Promise<string> {
+  const { data, error } = await supabase.auth.signInWithPassword({
+    email,
+    password,
+  });
+  if (error) throw new Error(error.message);
+  const userId = data.user?.id;
+  if (!userId) throw new Error("Sign in succeeded but no user ID was returned.");
+  return userId;
+}
+
+/** Sign out the current user. */
+export async function signOut(): Promise<void> {
+  const { error } = await supabase.auth.signOut();
+  if (error) throw new Error(error.message);
+}
+
+/** Returns the currently signed-in user's UUID, or null if not signed in. */
+export async function getCurrentAuthUserId(): Promise<string | null> {
+  const { data } = await supabase.auth.getSession();
+  return data.session?.user?.id ?? null;
+}
+
+// ─── Invite code ─────────────────────────────────────────────────────────────
 
 export function generateInviteCode(): string {
   const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
@@ -19,6 +63,8 @@ export function generateInviteCode(): string {
   }
   return code;
 }
+
+// ─── Remote row types ────────────────────────────────────────────────────────
 
 export interface RemoteRanchRow {
   id: string;
@@ -47,11 +93,16 @@ export interface RemoteAnimalRow {
   updated_at: string;
 }
 
+// ─── Animal sync ─────────────────────────────────────────────────────────────
+
 function isRemoteRanch(ranchId: string | undefined | null): ranchId is string {
   return !!ranchId && ranchId.length > 0;
 }
 
-export async function pushAnimalToCloud(animal: Animal, createdBy: string | null): Promise<void> {
+export async function pushAnimalToCloud(
+  animal: Animal,
+  createdBy: string | null,
+): Promise<void> {
   if (!isRemoteRanch(animal.ranchId)) return;
   try {
     const { error } = await supabase.from("animals").upsert(
@@ -74,7 +125,10 @@ export async function pushAnimalToCloud(animal: Animal, createdBy: string | null
   }
 }
 
-export async function deleteAnimalInCloud(animalId: string, ranchId: string): Promise<void> {
+export async function deleteAnimalInCloud(
+  animalId: string,
+  ranchId: string,
+): Promise<void> {
   if (!isRemoteRanch(ranchId)) return;
   try {
     const { error } = await supabase
@@ -94,7 +148,9 @@ export interface AnimalSyncResult {
   error?: string;
 }
 
-export async function fetchRanchAnimals(ranchId: string): Promise<AnimalSyncResult> {
+export async function fetchRanchAnimals(
+  ranchId: string,
+): Promise<AnimalSyncResult> {
   if (!isRemoteRanch(ranchId)) return { remoteRows: [] };
   try {
     const { data, error } = await supabase
@@ -113,7 +169,10 @@ export async function fetchRanchAnimals(ranchId: string): Promise<AnimalSyncResu
   }
 }
 
-export async function pushAnimalsBatchToCloud(animals: Animal[], createdBy: string | null): Promise<void> {
+export async function pushAnimalsBatchToCloud(
+  animals: Animal[],
+  createdBy: string | null,
+): Promise<void> {
   const remoteAnimals = animals.filter((a) => isRemoteRanch(a.ranchId));
   if (remoteAnimals.length === 0) return;
   try {
@@ -126,7 +185,9 @@ export async function pushAnimalsBatchToCloud(animals: Animal[], createdBy: stri
       deleted: false,
       updated_at: a.updatedAt,
     }));
-    const { error } = await supabase.from("animals").upsert(rows, { onConflict: "id" });
+    const { error } = await supabase
+      .from("animals")
+      .upsert(rows, { onConflict: "id" });
     if (error) {
       console.log("[sync] pushAnimalsBatch error", error.message);
     }
