@@ -61,17 +61,47 @@ export default function SignUpScreen() {
 
     setIsLoading(true);
     try {
-      // Create the account in Supabase
-      let userId = await signUpWithEmail(trimmedEmail, password);
+      let userId: string | null = null;
+      let signUpError: unknown = null;
 
-      // Supabase signUp may not return an active session (e.g. when email
-      // confirmation is enabled). Immediately sign in to guarantee a session
-      // so subsequent inserts (ranch creation, etc.) pass RLS checks.
+      // Try creating the account first
+      try {
+        userId = await signUpWithEmail(trimmedEmail, password);
+      } catch (e) {
+        signUpError = e;
+      }
+
+      // Always try to sign in afterwards. This handles three cases gracefully:
+      //   1. Sign-up succeeded but no session (email confirmation enabled).
+      //   2. The email is already registered — user is just signing back in.
+      //   3. Sign-up rate-limited but the account may already exist.
       try {
         const signedInId = await signInWithEmail(trimmedEmail, password);
         if (signedInId) userId = signedInId;
       } catch (signInErr) {
         console.log("[sign-up] post-signup signIn failed", signInErr);
+      }
+
+      // If we still don't have a user ID, surface the most useful error
+      if (!userId) {
+        const raw =
+          signUpError instanceof Error
+            ? signUpError.message
+            : "Something went wrong. Please try again.";
+        const lower = raw.toLowerCase();
+
+        let friendly = raw;
+        if (lower.includes("rate limit") || lower.includes("rate-limit")) {
+          friendly =
+            "Too many sign-up attempts right now. Please wait an hour and try again, or use a different email address.";
+        } else if (lower.includes("already registered") || lower.includes("already exists")) {
+          friendly =
+            "This email is already registered. Please tap 'Sign in' below to log in instead.";
+        } else if (lower.includes("email not confirmed") || lower.includes("confirm")) {
+          friendly =
+            "Please check your email and confirm your address before signing in.";
+        }
+        throw new Error(friendly);
       }
 
       await AsyncStorage.setItem(AUTH_STORAGE_KEY, userId);
