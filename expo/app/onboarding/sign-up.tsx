@@ -18,7 +18,7 @@ import * as Haptics from "expo-haptics";
 import { ArrowRight, Mail, Lock, User } from "lucide-react-native";
 import { ThemeColors } from "@/constants/colors";
 import { useColors } from "@/providers/ThemeProvider";
-import { signUpWithEmail } from "@/lib/supabase";
+import { signUpWithEmail, signInWithEmail } from "@/lib/supabase";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 const AUTH_STORAGE_KEY = "ranchtrack_auth_user_id";
@@ -61,10 +61,32 @@ export default function SignUpScreen() {
 
     setIsLoading(true);
     try {
-      const userId = await signUpWithEmail(trimmedEmail, password);
+      // Create the account in Supabase
+      let userId = await signUpWithEmail(trimmedEmail, password);
+
+      // Supabase signUp may not return an active session (e.g. when email
+      // confirmation is enabled). Immediately sign in to guarantee a session
+      // so subsequent inserts (ranch creation, etc.) pass RLS checks.
+      try {
+        const signedInId = await signInWithEmail(trimmedEmail, password);
+        if (signedInId) userId = signedInId;
+      } catch (signInErr) {
+        console.log("[sign-up] post-signup signIn failed", signInErr);
+      }
+
       await AsyncStorage.setItem(AUTH_STORAGE_KEY, userId);
+      await AsyncStorage.setItem("ranchtrack_current_user_id", userId);
       await AsyncStorage.setItem("ranchtrack_pending_user_name", trimmedName);
-      router.push("/onboarding/welcome");
+
+      // Route based on the intent stored when the user tapped a button on welcome
+      const intent = await AsyncStorage.getItem("ranchtrack_auth_intent");
+      await AsyncStorage.removeItem("ranchtrack_auth_intent");
+
+      if (intent === "join") {
+        router.replace("/onboarding/join-ranch");
+      } else {
+        router.replace("/onboarding/ranch-name");
+      }
     } catch (e) {
       const message = e instanceof Error ? e.message : "Something went wrong. Please try again.";
       Alert.alert("Sign Up Failed", message);
