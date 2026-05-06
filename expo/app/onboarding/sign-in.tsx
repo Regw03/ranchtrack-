@@ -18,7 +18,7 @@ import * as Haptics from "expo-haptics";
 import { ArrowRight, Mail, Lock, Home } from "lucide-react-native";
 import { ThemeColors } from "@/constants/colors";
 import { useColors } from "@/providers/ThemeProvider";
-import { signInWithEmail } from "@/lib/supabase";
+import { signInWithEmail, resendConfirmationEmail } from "@/lib/supabase";
 import { useRanch } from "@/providers/RanchProvider";
 import { useOnboarding } from "@/providers/OnboardingProvider";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -36,6 +36,7 @@ export default function SignInScreen() {
   const [email, setEmail] = useState<string>("");
   const [password, setPassword] = useState<string>("");
   const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [isResending, setIsResending] = useState<boolean>(false);
 
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(24)).current;
@@ -59,6 +60,32 @@ export default function SignInScreen() {
     password.length >= 6 &&
     !isLoading;
 
+  const handleResendConfirmation = useCallback(async () => {
+    if (!trimmedEmail.includes("@")) {
+      Alert.alert("Email Required", "Please enter your email address above first.");
+      return;
+    }
+    if (Platform.OS !== "web") void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setIsResending(true);
+    try {
+      await resendConfirmationEmail(trimmedEmail);
+      Alert.alert(
+        "Confirmation Email Sent",
+        `We've sent a new confirmation link to ${trimmedEmail}. Please check your inbox (and spam folder).`,
+      );
+    } catch (e) {
+      const message =
+        e instanceof Error ? e.message : "Could not resend confirmation email.";
+      const lower = message.toLowerCase();
+      const friendly = lower.includes("rate")
+        ? "Too many requests. Please wait a minute and try again."
+        : message;
+      Alert.alert("Resend Failed", friendly);
+    } finally {
+      setIsResending(false);
+    }
+  }, [trimmedEmail]);
+
   const handleSignIn = useCallback(async () => {
     if (!canContinue) return;
     if (Platform.OS !== "web") void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -80,11 +107,28 @@ export default function SignInScreen() {
     } catch (e) {
       const message =
         e instanceof Error ? e.message : "Something went wrong. Please try again.";
-      Alert.alert("Sign In Failed", message);
+      const lower = message.toLowerCase();
+      if (lower.includes("confirm") || lower.includes("not confirmed")) {
+        Alert.alert(
+          "Email Not Confirmed",
+          "Please confirm your email before signing in. Would you like us to resend the confirmation email?",
+          [
+            { text: "Cancel", style: "cancel" },
+            {
+              text: "Resend",
+              onPress: () => {
+                void handleResendConfirmation();
+              },
+            },
+          ],
+        );
+      } else {
+        Alert.alert("Sign In Failed", message);
+      }
     } finally {
       setIsLoading(false);
     }
-  }, [canContinue, trimmedEmail, password, refreshRanch, completeOnboarding]);
+  }, [canContinue, trimmedEmail, password, refreshRanch, completeOnboarding, handleResendConfirmation]);
 
   return (
     <View style={styles.container}>
@@ -166,6 +210,25 @@ export default function SignInScreen() {
               <Text style={styles.hint}>
                 Use the same email and password you signed up with on your other device.
               </Text>
+
+              <TouchableOpacity
+                style={styles.resendLink}
+                onPress={handleResendConfirmation}
+                activeOpacity={0.7}
+                disabled={isResending}
+                testID="resend-confirmation"
+              >
+                {isResending ? (
+                  <ActivityIndicator color={Colors.primary} size="small" />
+                ) : (
+                  <Text style={styles.resendLinkText}>
+                    Didn&apos;t get the confirmation email?{" "}
+                    <Text style={{ color: Colors.primary, fontWeight: "700" }}>
+                      Resend it
+                    </Text>
+                  </Text>
+                )}
+              </TouchableOpacity>
             </Animated.View>
           </ScrollView>
 
@@ -262,6 +325,16 @@ function createStyles(Colors: ThemeColors) {
     signUpLinkText: {
       fontSize: 15,
       color: Colors.textSecondary,
+    },
+    resendLink: {
+      marginTop: 18,
+      alignItems: "center" as const,
+      paddingVertical: 10,
+    },
+    resendLinkText: {
+      fontSize: 14,
+      color: Colors.textSecondary,
+      textAlign: "center" as const,
     },
     hint: {
       fontSize: 13,

@@ -41,6 +41,15 @@ export async function signInWithEmail(
   return userId;
 }
 
+/** Resend the email confirmation link to a user who has signed up but not yet confirmed. */
+export async function resendConfirmationEmail(email: string): Promise<void> {
+  const { error } = await supabase.auth.resend({
+    type: "signup",
+    email,
+  });
+  if (error) throw new Error(error.message);
+}
+
 /** Sign out the current user. */
 export async function signOut(): Promise<void> {
   const { error } = await supabase.auth.signOut();
