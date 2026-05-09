@@ -2,6 +2,7 @@ import createContextHook from "@nkzw/create-context-hook";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { AppState } from "react-native";
 import { parseBirthDate } from "@/utils/helpers";
 import { requireRanch } from "@/utils/ranchGuard";
 import {
@@ -2157,6 +2158,27 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
       void syncAnimalsMutation.mutateAsync();
     },
   });
+
+  // Auto-refresh ranch members when app comes back to foreground
+  // This is how the owner's device picks up new members who joined via invite code
+  const appStateRef = useRef<string>(AppState.currentState);
+  useEffect(() => {
+    const subscription = AppState.addEventListener("change", (nextState: string) => {
+      const wasBackground =
+        appStateRef.current === "background" || appStateRef.current === "inactive";
+      const nowActive = nextState === "active";
+      appStateRef.current = nextState;
+      if (wasBackground && nowActive) {
+        const currentRanch = queryClient.getQueryData<Ranch>(["ranch"]);
+        if (currentRanch?.id && currentRanch.id !== MOCK_RANCH.id) {
+          console.log("[AppState] app foregrounded — refreshing ranch members");
+          refreshRanchMutation.mutate();
+        }
+      }
+    });
+    return () => subscription.remove();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const resetAppMutation = useMutation({
     mutationFn: async () => {
