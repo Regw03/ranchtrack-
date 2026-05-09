@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo } from "react";
+import React, { useCallback, useMemo, useState } from "react";
 import {
   View,
   Text,
@@ -8,6 +8,7 @@ import {
   Alert,
   Platform,
   Switch,
+  RefreshControl,
 } from "react-native";
 import {
   Copy,
@@ -37,9 +38,21 @@ const AUTH_STORAGE_KEY = "ranchtrack_auth_user_id";
 export default function SettingsScreen() {
   const Colors = useColors();
   const { isDark, toggleTheme } = useTheme();
-  const { ranch, currentUserId, resetApp } = useRanch();
+  const { ranch, currentUserId, resetApp, refreshRanch, isRefreshingRanch } = useRanch();
   const { resetOnboarding } = useOnboarding();
   const router = useRouter();
+  const [isManualRefreshing, setIsManualRefreshing] = useState<boolean>(false);
+
+  const handleRefresh = useCallback(async () => {
+    setIsManualRefreshing(true);
+    try {
+      await refreshRanch();
+    } catch (e) {
+      console.log("[settings] refresh failed", e);
+    } finally {
+      setIsManualRefreshing(false);
+    }
+  }, [refreshRanch]);
   const styles = useMemo(() => createStyles(Colors), [Colors]);
 
   const ROLE_LABELS: Record<string, string> = {
@@ -110,6 +123,15 @@ export default function SettingsScreen() {
       style={styles.container}
       contentContainerStyle={styles.content}
       showsVerticalScrollIndicator={false}
+      refreshControl={
+        <RefreshControl
+          refreshing={isManualRefreshing || isRefreshingRanch}
+          onRefresh={handleRefresh}
+          tintColor={Colors.primary}
+          title="Checking for new members..."
+          titleColor={Colors.textSecondary}
+        />
+      }
     >
       <View style={styles.ranchHeader}>
         <View style={styles.ranchIcon}>
