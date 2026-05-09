@@ -20,6 +20,9 @@ import { ThemeColors } from "@/constants/colors";
 import { useColors } from "@/providers/ThemeProvider";
 import { useRanch } from "@/providers/RanchProvider";
 import { useOnboarding } from "@/providers/OnboardingProvider";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+
+const PENDING_NAME_KEY = "ranchtrack_pending_user_name";
 
 export default function RanchSetupScreen() {
   const Colors = useColors();
@@ -30,8 +33,24 @@ export default function RanchSetupScreen() {
 
   const [userName, setUserName] = useState<string>("");
   const [ranchName, setRanchName] = useState<string>("");
+  const [namePreFilled, setNamePreFilled] = useState<boolean>(false);
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(24)).current;
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const pendingName = await AsyncStorage.getItem(PENDING_NAME_KEY);
+        if (pendingName && pendingName.trim().length > 0) {
+          setUserName(pendingName.trim());
+          setNamePreFilled(true);
+          await AsyncStorage.removeItem(PENDING_NAME_KEY);
+        }
+      } catch (e) {
+        console.log("[ranch-name] could not read pending name", e);
+      }
+    })();
+  }, []);
 
   useEffect(() => {
     Animated.parallel([
@@ -86,25 +105,37 @@ export default function RanchSetupScreen() {
               <Text style={styles.brandEmoji}>🏜️</Text>
               <Text style={styles.title}>Let&apos;s set up your ranch</Text>
               <Text style={styles.subtitle}>
-                A couple quick details and you&apos;re ready to start tracking.
+                {namePreFilled
+                  ? "Just one more thing — what's your ranch called?"
+                  : "A couple quick details and you're ready to start tracking."}
               </Text>
 
-              <View style={styles.fieldGroup}>
-                <Text style={styles.label}>Your Name</Text>
-                <View style={styles.inputWrapper}>
-                  <TextInput
-                    value={userName}
-                    onChangeText={setUserName}
-                    placeholder="e.g. Jake Morrison"
-                    placeholderTextColor={Colors.textTertiary}
-                    style={styles.input}
-                    autoCapitalize="words"
-                    returnKeyType="next"
-                    maxLength={40}
-                    testID="user-name-input"
-                  />
+              {!namePreFilled && (
+                <View style={styles.fieldGroup}>
+                  <Text style={styles.label}>Your Name</Text>
+                  <View style={styles.inputWrapper}>
+                    <TextInput
+                      value={userName}
+                      onChangeText={setUserName}
+                      placeholder="e.g. Jake Morrison"
+                      placeholderTextColor={Colors.textTertiary}
+                      style={styles.input}
+                      autoCapitalize="words"
+                      returnKeyType="next"
+                      maxLength={40}
+                      testID="user-name-input"
+                    />
+                  </View>
                 </View>
-              </View>
+              )}
+
+              {namePreFilled && (
+                <View style={styles.greetingRow}>
+                  <Text style={styles.greetingText}>
+                    👋 Welcome, {trimmedUser}!
+                  </Text>
+                </View>
+              )}
 
               <View style={styles.fieldGroup}>
                 <Text style={styles.label}>Ranch Name</Text>
@@ -120,6 +151,7 @@ export default function RanchSetupScreen() {
                     onSubmitEditing={handleContinue}
                     maxLength={60}
                     testID="ranch-name-input"
+                    autoFocus={namePreFilled}
                   />
                 </View>
               </View>
@@ -177,6 +209,18 @@ function createStyles(Colors: ThemeColors) {
       color: Colors.textSecondary,
       lineHeight: 23,
       marginBottom: 40,
+    },
+    greetingRow: {
+      backgroundColor: Colors.primary + "18",
+      borderRadius: 14,
+      paddingVertical: 14,
+      paddingHorizontal: 18,
+      marginBottom: 24,
+    },
+    greetingText: {
+      fontSize: 17,
+      fontWeight: "700" as const,
+      color: Colors.primary,
     },
     fieldGroup: { marginBottom: 22 },
     label: {
