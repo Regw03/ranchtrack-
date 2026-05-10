@@ -200,6 +200,7 @@ export default function SettingsScreen() {
         />
       }
     >
+      {/* Notifications Modal */}
       <Modal visible={activeModal === "notifications"} animationType="slide" presentationStyle="pageSheet">
         <View style={styles.modalContainer}>
           <View style={styles.modalHeader}>
@@ -237,6 +238,7 @@ export default function SettingsScreen() {
         </View>
       </Modal>
 
+      {/* Data & Storage Modal */}
       <Modal visible={activeModal === "data"} animationType="slide" presentationStyle="pageSheet">
         <View style={styles.modalContainer}>
           <View style={styles.modalHeader}>
@@ -267,6 +269,7 @@ export default function SettingsScreen() {
         </View>
       </Modal>
 
+      {/* Sync Modal */}
       <Modal visible={activeModal === "sync"} animationType="slide" presentationStyle="pageSheet">
         <View style={styles.modalContainer}>
           <View style={styles.modalHeader}>
@@ -279,7 +282,7 @@ export default function SettingsScreen() {
             <Text style={styles.modalNote}>RanchTrack syncs automatically when you open the app. You can also sync manually below.</Text>
             <View style={styles.syncStatusCard}>
               <CheckCircle size={20} color={Colors.primary} />
-              <View style={{ flex: 1, marginLeft: 12 }}>
+              <View style={styles.syncStatusInfo}>
                 <Text style={styles.syncStatusLabel}>Sync Status</Text>
                 <Text style={styles.syncStatusValue}>{lastSyncTime ? `Last synced at ${lastSyncTime}` : "Not yet synced this session"}</Text>
               </View>
@@ -295,13 +298,14 @@ export default function SettingsScreen() {
               </View>
             ))}
             <View style={styles.modalDivider} />
-            <TouchableOpacity style={[styles.syncButton, isSyncing && { opacity: 0.7 }]} onPress={handleSyncNow} disabled={isSyncing} activeOpacity={0.85}>
+            <TouchableOpacity style={[styles.syncButton, isSyncing && styles.syncButtonDisabled]} onPress={handleSyncNow} disabled={isSyncing} activeOpacity={0.85}>
               {isSyncing ? <ActivityIndicator color="#fff" /> : <><RefreshCw size={18} color="#fff" /><Text style={styles.syncButtonText}>Sync Now</Text></>}
             </TouchableOpacity>
           </ScrollView>
         </View>
       </Modal>
 
+      {/* Help Modal */}
       <Modal visible={activeModal === "help"} animationType="slide" presentationStyle="pageSheet">
         <View style={styles.modalContainer}>
           <View style={styles.modalHeader}>
@@ -315,18 +319,161 @@ export default function SettingsScreen() {
               <Text style={styles.helpCardTitle}>RanchTrack</Text>
               <Text style={styles.helpCardVersion}>Version 1.0.0</Text>
             </View>
+
+            <Text style={styles.helpSection}>📊 Dashboard</Text>
             {[
-              { q: "How do I invite a team member?", a: "Go to Settings → copy your Invite Code → share it with your teammate. They enter it on the Join Ranch screen." },
-              { q: "Why isn't my data showing on another device?", a: "Pull down on Settings to force a sync. Animals and ranch data sync automatically when the app opens." },
-              { q: "What data is synced to the cloud?", a: "Animals and ranch/member info sync to Supabase. Calving, health, and breeding records are stored locally — full sync is coming soon." },
-              { q: "How do I start a new business year?", a: "Go to the Work tab, tap the business year selector at the top, and choose Create New Year." },
-              { q: "Can I undo marking an animal as sold?", a: "Yes — go to the For Sale screen, tap the Sold tab, find the animal, and tap Undo Sold." },
+              { q: "What is the Dashboard?", a: "Your daily command center. Shows animals needing attention, active calving groups, processing sessions, and quick action buttons for the most common tasks." },
+              { q: "Quick Actions", a: "Add Calf opens the calving log. Add Cow opens the add animal form. Process opens processing sessions. Doctor opens the doctoring form. Each takes 1–2 taps." },
+              { q: "Needs Attention", a: "Shows animals with unresolved doctoring follow-ups. Tap any animal to open their profile and resolve the issue. The section is hidden when there are none." },
             ].map((item, i) => (
-              <View key={i} style={styles.faqItem}>
+              <View key={`dash${i}`} style={styles.faqItem}>
                 <Text style={styles.faqQ}>{item.q}</Text>
                 <Text style={styles.faqA}>{item.a}</Text>
               </View>
             ))}
+
+            <Text style={styles.helpSection}>🐄 Animals (Herd Tab)</Text>
+            {[
+              { q: "Viewing your herd", a: "The Animals tab groups your herd by type: Cows, Heifers, Calves, Bulls, Steers, and Deceased. Tap a group card to filter the list to that type only." },
+              { q: "Adding an animal", a: "Tap the + button at the bottom right. Tag ID is the only required field. Name, breed, birth year, gender, and species are all optional." },
+              { q: "Animal profile", a: "Tap any animal card to open its full profile. From here you can edit details, add a photo, log health records, weight records, breeding records, and doctoring events." },
+              { q: "Adding a photo", a: "Open the animal profile and tap the photo area or camera icon. You can take a new photo or choose from your library. The photo shows on the profile only, not on list cards." },
+              { q: "Birth year vs full date", a: "For older animals, enter just the birth year (e.g. 2019). Full birthdates are only needed for calves — those are filled in automatically through the calving screen." },
+              { q: "Identity status", a: "Mark an animal as Confirmed, Estimated, or Unknown. Estimated animals show a ~ symbol next to their tag. Useful when you are not certain of an animal's details." },
+              { q: "Generation tracking", a: "Optionally enter a generation number when adding an animal. Toggle Est. to mark it as estimated. Generations are displayed as #3 (confirmed) or ~3 (estimated) on animal cards." },
+              { q: "Searching animals", a: "Use the search bar at the top of the Animals screen. Search by tag number, name, or breed. Tap a group card to filter by type at the same time." },
+              { q: "Marking for sale", a: "Open the animal profile and tap Mark for Sale. They appear on the For Sale screen immediately. Tap Mark Sold to move them to the Sold tab." },
+              { q: "Marking as deceased", a: "Open the animal profile and tap Deceased. The animal is removed from all lists and shows in the Deceased group card. Tap Undo Deceased to fully restore them." },
+              { q: "Merging duplicates", a: "If an animal was entered twice, open one profile and use Merge Duplicate. All records from the duplicate transfer to the kept animal." },
+            ].map((item, i) => (
+              <View key={`herd${i}`} style={styles.faqItem}>
+                <Text style={styles.faqQ}>{item.q}</Text>
+                <Text style={styles.faqA}>{item.a}</Text>
+              </View>
+            ))}
+
+            <Text style={styles.helpSection}>🐮 Calving</Text>
+            {[
+              { q: "Logging a calving event", a: "From the Dashboard tap Add Calf, or Work tab → Log Calving. Type the cow's tag, enter the calf's tag, tap Heifer or Bull, then Save. The calf is automatically added to your herd." },
+              { q: "Unknown cow", a: "If you do not know the mother's tag, you can leave it blank or type an unrecognized tag. The calving record is still saved with the unmatched tag stored as a note." },
+              { q: "Repeat last entry", a: "After saving a calf, tap Repeat Last Entry to pre-fill the calf type, breed, and assisted status from the previous entry. Useful during busy calving periods." },
+              { q: "Calving groups", a: "Groups organize cows by pasture or season (e.g. North Pasture, Spring Heifers). Go to Work → Calving → Groups → New Calving Group. Add cows and log calvings directly from within the group." },
+              { q: "Logging from a group", a: "Open a calving group and tap Log Calving. The mother selection is limited to cows in that group, and the new calf is automatically added to the group." },
+              { q: "Groups reset each year", a: "When you create a new business year, calving groups start fresh. Old groups are preserved if you switch back to view a past year." },
+              { q: "Female calves at year end", a: "When you create a new business year, female calves are automatically promoted to replacement heifers. Bull calves do not transfer since they are typically sold." },
+            ].map((item, i) => (
+              <View key={`calv${i}`} style={styles.faqItem}>
+                <Text style={styles.faqQ}>{item.q}</Text>
+                <Text style={styles.faqA}>{item.a}</Text>
+              </View>
+            ))}
+
+            <Text style={styles.helpSection}>🐂 Breeding</Text>
+            {[
+              { q: "Adding a breeding record", a: "Open an animal profile and tap Add Breeding Record. Enter the last bred date, expected due date, sire tag (optional), and breeding status." },
+              { q: "Breeding status options", a: "Open: not yet bred. Bred: breeding date entered. Confirmed: pregnancy confirmed. Delivered: calf has been born. Tap quick-toggle buttons on the Breeding screen to update in one tap." },
+              { q: "Breeding groups", a: "Go to Work → Breeding → Groups → New Breeding Group. Add females and heifers to organize breeding by pasture or sire. Works the same way as calving groups." },
+              { q: "Breeding records reset each year", a: "Like calving, breeding records and groups are tied to the active business year. Each new year starts fresh." },
+            ].map((item, i) => (
+              <View key={`breed${i}`} style={styles.faqItem}>
+                <Text style={styles.faqQ}>{item.q}</Text>
+                <Text style={styles.faqA}>{item.a}</Text>
+              </View>
+            ))}
+
+            <Text style={styles.helpSection}>💉 Health Events</Text>
+            {[
+              { q: "Logging a group health event", a: "Go to Work → Health Events → Log Event. Choose an event type (Vaccination, Blood Test, Treatment, Inspection, or Custom), assign it to a group, set the date, and save." },
+              { q: "Health templates", a: "Templates save common events for quick reuse. Go to Work → Health Events → Templates → New Template. Select a template when logging a new event to pre-fill the fields." },
+              { q: "Tracking due and overdue events", a: "The Health Events screen groups events into Upcoming, Overdue, and Completed. Overdue events show in red. Tap the circle on any event to mark it complete." },
+              { q: "Doctoring individual animals", a: "For individual issues like injury or illness, use Doctoring instead of Health Events. Open an animal profile and tap Doctor, or use the Doctor quick action on the Dashboard." },
+              { q: "Doctoring follow-ups", a: "When logging a doctoring event, toggle Follow-Up Needed. The animal will appear on the Needs Attention list on your Dashboard until the follow-up is resolved." },
+              { q: "Resolving a follow-up", a: "Open the animal profile, find the doctoring event in the health timeline, and tap Mark Resolved. The animal is removed from the Needs Attention list." },
+            ].map((item, i) => (
+              <View key={`health${i}`} style={styles.faqItem}>
+                <Text style={styles.faqQ}>{item.q}</Text>
+                <Text style={styles.faqA}>{item.a}</Text>
+              </View>
+            ))}
+
+            <Text style={styles.helpSection}>📋 Processing Sessions</Text>
+            {[
+              { q: "What is a processing session?", a: "A processing session tracks a seasonal work event like Spring Processing or Fall Preg Check. It groups health events and tasks together so you can see what is done and what still needs attention." },
+              { q: "Creating a session", a: "Go to Work → Processing Sessions → New Session. Give it a name (e.g. Spring Processing 2026), assign groups, add notes, and save. Sessions are tied to your active business year." },
+              { q: "Logging events in a session", a: "Open a session and tap Log Event. Choose the event type, name it, select the group it applies to, and save. Events appear in the session timeline." },
+              { q: "Tracking group progress", a: "Inside a session, each group shows a status: Not Started, In Progress, or Completed. Tap the status to cycle through the options as work gets done." },
+            ].map((item, i) => (
+              <View key={`proc${i}`} style={styles.faqItem}>
+                <Text style={styles.faqQ}>{item.q}</Text>
+                <Text style={styles.faqA}>{item.a}</Text>
+              </View>
+            ))}
+
+            <Text style={styles.helpSection}>💰 For Sale</Text>
+            {[
+              { q: "Marking an animal for sale", a: "Open any animal profile and tap Mark for Sale. The animal appears on the For Sale screen immediately. They remain in your herd until marked as sold." },
+              { q: "Marking as sold", a: "On the For Sale screen, tap Mark Sold on any animal. They move to the Sold tab and are removed from all other lists and groups." },
+              { q: "Undoing a sale", a: "On the For Sale screen tap the Sold tab, find the animal, and tap Undo Sold. The animal is fully restored including any lists or groups they belonged to before being sold." },
+            ].map((item, i) => (
+              <View key={`sale${i}`} style={styles.faqItem}>
+                <Text style={styles.faqQ}>{item.q}</Text>
+                <Text style={styles.faqA}>{item.a}</Text>
+              </View>
+            ))}
+
+            <Text style={styles.helpSection}>📝 Custom Lists</Text>
+            {[
+              { q: "Creating a list", a: "On the Animals screen scroll to the Operations section and tap New List. Choose an animal type (Cattle or Horse), pick a category (Vaccinations, Breeding, To Be Sold, or Calving/Foaling), give it a name and color, and save." },
+              { q: "Adding animals to a list", a: "Open a list and tap the + button. Search for existing animals to add, or create a brand new animal profile directly from within the list using the list type as a template." },
+              { q: "Sub-lists", a: "Lists support sub-lists for organizing groups within a category. Open a list and tap Add Sub-List (e.g. First Calf Heifers inside a Calving list). Sub-lists collapse under their parent." },
+              { q: "Removing animals from a list", a: "Open the list and remove the animal, or open the animal profile and remove the list from the Lists section on their profile." },
+            ].map((item, i) => (
+              <View key={`list${i}`} style={styles.faqItem}>
+                <Text style={styles.faqQ}>{item.q}</Text>
+                <Text style={styles.faqA}>{item.a}</Text>
+              </View>
+            ))}
+
+            <Text style={styles.helpSection}>📅 Business Years</Text>
+            {[
+              { q: "What is a business year?", a: "A business year represents one ranch season (e.g. Spring Calving 2026). Calving records, breeding records, and groups are all tied to it so each season stays organized separately." },
+              { q: "Creating a new business year", a: "Go to the Work tab, tap the business year selector at the top, and choose Create New Year. Give it a name and it becomes the active year for all new records." },
+              { q: "What carries over to a new year?", a: "Active animals (cows, bulls, steers) carry over. Female calves are automatically promoted to replacement heifers. Bull calves do not transfer. Calving and breeding groups start fresh." },
+              { q: "Viewing past years", a: "Tap the business year selector at the top of the Work tab and choose any past year. All screens filter to show records from that year." },
+            ].map((item, i) => (
+              <View key={`year${i}`} style={styles.faqItem}>
+                <Text style={styles.faqQ}>{item.q}</Text>
+                <Text style={styles.faqA}>{item.a}</Text>
+              </View>
+            ))}
+
+            <Text style={styles.helpSection}>👥 Team & Ranch</Text>
+            {[
+              { q: "Inviting a team member", a: "Go to Settings and copy your Invite Code. Share it with your teammate. They install RanchTrack, tap Join an Existing Ranch on the welcome screen, enter their name and the code, and they are in." },
+              { q: "Seeing new members on your device", a: "Pull down on the Settings screen to refresh the member list. The app also automatically checks for new members each time you open it." },
+              { q: "Roles", a: "Owners and Managers can invite new teammates. Members can view and add data but cannot invite others. Roles are shown on each member card in Settings." },
+              { q: "Ranch Profile", a: "Tap the ranch button in the top right of the Dashboard to open Ranch Profile. Edit your ranch name, your name, manage team members, and switch users on shared devices." },
+              { q: "Switching users on a shared device", a: "Open Ranch Profile and tap Switch User. Select an existing user or add a new one. Useful when multiple people share the same device." },
+            ].map((item, i) => (
+              <View key={`team${i}`} style={styles.faqItem}>
+                <Text style={styles.faqQ}>{item.q}</Text>
+                <Text style={styles.faqA}>{item.a}</Text>
+              </View>
+            ))}
+
+            <Text style={styles.helpSection}>☁️ Account & Sync</Text>
+            {[
+              { q: "What syncs to the cloud?", a: "Animals and ranch/member information sync automatically. Calving, health, breeding, and processing records are stored locally — full cloud sync is coming in a future update." },
+              { q: "Signing in on a new device", a: "Open RanchTrack, tap Sign In on the welcome screen, and enter your email and password. Your ranch and animals are pulled down automatically." },
+              { q: "Signing out", a: "Go to Settings and tap Sign Out at the bottom. Your local data is cleared from this device but remains on the server." },
+              { q: "Clearing local data", a: "Go to Settings → Data & Storage → Clear Local Data. This removes all data from this device only. Sign back in to restore everything from the server." },
+            ].map((item, i) => (
+              <View key={`acct${i}`} style={styles.faqItem}>
+                <Text style={styles.faqQ}>{item.q}</Text>
+                <Text style={styles.faqA}>{item.a}</Text>
+              </View>
+            ))}
+
             <TouchableOpacity style={styles.contactButton} onPress={() => Alert.alert("Contact Support", "For help, email: support@ranchtrack.app")} activeOpacity={0.8}>
               <Mail size={18} color={Colors.primary} />
               <Text style={styles.contactButtonText}>Contact Support</Text>
@@ -335,6 +482,7 @@ export default function SettingsScreen() {
         </View>
       </Modal>
 
+      {/* Main Content */}
       <View style={styles.ranchHeader}>
         <View style={styles.ranchIcon}><Text style={styles.ranchIconText}>🏜️</Text></View>
         <Text style={styles.ranchName}>{ranch.name}</Text>
@@ -482,12 +630,14 @@ const createStyles = (Colors: ThemeColors) => StyleSheet.create({
   dangerButton: { flexDirection: "row" as const, alignItems: "center" as const, justifyContent: "center" as const, backgroundColor: Colors.error, borderRadius: 14, paddingVertical: 16, gap: 8 },
   dangerButtonText: { fontSize: 16, fontWeight: "700" as const, color: "#fff" },
   syncStatusCard: { flexDirection: "row" as const, alignItems: "center" as const, backgroundColor: Colors.surface, borderRadius: 14, padding: 16, marginBottom: 16, borderWidth: 1, borderColor: Colors.borderLight },
+  syncStatusInfo: { flex: 1, marginLeft: 12 },
   syncStatusLabel: { fontSize: 13, fontWeight: "700" as const, color: Colors.textSecondary, textTransform: "uppercase" as const, letterSpacing: 0.8 },
   syncStatusValue: { fontSize: 14, color: Colors.text, marginTop: 2, fontWeight: "500" as const },
   syncInfoRow: { flexDirection: "row" as const, justifyContent: "space-between" as const, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: Colors.borderLight },
   syncInfoLabel: { fontSize: 14, color: Colors.text, fontWeight: "600" as const },
   syncInfoValue: { fontSize: 13, color: Colors.textSecondary },
   syncButton: { flexDirection: "row" as const, alignItems: "center" as const, justifyContent: "center" as const, backgroundColor: Colors.primary, borderRadius: 14, paddingVertical: 16, gap: 8 },
+  syncButtonDisabled: { opacity: 0.7 },
   syncButtonText: { fontSize: 16, fontWeight: "700" as const, color: "#fff" },
   helpCard: { alignItems: "center" as const, paddingVertical: 24, marginBottom: 16 },
   helpCardTitle: { fontSize: 22, fontWeight: "800" as const, color: Colors.text },
@@ -497,4 +647,5 @@ const createStyles = (Colors: ThemeColors) => StyleSheet.create({
   faqA: { fontSize: 13, color: Colors.textSecondary, lineHeight: 20 },
   contactButton: { flexDirection: "row" as const, alignItems: "center" as const, justifyContent: "center" as const, borderRadius: 14, paddingVertical: 16, gap: 8, marginTop: 8, borderWidth: 1.5, borderColor: Colors.primary, backgroundColor: Colors.surface },
   contactButtonText: { fontSize: 16, fontWeight: "700" as const, color: Colors.primary },
+  helpSection: { fontSize: 15, fontWeight: "800" as const, color: Colors.text, marginTop: 20, marginBottom: 10, letterSpacing: 0.2 },
 });
