@@ -27,6 +27,7 @@ import {
   RanchMember,
   User,
   CustomList,
+  CalvingList,
   CalvingGroup,
   BreedingGroup,
   HerdGroup,
@@ -82,6 +83,7 @@ const STORAGE_KEYS = {
   ranch: "ranchtrack_ranch",
   currentUserId: "ranchtrack_current_user",
   customLists: "ranchtrack_custom_lists",
+  calvingLists: "ranchtrack_calving_lists",
   calvingGroups: "ranchtrack_calving_groups",
   breedingGroups: "ranchtrack_breeding_groups",
   deceasedSnapshots: "ranchtrack_deceased_snapshots",
@@ -280,6 +282,11 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
     queryFn: () => loadFromStorage<CustomList[]>(STORAGE_KEYS.customLists, []),
   });
 
+  const calvingListsQuery = useQuery({
+    queryKey: ["calvingLists"],
+    queryFn: () => loadFromStorage<CalvingList[]>(STORAGE_KEYS.calvingLists, []),
+  });
+
   const calvingGroupsQuery = useQuery({
     queryKey: ["calvingGroups"],
     queryFn: () => loadFromStorage<CalvingGroup[]>(STORAGE_KEYS.calvingGroups, []),
@@ -325,8 +332,15 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
   const activityLog = activityQuery.data ?? [];
   const messages = messagesQuery.data ?? [];
   const customLists = customListsQuery.data ?? [];
+  const allCalvingLists = calvingListsQuery.data ?? [];
   const allCalvingGroups = calvingGroupsQuery.data ?? [];
   const allBreedingGroups = breedingGroupsQuery.data ?? [];
+
+  const calvingLists = useMemo(
+    () => allCalvingLists.filter((l) => l.businessYearId === activeBusinessYearId),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [allCalvingLists.length, activeBusinessYearId],
+  );
 
   const calvingGroups = useMemo(
     () => allCalvingGroups.filter((g) => g.businessYearId === activeBusinessYearId),
@@ -640,89 +654,6 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
     },
   });
 
-  const logCalvingMutation = useMutation({
-    mutationFn: async (record: Omit<CalvingRecord, "id" | "createdAt"> & { calfGeneration?: number; calfGenerationConfidence?: GenerationConfidence; calfIdentityStatus?: IdentityStatus }) => {
-      const { calfGeneration, calfGenerationConfidence, calfIdentityStatus, ...calvingData } = record;
-      const newRecord: CalvingRecord = {
-        ...calvingData,
-        id: generateId(),
-        businessYearId: calvingData.businessYearId || activeBusinessYearId,
-        createdBy: currentUserId || undefined,
-        createdByName: currentUserName || undefined,
-        createdAt: new Date().toISOString(),
-      };
-
-      const currentCalving = queryClient.getQueryData<CalvingRecord[]>(["calvingRecords"]) ?? [];
-      const updatedCalving = [newRecord, ...currentCalving];
-      await saveToStorage(STORAGE_KEYS.calvingRecords, updatedCalving);
-
-      const currentAnimals = queryClient.getQueryData<Animal[]>(["animals"]) ?? [];
-
-      const calvingBusinessYearId = calvingData.businessYearId || activeBusinessYearId;
-
-      let finalGeneration: number | undefined = calfGeneration;
-      let finalGenConfidence: GenerationConfidence | undefined = calfGenerationConfidence;
-      if (finalGeneration == null) {
-        const existingCalvesInYear = currentAnimals.filter(
-          (a) => a.businessYearId === calvingBusinessYearId,
-        );
-        finalGeneration = existingCalvesInYear.length > 0
-          ? Math.max(...existingCalvesInYear.filter((a) => a.generation != null).map((a) => a.generation!), 0) + 1
-          : 1;
-        if (!finalGenConfidence) finalGenConfidence = "confirmed";
-      }
-
-      const calfAnimal: Animal = {
-        id: generateId(),
-        ranchId: ranch.id,
-        tagId: calvingData.calfTagId,
-        species: "cattle",
-        breed: calvingData.calfBreed,
-        birthDate: calvingData.date,
-        sex: calvingData.calfSex === "male" ? "male" : "female",
-        notes: calvingData.notes,
-        status: "active",
-        markedForSale: false,
-        motherId: calvingData.motherId,
-        businessYearId: calvingBusinessYearId,
-        generation: finalGeneration,
-        generationConfidence: finalGenConfidence ?? "confirmed",
-        identityStatus: calfIdentityStatus ?? "confirmed",
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      };
-      const updatedAnimals = [...currentAnimals, calfAnimal];
-      await saveToStorage(STORAGE_KEYS.animals, updatedAnimals);
-
-      const updatedCalvingWithCalf = updatedCalving.map((r) =>
-        r.id === newRecord.id ? { ...r, calfId: calfAnimal.id } : r,
-      );
-      await saveToStorage(STORAGE_KEYS.calvingRecords, updatedCalvingWithCalf);
-
-      const breedingCurrent = queryClient.getQueryData<BreedingRecord[]>(["breedingRecords"]) ?? [];
-      const updatedBreeding = breedingCurrent.map((r) =>
-        r.animalId === record.motherId && (r.status === "bred" || r.status === "confirmed")
-          ? { ...r, status: "delivered" as const }
-          : r,
-      );
-      await saveToStorage(STORAGE_KEYS.breedingRecords, updatedBreeding);
-
-      const mother = currentAnimals.find((a) => a.id === calvingData.motherId);
-      await logActivity(
-        `Logged calving: ${mother ? getAnimalDisplayName(mother) : "Unknown"} → calf ${calvingData.calfTagId}`,
-        "calving",
-        newRecord.id,
-      );
-
-      return { updatedCalving: updatedCalvingWithCalf, updatedAnimals, updatedBreeding, newCalf: calfAnimal };
-    },
-    onSuccess: ({ updatedCalving, updatedAnimals, updatedBreeding }) => {
-      queryClient.setQueryData(["calvingRecords"], updatedCalving);
-      queryClient.setQueryData(["animals"], updatedAnimals);
-      queryClient.setQueryData(["breedingRecords"], updatedBreeding);
-    },
-  });
-
   const createBusinessYearMutation = useMutation({
     mutationFn: async (year: Omit<BusinessYear, "id" | "createdAt">) => {
       const newYear: BusinessYear = {
@@ -825,14 +756,21 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
   );
 
   const animalStats = useMemo(() => {
-    const total = animals.length;
-    const bySpecies = animals.reduce<Record<string, number>>((acc, a) => {
+    const allActive = animals.filter((a) => a.status === "active");
+    const breedingHerd = allActive.filter((a) => getHerdGroup(a) !== "calves");
+    const calvesCount = allActive.filter((a) => getHerdGroup(a) === "calves").length;
+    const bySpecies = breedingHerd.reduce<Record<string, number>>((acc, a) => {
       acc[a.species] = (acc[a.species] || 0) + 1;
       return acc;
     }, {});
-    const active = animals.filter((a) => a.status === "active").length;
     const forSale = animals.filter((a) => a.markedForSale).length;
-    return { total, bySpecies, active, forSale };
+    return {
+      total: breedingHerd.length,
+      calvesCount,
+      bySpecies,
+      active: breedingHerd.length,
+      forSale,
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [animals.length]);
 
@@ -1302,6 +1240,201 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [customLists.length, customLists],
   );
+
+  // ─── Calving List mutations (new simple system) ───────────────────────────
+
+  const createCalvingListMutation = useMutation({
+    mutationFn: async (list: { name: string; color: string }) => {
+      requireRanch(ranch.id, "create calving list");
+      const newList: CalvingList = {
+        id: generateId(),
+        ranchId: ranch.id,
+        name: list.name,
+        color: list.color,
+        businessYearId: activeBusinessYearId,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+      const current = queryClient.getQueryData<CalvingList[]>(["calvingLists"]) ?? [];
+      const updated = [...current, newList];
+      await saveToStorage(STORAGE_KEYS.calvingLists, updated);
+      await logActivity(`Created calving list "${newList.name}"`);
+      return { updated, newList };
+    },
+    onSuccess: ({ updated }) => {
+      queryClient.setQueryData(["calvingLists"], updated);
+    },
+  });
+
+  const updateCalvingListMutation = useMutation({
+    mutationFn: async (list: CalvingList) => {
+      const current = queryClient.getQueryData<CalvingList[]>(["calvingLists"]) ?? [];
+      const updated = current.map((l) =>
+        l.id === list.id ? { ...list, updatedAt: new Date().toISOString() } : l,
+      );
+      await saveToStorage(STORAGE_KEYS.calvingLists, updated);
+      return updated;
+    },
+    onSuccess: (updated) => {
+      queryClient.setQueryData(["calvingLists"], updated);
+    },
+  });
+
+  const deleteCalvingListMutation = useMutation({
+    mutationFn: async (listId: string) => {
+      const current = queryClient.getQueryData<CalvingList[]>(["calvingLists"]) ?? [];
+      const list = current.find((l) => l.id === listId);
+      const updated = current.filter((l) => l.id !== listId);
+      await saveToStorage(STORAGE_KEYS.calvingLists, updated);
+      const currentRecords = queryClient.getQueryData<CalvingRecord[]>(["calvingRecords"]) ?? [];
+      const updatedRecords = currentRecords.filter((r) => r.calvingListId !== listId);
+      await saveToStorage(STORAGE_KEYS.calvingRecords, updatedRecords);
+      queryClient.setQueryData(["calvingRecords"], updatedRecords);
+      if (list) await logActivity(`Deleted calving list "${list.name}"`);
+      return updated;
+    },
+    onSuccess: (updated) => {
+      queryClient.setQueryData(["calvingLists"], updated);
+    },
+  });
+
+  const logCalvingEventMutation = useMutation({
+    mutationFn: async (record: {
+      calvingListId: string;
+      date: string;
+      cowTag: string;
+      calfTag: string;
+      calfType: "heifer" | "steer" | "bull";
+      calfBreed?: string;
+      birthWeight?: number;
+      birthWeightUnit?: "lbs" | "kg";
+      assisted?: boolean;
+      cowNotes?: string;
+      calfNotes?: string;
+      photoUrl?: string;
+    }) => {
+      requireRanch(ranch.id, "log calving event");
+      const now = new Date().toISOString();
+      const newRecord: CalvingRecord = {
+        id: generateId(),
+        calvingListId: record.calvingListId,
+        businessYearId: activeBusinessYearId,
+        date: record.date,
+        cowTag: record.cowTag,
+        calfTag: record.calfTag,
+        calfType: record.calfType,
+        calfBreed: record.calfBreed,
+        birthWeight: record.birthWeight,
+        birthWeightUnit: record.birthWeightUnit,
+        assisted: record.assisted,
+        cowNotes: record.cowNotes,
+        calfNotes: record.calfNotes,
+        photoUrl: record.photoUrl,
+        createdBy: currentUserId,
+        createdByName: currentUserName,
+        createdAt: now,
+        updatedAt: now,
+      };
+
+      const currentAnimals = queryClient.getQueryData<Animal[]>(["animals"]) ?? [];
+      const matchedCow = currentAnimals.find(
+        (a) => a.tagId.toLowerCase() === record.cowTag.toLowerCase() && a.status === "active",
+      );
+      if (matchedCow) newRecord.cowId = matchedCow.id;
+
+      const calfSex: Animal["sex"] =
+        record.calfType === "heifer" ? "heifer" :
+        record.calfType === "steer" ? "steer" : "male";
+
+      const calfAnimal: Animal = {
+        id: generateId(),
+        ranchId: ranch.id,
+        tagId: record.calfTag,
+        species: "cattle",
+        breed: record.calfBreed ?? matchedCow?.breed ?? "",
+        birthDate: record.date.substring(0, 10),
+        sex: calfSex,
+        notes: record.calfNotes ?? "",
+        status: "active",
+        markedForSale: false,
+        motherId: matchedCow?.id,
+        businessYearId: activeBusinessYearId,
+        createdAt: now,
+        updatedAt: now,
+      };
+
+      newRecord.calfId = calfAnimal.id;
+
+      const updatedAnimals = [...currentAnimals, calfAnimal];
+      await saveToStorage(STORAGE_KEYS.animals, updatedAnimals);
+      queryClient.setQueryData(["animals"], updatedAnimals);
+      void pushAnimalToCloud(calfAnimal, currentUserId || null);
+
+      const currentRecords = queryClient.getQueryData<CalvingRecord[]>(["calvingRecords"]) ?? [];
+      const updatedRecords = [newRecord, ...currentRecords];
+      await saveToStorage(STORAGE_KEYS.calvingRecords, updatedRecords);
+
+      const list = allCalvingLists.find((l) => l.id === record.calvingListId);
+      await logActivity(
+        `Logged calving: Cow ${record.cowTag} → ${record.calfType} calf ${record.calfTag}${list ? ` (${list.name})` : ""}`,
+        "calving",
+        newRecord.id,
+      );
+
+      return { newRecord, updatedRecords, calfAnimal };
+    },
+    onSuccess: ({ updatedRecords }) => {
+      queryClient.setQueryData(["calvingRecords"], updatedRecords);
+    },
+  });
+
+  const updateCalvingRecordMutation = useMutation({
+    mutationFn: async (record: CalvingRecord) => {
+      const current = queryClient.getQueryData<CalvingRecord[]>(["calvingRecords"]) ?? [];
+      const updated = current.map((r) =>
+        r.id === record.id ? { ...record, updatedAt: new Date().toISOString() } : r,
+      );
+      await saveToStorage(STORAGE_KEYS.calvingRecords, updated);
+      return updated;
+    },
+    onSuccess: (updated) => {
+      queryClient.setQueryData(["calvingRecords"], updated);
+    },
+  });
+
+  const deleteCalvingRecordMutation = useMutation({
+    mutationFn: async (recordId: string) => {
+      const current = queryClient.getQueryData<CalvingRecord[]>(["calvingRecords"]) ?? [];
+      const updated = current.filter((r) => r.id !== recordId);
+      await saveToStorage(STORAGE_KEYS.calvingRecords, updated);
+      await logActivity("Deleted calving record", "calving", recordId);
+      return updated;
+    },
+    onSuccess: (updated) => {
+      queryClient.setQueryData(["calvingRecords"], updated);
+    },
+  });
+
+  const getCalvingListById = useCallback(
+    (id: string) => allCalvingLists.find((l) => l.id === id),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [allCalvingLists.length, allCalvingLists],
+  );
+
+  const getCalvingRecordById = useCallback(
+    (id: string) => (queryClient.getQueryData<CalvingRecord[]>(["calvingRecords"]) ?? []).find((r) => r.id === id),
+    [queryClient],
+  );
+
+  const getCalvingRecordsForList = useCallback(
+    (listId: string) =>
+      (queryClient.getQueryData<CalvingRecord[]>(["calvingRecords"]) ?? [])
+        .filter((r) => r.calvingListId === listId)
+        .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
+    [queryClient],
+  );
+
+  // ─── End calving list mutations ─────────────────────────────────────────────
 
   const createCalvingGroupMutation = useMutation({
     mutationFn: async (group: Omit<CalvingGroup, "id" | "ranchId" | "businessYearId" | "createdAt" | "updatedAt">) => {
@@ -1915,8 +2048,8 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
             (memberErr as { code?: string }).code === "23505"
               ? "This teammate is already in the ranch."
               : (memberErr as { code?: string }).code === "42501"
-                ? "You don't have permission to invite teammates. Check Supabase RLS policies for ranch_members."
-                : memberErr.message || "Failed to invite teammate";
+              ? "You don't have permission to invite teammates. Check Supabase RLS policies for ranch_members."
+              : memberErr.message || "Failed to invite teammate";
           throw new Error(friendly);
         }
       } else if (currentRanch.id && !isUuid(currentRanch.id)) {
@@ -2109,6 +2242,25 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ranch.id]);
 
+  const appStateRef = useRef<string>(AppState.currentState);
+  useEffect(() => {
+    const subscription = AppState.addEventListener("change", (nextState: string) => {
+      const wasBackground =
+        appStateRef.current === "background" || appStateRef.current === "inactive";
+      const nowActive = nextState === "active";
+      appStateRef.current = nextState;
+      if (wasBackground && nowActive) {
+        const currentRanch = queryClient.getQueryData<Ranch>(["ranch"]);
+        if (currentRanch?.id && currentRanch.id !== MOCK_RANCH.id) {
+          console.log("[AppState] app foregrounded — refreshing ranch members");
+          refreshRanchMutation.mutate();
+        }
+      }
+    });
+    return () => subscription.remove();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const refreshRanchMutation = useMutation({
     mutationFn: async () => {
       const current = queryClient.getQueryData<Ranch>(["ranch"]) ?? ranch;
@@ -2159,27 +2311,6 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
     },
   });
 
-  // Auto-refresh ranch members when app comes back to foreground
-  // This is how the owner's device picks up new members who joined via invite code
-  const appStateRef = useRef<string>(AppState.currentState);
-  useEffect(() => {
-    const subscription = AppState.addEventListener("change", (nextState: string) => {
-      const wasBackground =
-        appStateRef.current === "background" || appStateRef.current === "inactive";
-      const nowActive = nextState === "active";
-      appStateRef.current = nextState;
-      if (wasBackground && nowActive) {
-        const currentRanch = queryClient.getQueryData<Ranch>(["ranch"]);
-        if (currentRanch?.id && currentRanch.id !== MOCK_RANCH.id) {
-          console.log("[AppState] app foregrounded — refreshing ranch members");
-          refreshRanchMutation.mutate();
-        }
-      }
-    });
-    return () => subscription.remove();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
   const resetAppMutation = useMutation({
     mutationFn: async () => {
       const keys = Object.values(STORAGE_KEYS);
@@ -2203,6 +2334,7 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
       queryClient.setQueryData(["activityLog"], []);
       queryClient.setQueryData(["messages"], []);
       queryClient.setQueryData(["customLists"], []);
+      queryClient.setQueryData(["calvingLists"], []);
       queryClient.setQueryData(["calvingGroups"], []);
       queryClient.setQueryData(["breedingGroups"], []);
       queryClient.setQueryData(["soldSnapshots"], []);
@@ -2312,6 +2444,8 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
     deleteRanchNote: deleteRanchNoteMutation.mutateAsync,
     animals,
     activeAnimals,
+    calvingLists,
+    allCalvingLists,
     calvingGroups,
     breedingGroups,
     weightRecords,
@@ -2343,7 +2477,6 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
     addHealthRecord: addHealthRecordMutation.mutateAsync,
     addBreedingRecord: addBreedingRecordMutation.mutateAsync,
     quickSetBreedingStatus: quickSetBreedingStatus.mutateAsync,
-    logCalving: logCalvingMutation.mutateAsync,
     createBusinessYear: createBusinessYearMutation.mutateAsync,
     setActiveBusinessYear: setActiveBusinessYearMutation.mutateAsync,
     sendMessage: sendMessageMutation.mutateAsync,
@@ -2352,7 +2485,6 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
     getHealthRecordsForAnimal,
     getBreedingRecordsForAnimal,
     isAddingAnimal: addAnimalMutation.isPending,
-    isLoggingCalving: logCalvingMutation.isPending,
     getAnimalBreedingStatus,
     getAnimalVaccinationStatus,
     toggleMarkedForSale: (animalId: string, note?: string) => toggleMarkedForSale.mutateAsync({ animalId, note }),
@@ -2371,6 +2503,16 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
     getBusinessYearName,
     isDuplicateTagInSameYear,
     getAnimalDisplayWithYear,
+    createCalvingList: createCalvingListMutation.mutateAsync,
+    updateCalvingList: updateCalvingListMutation.mutateAsync,
+    deleteCalvingList: deleteCalvingListMutation.mutateAsync,
+    logCalvingEvent: logCalvingEventMutation.mutateAsync,
+    isLoggingCalvingEvent: logCalvingEventMutation.isPending,
+    updateCalvingRecord: updateCalvingRecordMutation.mutateAsync,
+    deleteCalvingRecord: deleteCalvingRecordMutation.mutateAsync,
+    getCalvingListById,
+    getCalvingRecordById,
+    getCalvingRecordsForList,
     createCalvingGroup: createCalvingGroupMutation.mutateAsync,
     updateCalvingGroup: updateCalvingGroupMutation.mutateAsync,
     deleteCalvingGroup: deleteCalvingGroupMutation.mutateAsync,
