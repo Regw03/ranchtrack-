@@ -38,6 +38,7 @@ export default function AddAnimalScreen() {
   const [duplicateWarningDismissed, setDuplicateWarningDismissed] = useState(false);
 
   const genderOptions = getGenderOptions(species);
+  const isTagRequired = species !== "horse";
   const hasSameYearDuplicate = tagId.trim() ? isDuplicateTagInSameYear(tagId.trim(), activeBusinessYearId) : false;
 
   const doSave = useCallback(async () => {
@@ -61,8 +62,8 @@ export default function AddAnimalScreen() {
   }, [name, tagId, species, breed, birthDate, sex, notes, generation, generationConfidence, identityStatus, addAnimal, router, activeBusinessYearId]);
 
   const handleSave = useCallback(async () => {
-    if (!tagId.trim()) { Alert.alert("Missing Info", "Please enter a tag ID."); return; }
-    if (hasSameYearDuplicate && !duplicateWarningDismissed) {
+    if (isTagRequired && !tagId.trim()) { Alert.alert("Missing Info", "Please enter a tag ID."); return; }
+    if (tagId.trim() && hasSameYearDuplicate && !duplicateWarningDismissed) {
       Alert.alert("Duplicate Tag ID", `Tag "${tagId.trim()}" already exists in ${activeBusinessYear.name}. Do you want to add it anyway?`, [
         { text: "Cancel", style: "cancel" },
         { text: "Add Anyway", onPress: () => { setDuplicateWarningDismissed(true); void doSave(); } },
@@ -70,14 +71,14 @@ export default function AddAnimalScreen() {
       return;
     }
     await doSave();
-  }, [tagId, hasSameYearDuplicate, duplicateWarningDismissed, activeBusinessYear.name, doSave]);
+  }, [tagId, isTagRequired, hasSameYearDuplicate, duplicateWarningDismissed, activeBusinessYear.name, doSave]);
 
   return (
     <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === "ios" ? "padding" : undefined}>
     <ScrollView style={styles.scrollView} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
       <View style={styles.formGroup}>
-        <Text style={styles.label}>Tag ID *</Text>
-        <TextInput style={styles.input} placeholder="e.g. TAG-007" placeholderTextColor={Colors.textTertiary} value={tagId} onChangeText={(t) => { setTagId(t); setDuplicateWarningDismissed(false); }} autoCapitalize="characters" testID="animal-tag-input" />
+        <Text style={styles.label}>Tag ID {isTagRequired ? "*" : "(optional)"}</Text>
+        <TextInput style={styles.input} placeholder={isTagRequired ? "e.g. TAG-007" : "Optional for horses"} placeholderTextColor={Colors.textTertiary} value={tagId} onChangeText={(t) => { setTagId(t); setDuplicateWarningDismissed(false); }} autoCapitalize="characters" testID="animal-tag-input" />
         {hasSameYearDuplicate && !duplicateWarningDismissed && (
           <View style={styles.duplicateWarning}><AlertCircle size={14} color={Colors.warning} /><Text style={styles.duplicateWarningText}>This tag ID already exists in {activeBusinessYear.name}</Text></View>
         )}

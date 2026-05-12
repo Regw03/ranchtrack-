@@ -24,6 +24,7 @@ export default function AddAnimalToListScreen() {
 
   const species = (listSpecies as Species) || "cattle";
   const type = (listType as ListType) || "custom";
+  const isTagRequired = species !== "horse";
   const [photoUri, setPhotoUri] = useState<string | null>(null);
   const [tagId, setTagId] = useState("");
   const [name, setName] = useState("");
@@ -55,12 +56,12 @@ export default function AddAnimalToListScreen() {
   }, [photoUri]);
 
   const handleSave = useCallback(async () => {
-    if (!tagId.trim()) { Alert.alert("Missing Info", "Please enter a tag number."); return; }
+    if (isTagRequired && !tagId.trim()) { Alert.alert("Missing Info", "Please enter a tag number."); return; }
     if (saving) return;
     setSaving(true);
     try {
       if (Platform.OS !== "web") void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      const result = await addAnimal({ tagId: tagId.trim(), name: name.trim() || undefined, species, breed: breed.trim() || "Unknown", birthDate: birthDate.trim() || new Date().getFullYear().toString(), sex: sex as "male" | "female" | "steer" | "heifer", notes: notes.trim(), photoUrl: photoUri ?? undefined, status: "active", markedForSale: type === "to_be_sold" });
+      const result = await addAnimal({ tagId: tagId.trim() || `HORSE-${Date.now().toString(36).toUpperCase()}`, name: name.trim() || undefined, species, breed: breed.trim() || "Unknown", birthDate: birthDate.trim() || new Date().getFullYear().toString(), sex: sex as "male" | "female" | "steer" | "heifer", notes: notes.trim(), photoUrl: photoUri ?? undefined, status: "active", markedForSale: type === "to_be_sold" });
       const newAnimalId = result.newAnimal.id;
       if (listId) { await addAnimalToList({ listId, animalId: newAnimalId }); }
       if (type === "vaccinations" && vaccFields.vaccineName.trim()) { await addHealthRecord({ animalId: newAnimalId, type: "vaccination", date: vaccFields.vaccineDate || new Date().toISOString().split("T")[0], description: vaccFields.vaccineName.trim(), notes: vaccFields.vaccineNotes.trim(), administeredBy: vaccFields.administeredBy.trim() || undefined }); }
@@ -87,7 +88,7 @@ export default function AddAnimalToListScreen() {
           </TouchableOpacity>
           <View style={styles.formCard}>
             <Text style={styles.formCardTitle}>Basic Info</Text>
-            <View style={styles.formGroup}><Text style={styles.label}>Tag Number *</Text><TextInput style={styles.input} placeholder="e.g. TAG-007" placeholderTextColor={Colors.textTertiary} value={tagId} onChangeText={setTagId} autoCapitalize="characters" testID="animal-tag-input" /></View>
+            <View style={styles.formGroup}><Text style={styles.label}>Tag Number {isTagRequired ? "*" : "(optional)"}</Text><TextInput style={styles.input} placeholder={isTagRequired ? "e.g. TAG-007" : "Optional for horses"} placeholderTextColor={Colors.textTertiary} value={tagId} onChangeText={setTagId} autoCapitalize="characters" testID="animal-tag-input" /></View>
             <View style={styles.formGroup}><Text style={styles.label}>Name (optional)</Text><TextInput style={styles.input} placeholder="e.g. Dusty" placeholderTextColor={Colors.textTertiary} value={name} onChangeText={setName} testID="animal-name-input" /></View>
             <View style={styles.formGroup}><Text style={styles.label}>Breed</Text><TextInput style={styles.input} placeholder="e.g. Angus" placeholderTextColor={Colors.textTertiary} value={breed} onChangeText={setBreed} /></View>
             <View style={styles.formRow}>
@@ -102,7 +103,7 @@ export default function AddAnimalToListScreen() {
           {type === "to_be_sold" && (<View style={styles.formCard}><View style={styles.formCardTitleRow}><Text style={styles.formCardTitleIcon}>💰</Text><Text style={styles.formCardTitle}>Sale Details</Text></View><View style={styles.formGroup}><Text style={styles.label}>Asking Price</Text><TextInput style={styles.input} placeholder="e.g. $2,500" placeholderTextColor={Colors.textTertiary} value={saleFields.askingPrice} onChangeText={(v) => setSaleFields((p) => ({ ...p, askingPrice: v }))} keyboardType="numeric" /></View><View style={styles.formGroup}><Text style={styles.label}>Reason for Sale</Text><TextInput style={[styles.input, styles.textArea]} placeholder="e.g. Culling, downsizing..." placeholderTextColor={Colors.textTertiary} value={saleFields.reasonForSale} onChangeText={(v) => setSaleFields((p) => ({ ...p, reasonForSale: v }))} multiline numberOfLines={2} textAlignVertical="top" /></View></View>)}
           {type === "birthing" && (<View style={styles.formCard}><View style={styles.formCardTitleRow}><Text style={styles.formCardTitleIcon}>🐣</Text><Text style={styles.formCardTitle}>{getBirthingTitle(species)} Details</Text></View><View style={styles.formGroup}><Text style={styles.label}>Dam Tag #</Text><TextInput style={styles.input} placeholder="e.g. TAG-002" placeholderTextColor={Colors.textTertiary} value={birthFields.damTagId} onChangeText={(v) => setBirthFields((p) => ({ ...p, damTagId: v }))} autoCapitalize="characters" /></View><View style={styles.formGroup}><Text style={styles.label}>Expected Due Date</Text><TextInput style={styles.input} placeholder="YYYY-MM-DD" placeholderTextColor={Colors.textTertiary} value={birthFields.expectedDueDate} onChangeText={(v) => setBirthFields((p) => ({ ...p, expectedDueDate: v }))} /></View><View style={styles.formGroup}><Text style={styles.label}>Notes</Text><TextInput style={[styles.input, styles.textArea]} placeholder="First time, complications..." placeholderTextColor={Colors.textTertiary} value={birthFields.birthingNotes} onChangeText={(v) => setBirthFields((p) => ({ ...p, birthingNotes: v }))} multiline numberOfLines={2} textAlignVertical="top" /></View></View>)}
         </ScrollView>
-        <View style={styles.footer}><TouchableOpacity style={[styles.saveBtn, (!tagId.trim() || saving) && styles.saveBtnDisabled]} onPress={handleSave} disabled={!tagId.trim() || saving || isAddingAnimal} activeOpacity={0.85} testID="save-animal-btn"><Text style={styles.saveBtnText}>{saving ? "Creating..." : "Create & Add to List"}</Text></TouchableOpacity></View>
+        <View style={styles.footer}><TouchableOpacity style={[styles.saveBtn, ((isTagRequired && !tagId.trim()) || saving) && styles.saveBtnDisabled]} onPress={handleSave} disabled={(isTagRequired && !tagId.trim()) || saving || isAddingAnimal} activeOpacity={0.85} testID="save-animal-btn"><Text style={styles.saveBtnText}>{saving ? "Creating..." : "Create & Add to List"}</Text></TouchableOpacity></View>
       </KeyboardAvoidingView>
     </>
   );
