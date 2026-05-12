@@ -125,6 +125,10 @@ function RootLayoutNav() {
         options={{ presentation: "modal", title: "New Calving List" }}
       />
       <Stack.Screen
+        name="calving-list/[id]"
+        options={{ title: "Calving List" }}
+      />
+      <Stack.Screen
         name="edit-calving-group"
         options={{ presentation: "modal", title: "Edit Group" }}
       />
