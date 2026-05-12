@@ -1,660 +1,482 @@
-import React, { useState, useCallback, useMemo, useRef, useEffect } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   View,
   Text,
   StyleSheet,
-  ScrollView,
-  TextInput,
   TouchableOpacity,
+  TextInput,
+  ScrollView,
+  KeyboardAvoidingView,
   Platform,
   Alert,
-  KeyboardAvoidingView,
+  ActivityIndicator,
   Animated,
 } from "react-native";
-import { useRouter, useLocalSearchParams, Stack } from "expo-router";
-import { Check, AlertCircle, RotateCcw, ChevronDown, ChevronUp, StickyNote, Users } from "lucide-react-native";
+import { useLocalSearchParams, useRouter } from "expo-router";
+import { SafeAreaView } from "react-native-safe-area-context";
 import * as Haptics from "expo-haptics";
-import AsyncStorage from "@react-native-async-storage/async-storage";
+import { Check, RefreshCw } from "lucide-react-native";
 import { ThemeColors } from "@/constants/colors";
 import { useColors } from "@/providers/ThemeProvider";
 import { useRanch } from "@/providers/RanchProvider";
-import { GenerationConfidence } from "@/types";
 
-const LAST_CALVING_KEY = "ranchtrack_last_calving_entry";
+type CalfType = "heifer" | "steer" | "bull";
 
 interface LastEntry {
-  calfSex: "male" | "female";
+  calfType: CalfType;
   calfBreed: string;
-  assisted: boolean;
 }
 
-async function loadLastEntry(): Promise<LastEntry | null> {
-  try {
-    const stored = await AsyncStorage.getItem(LAST_CALVING_KEY);
-    return stored ? JSON.parse(stored) : null;
-  } catch {
-    return null;
-  }
-}
-
-async function saveLastEntry(entry: LastEntry): Promise<void> {
-  try {
-    await AsyncStorage.setItem(LAST_CALVING_KEY, JSON.stringify(entry));
-  } catch (e) {
-    console.log("Error saving last calving entry:", e);
-  }
-}
+const CALF_TYPE_CONFIG: Record<CalfType, { label: string; emoji: string; color: string }> = {
+  heifer: { label: "Heifer", emoji: "🐄", color: "#2D7A9C" },
+  steer: { label: "Steer", emoji: "🐂", color: "#7B5EA7" },
+  bull: { label: "Bull", emoji: "🐃", color: "#C4622D" },
+};
 
 export default function LogCalvingScreen() {
   const Colors = useColors();
   const router = useRouter();
-  const params = useLocalSearchParams<{ calvingGroupId?: string }>();
-  const {
-    animals,
-    logCalving,
-    isLoggingCalving,
-    activeBusinessYearId,
-    activeBusinessYear,
-    isDuplicateTagInSameYear,
-    getCalvingGroupById,
-    addCalfToCalvingGroup,
-    calvingGroups,
-  } = useRanch();
+  const params = useLocalSearchParams<{ calvingListId?: string }>();
+  const { logCalvingEvent, isLoggingCalvingEvent, calvingLists, getCalvingListById } = useRanch();
   const styles = useMemo(() => createStyles(Colors), [Colors]);
 
-  const paramGroup = useMemo(
-    () => (params.calvingGroupId ? getCalvingGroupById(params.calvingGroupId) : undefined),
-    [params.calvingGroupId, getCalvingGroupById],
-  );
-
-  const [selectedGroupId, setSelectedGroupId] = useState<string | undefined>(params.calvingGroupId);
-
-  useEffect(() => {
-    if (params.calvingGroupId) setSelectedGroupId(params.calvingGroupId);
-  }, [params.calvingGroupId]);
-
-  const calvingGroup = useMemo(
-    () => (selectedGroupId ? getCalvingGroupById(selectedGroupId) : undefined),
-    [selectedGroupId, getCalvingGroupById],
-  );
-
-  const availableGroups = useMemo(
-    () => calvingGroups.filter((g) => !g.archived),
-    [calvingGroups],
-  );
-
+  const today = new Date().toISOString().substring(0, 10);
+  const [date, setDate] = useState(today);
   const [cowTag, setCowTag] = useState("");
   const [calfTag, setCalfTag] = useState("");
-  const [calfSex, setCalfSex] = useState<"male" | "female">("female");
-  const [calfBreed, setCalfBreed] = useState("");
-  const [assisted, setAssisted] = useState(false);
-  const [notes, setNotes] = useState("");
-  const [showExtras, setShowExtras] = useState(false);
-  const [savedCount, setSavedCount] = useState(0);
+  const [calfType, setCalfType] = useState<CalfType>("heifer");
+  const [selectedListId, setSelectedListId] = useState<string | undefined>(
+    params.calvingListId,
+  );
+  const [saveCount, setSaveCount] = useState<number>(0);
   const [lastEntry, setLastEntry] = useState<LastEntry | null>(null);
 
-  const calfTagRef = useRef<TextInput>(null);
   const successAnim = useRef(new Animated.Value(0)).current;
-  const successScale = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    loadLastEntry().then((entry) => {
-      if (entry) {
-        setLastEntry(entry);
-        console.log("Loaded last calving entry:", entry);
-      }
-    });
-  }, []);
+    if (params.calvingListId) setSelectedListId(params.calvingListId);
+  }, [params.calvingListId]);
 
-  const matchedMother = useMemo(() => {
-    if (!cowTag.trim()) return null;
-    const q = cowTag.trim().toLowerCase();
-    return animals.find(
-      (a) =>
-        a.tagId.toLowerCase() === q &&
-        (a.sex === "female" || a.sex === "heifer") &&
-        a.status === "active",
-    );
-  }, [animals, cowTag]);
+  const selectedList = useMemo(
+    () => (selectedListId ? getCalvingListById(selectedListId) : undefined),
+    [selectedListId, getCalvingListById],
+  );
+
+  const canSave =
+    cowTag.trim().length > 0 &&
+    calfTag.trim().length > 0 &&
+    !!selectedListId &&
+    !isLoggingCalvingEvent;
+
+  const flashSuccess = useCallback(() => {
+    Animated.sequence([
+      Animated.timing(successAnim, { toValue: 1, duration: 200, useNativeDriver: true }),
+      Animated.timing(successAnim, { toValue: 0, duration: 600, useNativeDriver: true }),
+    ]).start();
+  }, [successAnim]);
+
+  const handleSave = useCallback(async () => {
+    if (!canSave || !selectedListId) return;
+    if (Platform.OS !== "web") void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+
+    try {
+      await logCalvingEvent({
+        calvingListId: selectedListId,
+        date,
+        cowTag: cowTag.trim(),
+        calfTag: calfTag.trim(),
+        calfType,
+      });
+
+      setLastEntry({ calfType, calfBreed: "" });
+      setSaveCount((c) => c + 1);
+      flashSuccess();
+
+      setCowTag("");
+      setCalfTag("");
+    } catch (e) {
+      console.log("[log-calving] save error", e);
+      Alert.alert("Error", "Could not save the calving record. Please try again.");
+    }
+  }, [canSave, selectedListId, date, cowTag, calfTag, calfType, logCalvingEvent, flashSuccess]);
 
   const handleRepeatLast = useCallback(() => {
     if (!lastEntry) return;
     if (Platform.OS !== "web") void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    setCalfSex(lastEntry.calfSex);
-    setCalfBreed(lastEntry.calfBreed);
-    setAssisted(lastEntry.assisted);
-    console.log("Applied last entry values:", lastEntry);
+    setCalfType(lastEntry.calfType);
   }, [lastEntry]);
 
-  const showSuccess = useCallback(() => {
-    successAnim.setValue(1);
-    successScale.setValue(0.5);
-    Animated.parallel([
-      Animated.timing(successScale, { toValue: 1, duration: 250, useNativeDriver: true }),
-      Animated.sequence([
-        Animated.delay(800),
-        Animated.timing(successAnim, { toValue: 0, duration: 300, useNativeDriver: true }),
-      ]),
-    ]).start();
-  }, [successAnim, successScale]);
-
-  const resetForm = useCallback(() => {
-    setCowTag("");
-    setCalfTag("");
-    setCalfBreed("");
-    setAssisted(false);
-    setNotes("");
-    setShowExtras(false);
+  const handleSelectType = useCallback((type: CalfType) => {
+    if (Platform.OS !== "web") void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setCalfType(type);
   }, []);
 
-  const handleSave = useCallback(async () => {
-    if (!calfTag.trim()) {
-      Alert.alert("Missing Info", "Please enter a calf tag.");
-      return;
-    }
-
-    if (Platform.OS !== "web") void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-
-    const motherId = matchedMother?.id ?? "";
-    const breed = calfBreed.trim() || matchedMother?.breed || "Unknown";
-
-    const entry: LastEntry = { calfSex, calfBreed: breed, assisted };
-    await saveLastEntry(entry);
-    setLastEntry(entry);
-
-    const result = await logCalving({
-      motherId,
-      date: new Date().toISOString().split("T")[0],
-      calfTagId: calfTag.trim(),
-      calfSex,
-      calfBreed: breed,
-      birthWeight: undefined,
-      birthWeightUnit: "lbs",
-      assisted,
-      notes: notes.trim() || (cowTag.trim() && !matchedMother ? `Cow tag: ${cowTag.trim()} (unmatched)` : ""),
-      businessYearId: activeBusinessYearId,
-    });
-
-    if (calvingGroup && result.newCalf) {
-      try {
-        await addCalfToCalvingGroup({ groupId: calvingGroup.id, calfId: result.newCalf.id });
-      } catch (e) {
-        console.log("Error adding calf to group:", e);
-      }
-    }
-
-    setSavedCount((c) => c + 1);
-    showSuccess();
-    resetForm();
-  }, [
-    calfTag, calfSex, calfBreed, assisted, notes, cowTag, matchedMother,
-    logCalving, activeBusinessYearId, calvingGroup, addCalfToCalvingGroup,
-    showSuccess, resetForm,
-  ]);
-
-  const isDuplicate = calfTag.trim() !== "" && isDuplicateTagInSameYear(calfTag.trim(), activeBusinessYearId);
+  const successOpacity = successAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0, 1],
+  });
 
   return (
-    <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === "ios" ? "padding" : undefined}>
-      <Stack.Screen options={{ title: savedCount > 0 ? `Log Calving (${savedCount} saved)` : "Log Calving" }} />
-
-      <Animated.View
-        pointerEvents="none"
-        style={[
-          styles.successOverlay,
-          { opacity: successAnim, transform: [{ scale: successScale }] },
-        ]}
-      >
-        <View style={styles.successBadge}>
-          <Check size={32} color="#fff" />
-          <Text style={styles.successText}>Saved!</Text>
-        </View>
-      </Animated.View>
-
-      <ScrollView
-        style={styles.scrollView}
-        contentContainerStyle={styles.content}
-        keyboardShouldPersistTaps="handled"
-        showsVerticalScrollIndicator={false}
-      >
-        {paramGroup && calvingGroup && (
-          <View style={styles.groupBanner}>
-            <View style={[styles.groupBannerDot, { backgroundColor: calvingGroup.color }]} />
-            <Text style={styles.groupBannerText}>{calvingGroup.name}</Text>
-          </View>
-        )}
-
-        {!paramGroup && availableGroups.length > 0 && (
-          <View style={styles.formGroup}>
-            <Text style={styles.label}>Calving Group (optional)</Text>
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.groupsRow}
-            >
-              <TouchableOpacity
-                style={[styles.groupChip, !selectedGroupId && styles.groupChipActive]}
-                onPress={() => {
-                  if (Platform.OS !== "web") void Haptics.selectionAsync();
-                  setSelectedGroupId(undefined);
-                }}
-                activeOpacity={0.8}
-                testID="group-chip-none"
-              >
-                <Users size={14} color={!selectedGroupId ? Colors.primary : Colors.textSecondary} />
-                <Text style={[styles.groupChipText, !selectedGroupId && styles.groupChipTextActive]}>
-                  None
-                </Text>
-              </TouchableOpacity>
-              {availableGroups.map((g) => {
-                const active = selectedGroupId === g.id;
-                return (
-                  <TouchableOpacity
-                    key={g.id}
-                    style={[
-                      styles.groupChip,
-                      active && styles.groupChipActive,
-                      active && { borderColor: g.color, backgroundColor: g.color + "15" },
-                    ]}
-                    onPress={() => {
-                      if (Platform.OS !== "web") void Haptics.selectionAsync();
-                      setSelectedGroupId(g.id);
-                    }}
-                    activeOpacity={0.8}
-                    testID={`group-chip-${g.id}`}
-                  >
-                    <View style={[styles.groupChipDot, { backgroundColor: g.color }]} />
-                    <Text style={[styles.groupChipText, active && styles.groupChipTextActive]}>
-                      {g.name}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </ScrollView>
-          </View>
-        )}
-
-        {lastEntry && (
-          <TouchableOpacity
-            style={styles.repeatBtn}
-            onPress={handleRepeatLast}
-            activeOpacity={0.7}
-            testID="repeat-last-btn"
-          >
-            <RotateCcw size={16} color={Colors.primary} />
-            <Text style={styles.repeatBtnText}>
-              Repeat last ({lastEntry.calfSex === "female" ? "Heifer" : "Bull"}{lastEntry.calfBreed ? ` · ${lastEntry.calfBreed}` : ""})
-            </Text>
-          </TouchableOpacity>
-        )}
-
-        <View style={styles.formGroup}>
-          <Text style={styles.label}>Cow Tag</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="Enter cow tag (optional)"
-            placeholderTextColor={Colors.textTertiary}
-            value={cowTag}
-            onChangeText={setCowTag}
-            autoCapitalize="characters"
-            returnKeyType="next"
-            onSubmitEditing={() => calfTagRef.current?.focus()}
-            testID="cow-tag-input"
-          />
-          {cowTag.trim() !== "" && (
-            <Text style={[styles.matchHint, { color: matchedMother ? Colors.success : Colors.warning }]}>
-              {matchedMother ? `Matched: ${matchedMother.tagId}` : "No match — will save as note"}
-            </Text>
-          )}
-        </View>
-
-        <View style={styles.formGroup}>
-          <Text style={styles.label}>Calf Tag *</Text>
-          <TextInput
-            ref={calfTagRef}
-            style={styles.input}
-            placeholder="e.g. 2026-01"
-            placeholderTextColor={Colors.textTertiary}
-            value={calfTag}
-            onChangeText={setCalfTag}
-            autoCapitalize="characters"
-            testID="calf-tag-input"
-          />
-          {isDuplicate && (
-            <View style={styles.duplicateWarning}>
-              <AlertCircle size={14} color={Colors.warning} />
-              <Text style={styles.duplicateWarningText}>
-                Tag exists in {activeBusinessYear.name}
-              </Text>
-            </View>
-          )}
-        </View>
-
-        <View style={styles.formGroup}>
-          <Text style={styles.label}>Calf Type</Text>
-          <View style={styles.sexRow}>
-            <TouchableOpacity
-              style={[styles.sexBtn, calfSex === "female" && styles.sexBtnActiveHeifer]}
-              onPress={() => {
-                if (Platform.OS !== "web") void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-                setCalfSex("female");
-              }}
-              activeOpacity={0.8}
-              testID="sex-heifer-btn"
-            >
-              <Text style={styles.sexEmoji}>♀</Text>
-              <Text style={[styles.sexBtnLabel, calfSex === "female" && styles.sexBtnLabelActive]}>
-                Heifer
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.sexBtn, calfSex === "male" && styles.sexBtnActiveBull]}
-              onPress={() => {
-                if (Platform.OS !== "web") void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-                setCalfSex("male");
-              }}
-              activeOpacity={0.8}
-              testID="sex-bull-btn"
-            >
-              <Text style={styles.sexEmoji}>♂</Text>
-              <Text style={[styles.sexBtnLabel, calfSex === "male" && styles.sexBtnLabelActive]}>
-                Bull
-              </Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        <TouchableOpacity
-          style={styles.extrasToggle}
-          onPress={() => setShowExtras(!showExtras)}
-          activeOpacity={0.7}
+    <View style={styles.container}>
+      <SafeAreaView style={styles.safeArea} edges={["bottom"]}>
+        <KeyboardAvoidingView
+          style={styles.flex}
+          behavior={Platform.OS === "ios" ? "padding" : undefined}
         >
-          <StickyNote size={16} color={Colors.textTertiary} />
-          <Text style={styles.extrasToggleText}>
-            {showExtras ? "Hide extras" : "Breed, notes & more"}
-          </Text>
-          {showExtras ? (
-            <ChevronUp size={16} color={Colors.textTertiary} />
-          ) : (
-            <ChevronDown size={16} color={Colors.textTertiary} />
-          )}
-        </TouchableOpacity>
+          <ScrollView
+            contentContainerStyle={styles.scrollContent}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+          >
+            {saveCount > 0 && (
+              <View style={styles.topBar}>
+                <Animated.View style={[styles.savedBadge, { opacity: successOpacity }]}>
+                  <Check size={14} color={Colors.success} />
+                  <Text style={styles.savedBadgeText}>Saved!</Text>
+                </Animated.View>
+                <Text style={styles.saveCounter}>
+                  {saveCount} record{saveCount !== 1 ? "s" : ""} logged
+                </Text>
+                {lastEntry && (
+                  <TouchableOpacity
+                    style={styles.repeatBtn}
+                    onPress={handleRepeatLast}
+                    activeOpacity={0.7}
+                    testID="repeat-last-btn"
+                  >
+                    <RefreshCw size={14} color={Colors.primary} />
+                    <Text style={styles.repeatBtnText}>Repeat last</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+            )}
 
-        {showExtras && (
-          <View style={styles.extrasSection}>
-            <View style={styles.formGroup}>
-              <Text style={styles.label}>Breed</Text>
-              <TextInput
-                style={styles.input}
-                placeholder={matchedMother?.breed || "e.g. Angus"}
-                placeholderTextColor={Colors.textTertiary}
-                value={calfBreed}
-                onChangeText={setCalfBreed}
-                testID="breed-input"
-              />
-            </View>
+            <View style={styles.form}>
+              <Text style={styles.sectionLabel}>Calving List</Text>
+              {calvingLists.length === 0 ? (
+                <View style={styles.noListBanner}>
+                  <Text style={styles.noListText}>
+                    No calving lists yet. Create one from the Work tab first.
+                  </Text>
+                </View>
+              ) : (
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={styles.listChips}
+                >
+                  {calvingLists.map((list) => (
+                    <TouchableOpacity
+                      key={list.id}
+                      style={[
+                        styles.listChip,
+                        selectedListId === list.id && {
+                          backgroundColor: list.color,
+                          borderColor: list.color,
+                        },
+                      ]}
+                      onPress={() => {
+                        if (Platform.OS !== "web") void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                        setSelectedListId(list.id);
+                      }}
+                      activeOpacity={0.8}
+                    >
+                      <View
+                        style={[
+                          styles.listChipDot,
+                          { backgroundColor: selectedListId === list.id ? "#fff" : list.color },
+                        ]}
+                      />
+                      <Text
+                        style={[
+                          styles.listChipText,
+                          selectedListId === list.id && { color: "#fff" },
+                        ]}
+                        numberOfLines={1}
+                      >
+                        {list.name}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              )}
 
-            <View style={styles.formGroup}>
-              <Text style={styles.label}>Assisted Birth?</Text>
-              <View style={styles.assistedRow}>
-                <TouchableOpacity
-                  style={[styles.assistedBtn, !assisted && styles.assistedBtnActiveNo]}
-                  onPress={() => setAssisted(false)}
-                  activeOpacity={0.8}
-                >
-                  <Text style={[styles.assistedBtnText, !assisted && styles.assistedBtnTextActive]}>No</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.assistedBtn, assisted && styles.assistedBtnActiveYes]}
-                  onPress={() => setAssisted(true)}
-                  activeOpacity={0.8}
-                >
-                  <Text style={[styles.assistedBtnText, assisted && styles.assistedBtnTextActive]}>Yes</Text>
-                </TouchableOpacity>
+              <Text style={styles.sectionLabel}>Date</Text>
+              <View style={styles.inputWrapper}>
+                <TextInput
+                  value={date}
+                  onChangeText={setDate}
+                  placeholder="YYYY-MM-DD"
+                  placeholderTextColor={Colors.textTertiary}
+                  style={styles.input}
+                  keyboardType="numbers-and-punctuation"
+                  returnKeyType="next"
+                  maxLength={10}
+                />
+              </View>
+
+              <Text style={styles.sectionLabel}>Cow Tag #</Text>
+              <View style={styles.inputWrapper}>
+                <TextInput
+                  value={cowTag}
+                  onChangeText={setCowTag}
+                  placeholder="e.g. 214"
+                  placeholderTextColor={Colors.textTertiary}
+                  style={styles.input}
+                  autoCapitalize="characters"
+                  returnKeyType="next"
+                  maxLength={20}
+                />
+              </View>
+
+              <Text style={styles.sectionLabel}>Calf Tag #</Text>
+              <View style={styles.inputWrapper}>
+                <TextInput
+                  value={calfTag}
+                  onChangeText={setCalfTag}
+                  placeholder="e.g. 2026-01"
+                  placeholderTextColor={Colors.textTertiary}
+                  style={styles.input}
+                  autoCapitalize="characters"
+                  returnKeyType="done"
+                  maxLength={20}
+                  onSubmitEditing={handleSave}
+                />
+              </View>
+
+              <Text style={styles.sectionLabel}>Calf Type</Text>
+              <View style={styles.typeRow}>
+                {(["heifer", "steer", "bull"] as CalfType[]).map((type) => {
+                  const cfg = CALF_TYPE_CONFIG[type];
+                  const selected = calfType === type;
+                  return (
+                    <TouchableOpacity
+                      key={type}
+                      style={[
+                        styles.typeBtn,
+                        selected && { backgroundColor: cfg.color, borderColor: cfg.color },
+                      ]}
+                      onPress={() => handleSelectType(type)}
+                      activeOpacity={0.8}
+                    >
+                      <Text style={styles.typeEmoji}>{cfg.emoji}</Text>
+                      <Text
+                        style={[
+                          styles.typeBtnText,
+                          selected && { color: "#fff" },
+                        ]}
+                      >
+                        {cfg.label}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
               </View>
             </View>
+          </ScrollView>
 
-            <View style={styles.formGroup}>
-              <Text style={styles.label}>Notes</Text>
-              <TextInput
-                style={[styles.input, styles.textArea]}
-                placeholder="Any notes..."
-                placeholderTextColor={Colors.textTertiary}
-                value={notes}
-                onChangeText={setNotes}
-                multiline
-                numberOfLines={3}
-                textAlignVertical="top"
-                testID="notes-input"
-              />
-            </View>
+          <View style={styles.bottomBar}>
+            {!selectedListId && calvingLists.length > 0 && (
+              <Text style={styles.selectListHint}>Select a calving list above to continue</Text>
+            )}
+            <TouchableOpacity
+              style={[
+                styles.saveBtn,
+                {
+                  backgroundColor: canSave
+                    ? (selectedList?.color ?? Colors.primary)
+                    : Colors.border,
+                },
+              ]}
+              onPress={handleSave}
+              disabled={!canSave}
+              activeOpacity={0.85}
+              testID="save-calving-btn"
+            >
+              {isLoggingCalvingEvent ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <>
+                  <Check size={20} color="#fff" />
+                  <Text style={styles.saveBtnText}>Save Record</Text>
+                </>
+              )}
+            </TouchableOpacity>
           </View>
-        )}
-
-        <TouchableOpacity
-          style={[styles.saveButton, isLoggingCalving && styles.saveButtonDisabled]}
-          onPress={handleSave}
-          disabled={isLoggingCalving}
-          activeOpacity={0.85}
-          testID="save-calving-btn"
-        >
-          <Check size={22} color="#fff" />
-          <Text style={styles.saveButtonText}>
-            {isLoggingCalving ? "Saving..." : "Log Calving"}
-          </Text>
-        </TouchableOpacity>
-
-        <View style={{ height: 40 }} />
-      </ScrollView>
-    </KeyboardAvoidingView>
+        </KeyboardAvoidingView>
+      </SafeAreaView>
+    </View>
   );
 }
 
-const createStyles = (Colors: ThemeColors) =>
-  StyleSheet.create({
+function createStyles(Colors: ThemeColors) {
+  return StyleSheet.create({
     container: { flex: 1, backgroundColor: Colors.background },
-    scrollView: { flex: 1 },
-    content: { padding: 20, paddingBottom: 40 },
-    groupBanner: {
-      flexDirection: "row",
-      alignItems: "center",
-      backgroundColor: Colors.primary + "0A",
-      borderRadius: 10,
-      paddingHorizontal: 14,
-      paddingVertical: 10,
-      marginBottom: 16,
-      gap: 8,
-      borderWidth: 1,
-      borderColor: Colors.primary + "20",
+    safeArea: { flex: 1 },
+    flex: { flex: 1 },
+    scrollContent: { flexGrow: 1, paddingBottom: 20 },
+
+    topBar: {
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      paddingHorizontal: 20,
+      paddingTop: 14,
+      paddingBottom: 4,
+      gap: 10,
     },
-    groupBannerDot: { width: 10, height: 10, borderRadius: 5 },
-    groupBannerText: { fontSize: 13, fontWeight: "600" as const, color: Colors.primary },
-    groupsRow: { flexDirection: "row", gap: 8, paddingVertical: 2, paddingRight: 8 },
-    groupChip: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 6,
-      paddingHorizontal: 14,
-      paddingVertical: 10,
-      borderRadius: 12,
-      backgroundColor: Colors.surface,
-      borderWidth: 1.5,
-      borderColor: Colors.border,
+    savedBadge: {
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      gap: 4,
+      backgroundColor: Colors.success + "18",
+      paddingHorizontal: 10,
+      paddingVertical: 5,
+      borderRadius: 20,
     },
-    groupChipActive: {
-      borderColor: Colors.primary,
-      backgroundColor: Colors.primary + "10",
-    },
-    groupChipDot: { width: 10, height: 10, borderRadius: 5 },
-    groupChipText: {
+    savedBadgeText: {
       fontSize: 13,
-      fontWeight: "600" as const,
-      color: Colors.textSecondary,
+      fontWeight: "700" as const,
+      color: Colors.success,
     },
-    groupChipTextActive: { color: Colors.text },
+    saveCounter: {
+      flex: 1,
+      fontSize: 13,
+      color: Colors.textSecondary,
+      fontWeight: "600" as const,
+    },
     repeatBtn: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 8,
-      backgroundColor: Colors.primary + "0D",
-      borderRadius: 12,
-      paddingHorizontal: 16,
-      paddingVertical: 12,
-      marginBottom: 20,
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      gap: 5,
+      paddingHorizontal: 12,
+      paddingVertical: 6,
+      borderRadius: 20,
       borderWidth: 1,
-      borderColor: Colors.primary + "25",
+      borderColor: Colors.primary,
     },
     repeatBtnText: {
-      fontSize: 14,
-      fontWeight: "600" as const,
-      color: Colors.primary,
-      flex: 1,
-    },
-    formGroup: { marginBottom: 18 },
-    label: {
-      fontSize: 12,
+      fontSize: 13,
       fontWeight: "700" as const,
+      color: Colors.primary,
+    },
+
+    form: { paddingHorizontal: 20, paddingTop: 16 },
+
+    sectionLabel: {
+      fontSize: 13,
+      fontWeight: "800" as const,
       color: Colors.textSecondary,
       textTransform: "uppercase" as const,
-      letterSpacing: 0.5,
-      marginBottom: 8,
+      letterSpacing: 1.1,
+      marginBottom: 10,
+      marginTop: 20,
+      marginLeft: 2,
     },
-    input: {
+
+    noListBanner: {
+      backgroundColor: Colors.warning + "18",
+      borderRadius: 12,
+      padding: 14,
+      borderWidth: 1,
+      borderColor: Colors.warning + "40",
+    },
+    noListText: {
+      fontSize: 14,
+      color: Colors.warning,
+      fontWeight: "600" as const,
+      lineHeight: 20,
+    },
+
+    listChips: {
+      gap: 10,
+      paddingBottom: 4,
+    },
+    listChip: {
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      gap: 8,
+      paddingHorizontal: 16,
+      paddingVertical: 10,
+      borderRadius: 24,
+      borderWidth: 1.5,
+      borderColor: Colors.border,
+      backgroundColor: Colors.surface,
+    },
+    listChipDot: {
+      width: 10,
+      height: 10,
+      borderRadius: 5,
+    },
+    listChipText: {
+      fontSize: 15,
+      fontWeight: "700" as const,
+      color: Colors.text,
+      maxWidth: 160,
+    },
+
+    inputWrapper: {
       backgroundColor: Colors.surface,
       borderRadius: 14,
-      paddingHorizontal: 16,
-      paddingVertical: 14,
-      fontSize: 17,
-      color: Colors.text,
-      borderWidth: 1,
+      borderWidth: 1.5,
       borderColor: Colors.border,
+      paddingHorizontal: 16,
     },
-    textArea: { minHeight: 80, paddingTop: 14 },
-    matchHint: {
-      fontSize: 12,
-      fontWeight: "500" as const,
-      marginTop: 6,
-      paddingHorizontal: 4,
+    input: {
+      fontSize: 18,
+      fontWeight: "600" as const,
+      color: Colors.text,
+      paddingVertical: 16,
     },
-    duplicateWarning: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 6,
-      marginTop: 8,
-      paddingHorizontal: 4,
+
+    typeRow: {
+      flexDirection: "row" as const,
+      gap: 10,
     },
-    duplicateWarningText: { fontSize: 12, fontWeight: "500" as const, color: Colors.warning },
-    sexRow: { flexDirection: "row", gap: 12 },
-    sexBtn: {
+    typeBtn: {
       flex: 1,
-      paddingVertical: 20,
+      alignItems: "center" as const,
+      justifyContent: "center" as const,
+      paddingVertical: 18,
       borderRadius: 16,
-      backgroundColor: Colors.surface,
-      alignItems: "center",
-      justifyContent: "center",
       borderWidth: 2,
       borderColor: Colors.border,
-      gap: 4,
+      backgroundColor: Colors.surface,
+      gap: 6,
     },
-    sexBtnActiveHeifer: {
-      backgroundColor: "#2D7A9C" + "15",
-      borderColor: "#2D7A9C",
-    },
-    sexBtnActiveBull: {
-      backgroundColor: Colors.accent + "15",
-      borderColor: Colors.accent,
-    },
-    sexEmoji: {
+    typeEmoji: {
       fontSize: 28,
-      lineHeight: 34,
     },
-    sexBtnLabel: {
-      fontSize: 16,
+    typeBtnText: {
+      fontSize: 15,
       fontWeight: "800" as const,
       color: Colors.textSecondary,
     },
-    sexBtnLabelActive: {
-      color: Colors.text,
-    },
-    extrasToggle: {
-      flexDirection: "row",
-      alignItems: "center",
+
+    bottomBar: {
+      paddingHorizontal: 20,
+      paddingBottom: 16,
+      paddingTop: 8,
       gap: 8,
-      paddingVertical: 14,
-      marginBottom: 4,
     },
-    extrasToggleText: {
-      fontSize: 14,
-      fontWeight: "600" as const,
+    selectListHint: {
+      fontSize: 13,
       color: Colors.textTertiary,
-      flex: 1,
+      textAlign: "center" as const,
+      fontWeight: "500" as const,
     },
-    extrasSection: {
-      marginBottom: 4,
-    },
-    assistedRow: { flexDirection: "row", gap: 10 },
-    assistedBtn: {
-      flex: 1,
-      paddingVertical: 12,
-      borderRadius: 12,
-      backgroundColor: Colors.surface,
-      alignItems: "center",
-      borderWidth: 1.5,
-      borderColor: Colors.border,
-    },
-    assistedBtnActiveNo: {
-      backgroundColor: Colors.primary,
-      borderColor: Colors.primary,
-    },
-    assistedBtnActiveYes: {
-      backgroundColor: Colors.warning,
-      borderColor: Colors.warning,
-    },
-    assistedBtnText: {
-      fontSize: 14,
-      fontWeight: "700" as const,
-      color: Colors.textSecondary,
-    },
-    assistedBtnTextActive: { color: "#fff" },
-    saveButton: {
-      flexDirection: "row",
-      alignItems: "center",
-      justifyContent: "center",
-      gap: 10,
-      backgroundColor: Colors.success,
+    saveBtn: {
       borderRadius: 16,
       paddingVertical: 18,
-      marginTop: 12,
-      shadowColor: Colors.success,
-      shadowOffset: { width: 0, height: 4 },
-      shadowOpacity: 0.3,
-      shadowRadius: 8,
-      elevation: 4,
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      justifyContent: "center" as const,
+      gap: 10,
     },
-    saveButtonDisabled: { opacity: 0.6 },
-    saveButtonText: { fontSize: 18, fontWeight: "800" as const, color: "#fff" },
-    successOverlay: {
-      position: "absolute" as const,
-      top: 0,
-      left: 0,
-      right: 0,
-      bottom: 0,
-      zIndex: 100,
-      alignItems: "center",
-      justifyContent: "center",
+    saveBtnText: {
+      fontSize: 18,
+      fontWeight: "800" as const,
+      color: "#fff",
+      letterSpacing: 0.2,
     },
-    successBadge: {
-      backgroundColor: Colors.success,
-      borderRadius: 24,
-      paddingHorizontal: 32,
-      paddingVertical: 20,
-      alignItems: "center",
-      gap: 8,
-      shadowColor: "#000",
-      shadowOffset: { width: 0, height: 8 },
-      shadowOpacity: 0.2,
-      shadowRadius: 16,
-      elevation: 8,
-    },
-    successText: { fontSize: 18, fontWeight: "800" as const, color: "#fff" },
   });
+}
