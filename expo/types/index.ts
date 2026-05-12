@@ -86,23 +86,73 @@ export interface BreedingRecord {
   notes: string;
 }
 
+// ─── Calving ──────────────────────────────────────────────────────────────────
+
+/**
+ * A calving list is simply a named container for calving events.
+ * No cow pre-assignment — cows are entered at the time of logging.
+ * Tied to a business year but viewable across years.
+ */
+export interface CalvingList {
+  id: string;
+  ranchId: string;
+  name: string;
+  color: string;
+  businessYearId: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/**
+ * One calving event. Contains all information about a single cow/calf pair.
+ * calfType replaces the old calfSex field with clearer ranch terminology.
+ * All optional fields can be filled in later — nothing blocks saving.
+ */
 export interface CalvingRecord {
   id: string;
-  motherId: string;
-  calfId?: string;
+  // Which list this record belongs to
+  calvingListId: string;
+  // Business year for filtering
+  businessYearId: string;
+  // Core fields — required at log time
   date: string;
-  calfTagId: string;
-  calfSex: "male" | "female";
-  calfBreed: string;
+  cowTag: string; // typed manually — no lookup required
+  calfTag: string; // typed manually
+  calfType: "heifer" | "steer" | "bull";
+  // Optional fields — can be added/edited at any time
+  calfBreed?: string;
   birthWeight?: number;
   birthWeightUnit?: "lbs" | "kg";
-  assisted: boolean;
-  notes: string;
-  businessYearId: string;
+  assisted?: boolean;
+  cowNotes?: string; // notes specific to the cow during this event
+  calfNotes?: string; // notes specific to the calf
+  photoUrl?: string; // optional photo on the record profile
+  // Links to actual animal records if they exist
+  cowId?: string; // linked animal record for the cow (if found)
+  calfId?: string; // linked animal record for the calf (auto-created)
+  // Attribution
   createdBy?: string;
   createdByName?: string;
   createdAt: string;
+  updatedAt: string;
 }
+
+// Keep the old CalvingGroup type temporarily so existing data doesn't break
+// during migration. Will be fully removed in a future cleanup.
+/** @deprecated Use CalvingList instead */
+export interface CalvingGroup {
+  id: string;
+  ranchId: string;
+  name: string;
+  color: string;
+  cowIds: string[];
+  calfIds: string[];
+  businessYearId: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// ─── Everything else (unchanged) ─────────────────────────────────────────────
 
 export interface BusinessYear {
   id: string;
@@ -146,18 +196,6 @@ export interface CustomList {
   parentId?: string;
   animalIds: string[];
   createdBy: string;
-  createdAt: string;
-  updatedAt: string;
-}
-
-export interface CalvingGroup {
-  id: string;
-  ranchId: string;
-  name: string;
-  color: string;
-  cowIds: string[];
-  calfIds: string[];
-  businessYearId: string;
   createdAt: string;
   updatedAt: string;
 }
