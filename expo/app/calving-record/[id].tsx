@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState } from "react";
+import React, { useCallback, useMemo, useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -6,157 +6,155 @@ import {
   ScrollView,
   TouchableOpacity,
   TextInput,
-  Image,
   Alert,
   Platform,
-  ActivityIndicator,
   Switch,
-  KeyboardAvoidingView,
+  ActivityIndicator,
+  Image,
 } from "react-native";
 import { useLocalSearchParams, useRouter, Stack } from "expo-router";
+import * as Haptics from "expo-haptics";
+import * as ImagePicker from "expo-image-picker";
 import {
   Camera,
+  Edit3,
   Check,
   X,
   Trash2,
   ChevronRight,
-  ImageIcon,
-  Edit3,
+  Image as ImageIcon,
 } from "lucide-react-native";
-import * as Haptics from "expo-haptics";
-import * as ImagePicker from "expo-image-picker";
 import { ThemeColors } from "@/constants/colors";
 import { useColors } from "@/providers/ThemeProvider";
 import { useRanch } from "@/providers/RanchProvider";
 import { CalvingRecord } from "@/types";
 
-type CalfType = "heifer" | "steer" | "bull";
-
-const CALF_TYPE_CONFIG: Record<CalfType, { label: string; emoji: string; color: string; bg: string }> = {
+const TYPE_CONFIG = {
   heifer: { label: "Heifer", emoji: "🐄", color: "#2D7A9C", bg: "#2D7A9C18" },
   steer: { label: "Steer", emoji: "🐂", color: "#7B5EA7", bg: "#7B5EA718" },
   bull: { label: "Bull", emoji: "🐃", color: "#C4622D", bg: "#C4622D18" },
 };
 
-// ─── Inline editable field ────────────────────────────────────────────────────
+type CalfType = "heifer" | "steer" | "bull";
 
-function InlineField({
+function EditableField({
   label,
   value,
-  placeholder,
   onSave,
-  multiline,
-  keyboardType,
+  placeholder,
+  keyboardType = "default",
+  multiline = false,
 }: {
   label: string;
-  value?: string;
-  placeholder?: string;
+  value: string;
   onSave: (val: string) => void;
-  multiline?: boolean;
+  placeholder?: string;
   keyboardType?: "default" | "numeric" | "numbers-and-punctuation";
+  multiline?: boolean;
 }) {
   const Colors = useColors();
   const styles = useMemo(() => createStyles(Colors), [Colors]);
   const [editing, setEditing] = useState<boolean>(false);
-  const [draft, setDraft] = useState<string>(value ?? "");
+  const [draft, setDraft] = useState<string>(value);
 
-  const startEdit = useCallback(() => {
-    setDraft(value ?? "");
-    setEditing(true);
-    if (Platform.OS !== "web") void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+  useEffect(() => {
+    setDraft(value);
   }, [value]);
 
-  const confirm = useCallback(() => {
+  const handleSave = useCallback(() => {
     onSave(draft.trim());
     setEditing(false);
-    if (Platform.OS !== "web") void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    if (Platform.OS !== "web") void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
   }, [draft, onSave]);
 
-  const cancel = useCallback(() => {
-    setDraft(value ?? "");
+  const handleCancel = useCallback(() => {
+    setDraft(value);
     setEditing(false);
   }, [value]);
 
-  return (
-    <View style={styles.fieldRow}>
-      <Text style={styles.fieldLabel}>{label}</Text>
-      {editing ? (
-        <View style={styles.editRow}>
+  if (editing) {
+    return (
+      <View style={styles.fieldEditing}>
+        <Text style={styles.fieldLabel}>{label}</Text>
+        <View style={styles.fieldEditRow}>
           <TextInput
             value={draft}
             onChangeText={setDraft}
-            placeholder={placeholder}
-            placeholderTextColor={Colors.textTertiary}
-            style={[styles.fieldInput, multiline && styles.fieldInputMultiline]}
+            style={[styles.fieldInput, multiline && styles.fieldInputMulti]}
             autoFocus
             multiline={multiline}
-            keyboardType={keyboardType ?? "default"}
-            autoCapitalize={keyboardType ? "none" : "sentences"}
+            keyboardType={keyboardType}
+            returnKeyType={multiline ? "default" : "done"}
+            onSubmitEditing={multiline ? undefined : handleSave}
+            placeholder={placeholder}
+            placeholderTextColor={Colors.textTertiary}
           />
-          <TouchableOpacity onPress={confirm} style={[styles.iconBtn, styles.iconBtnConfirm]}>
-            <Check size={18} color="#fff" />
-          </TouchableOpacity>
-          <TouchableOpacity onPress={cancel} style={[styles.iconBtn, styles.iconBtnCancel]}>
-            <X size={18} color={Colors.textSecondary} />
-          </TouchableOpacity>
+          <View style={styles.fieldEditActions}>
+            <TouchableOpacity style={styles.fieldSaveBtn} onPress={handleSave}>
+              <Check size={16} color="#fff" />
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.fieldCancelBtn} onPress={handleCancel}>
+              <X size={16} color={Colors.textSecondary} />
+            </TouchableOpacity>
+          </View>
         </View>
-      ) : (
-        <TouchableOpacity onPress={startEdit} activeOpacity={0.7} style={styles.fieldValueRow}>
-          <Text
-            style={[styles.fieldValue, !value && styles.fieldPlaceholder]}
-            numberOfLines={multiline ? 0 : 1}
-          >
-            {value && value.length > 0 ? value : placeholder ?? "Tap to add"}
-          </Text>
-          <Edit3 size={14} color={Colors.textTertiary} />
-        </TouchableOpacity>
-      )}
-    </View>
+      </View>
+    );
+  }
+
+  return (
+    <TouchableOpacity style={styles.fieldRow} onPress={() => setEditing(true)} activeOpacity={0.7}>
+      <View style={styles.fieldInfo}>
+        <Text style={styles.fieldLabel}>{label}</Text>
+        <Text style={[styles.fieldValue, !value && styles.fieldValueEmpty]}>
+          {value || placeholder || "Tap to add"}
+        </Text>
+      </View>
+      <Edit3 size={15} color={Colors.textTertiary} />
+    </TouchableOpacity>
   );
 }
-
-// ─── Main screen ──────────────────────────────────────────────────────────────
 
 export default function CalvingRecordScreen() {
   const Colors = useColors();
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const {
-    getCalvingRecordById,
-    getCalvingListById,
-    getAnimalById,
+    calvingRecords,
     updateCalvingRecord,
     deleteCalvingRecord,
-    calvingRecords,
+    getCalvingListById,
+    getAnimalById,
   } = useRanch();
   const styles = useMemo(() => createStyles(Colors), [Colors]);
 
   const record = useMemo(
-    () => getCalvingRecordById(id ?? ""),
+    () => calvingRecords.find((r) => r.id === id),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [id, calvingRecords.length, getCalvingRecordById],
+    [id, calvingRecords],
   );
 
   const list = useMemo(
-    () => (record ? getCalvingListById(record.calvingListId) : undefined),
-    [record, getCalvingListById],
+    () => (record?.calvingListId ? getCalvingListById(record.calvingListId) : undefined),
+    [record?.calvingListId, getCalvingListById],
   );
 
-  const linkedCalf = useMemo(
+  const calfAnimal = useMemo(
     () => (record?.calfId ? getAnimalById(record.calfId) : undefined),
     [record?.calfId, getAnimalById],
   );
 
   const [isSaving, setIsSaving] = useState<boolean>(false);
 
-  const patchRecord = useCallback(
+  const handleUpdate = useCallback(
     async (patch: Partial<CalvingRecord>) => {
       if (!record) return;
       setIsSaving(true);
       try {
         await updateCalvingRecord({ ...record, ...patch });
       } catch (e) {
-        Alert.alert("Error", "Could not save change. Please try again.");
+        console.log("[calving-record] update failed", e);
+        Alert.alert("Error", "Could not save. Please try again.");
       } finally {
         setIsSaving(false);
       }
@@ -168,7 +166,7 @@ export default function CalvingRecordScreen() {
     if (!record) return;
     Alert.alert(
       "Delete Record",
-      `Delete calving record for cow ${record.cowTag} → calf ${record.calfTag}?`,
+      `Delete calving record for cow ${record.cowTag} → calf ${record.calfTag}? This cannot be undone.`,
       [
         { text: "Cancel", style: "cancel" },
         {
@@ -185,65 +183,67 @@ export default function CalvingRecordScreen() {
     );
   }, [record, deleteCalvingRecord, router]);
 
-  const handlePickPhoto = useCallback(async () => {
+  const handlePhotoPress = useCallback(async () => {
     if (!record) return;
-    if (Platform.OS !== "web") void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    Alert.alert("Add Photo", "Choose a photo source", [
-      { text: "Cancel", style: "cancel" },
+
+    Alert.alert("Photo", "Choose an option", [
       {
         text: "Take Photo",
         onPress: async () => {
-          const perm = await ImagePicker.requestCameraPermissionsAsync();
-          if (!perm.granted) {
-            Alert.alert("Permission needed", "Camera access is required.");
+          const { status } = await ImagePicker.requestCameraPermissionsAsync();
+          if (status !== "granted") {
+            Alert.alert("Permission needed", "Camera permission is required.");
             return;
           }
           const result = await ImagePicker.launchCameraAsync({
             mediaTypes: ImagePicker.MediaTypeOptions.Images,
-            quality: 0.7,
+            allowsEditing: true,
+            aspect: [4, 3],
+            quality: 0.8,
           });
-          if (!result.canceled && result.assets[0]?.uri) {
-            void patchRecord({ photoUrl: result.assets[0].uri });
+          if (!result.canceled && result.assets[0]) {
+            await handleUpdate({ photoUrl: result.assets[0].uri });
           }
         },
       },
       {
         text: "Choose from Library",
         onPress: async () => {
-          const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
-          if (!perm.granted) {
-            Alert.alert("Permission needed", "Photo library access is required.");
+          const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+          if (status !== "granted") {
+            Alert.alert("Permission needed", "Photo library permission is required.");
             return;
           }
           const result = await ImagePicker.launchImageLibraryAsync({
             mediaTypes: ImagePicker.MediaTypeOptions.Images,
-            quality: 0.7,
+            allowsEditing: true,
+            aspect: [4, 3],
+            quality: 0.8,
           });
-          if (!result.canceled && result.assets[0]?.uri) {
-            void patchRecord({ photoUrl: result.assets[0].uri });
+          if (!result.canceled && result.assets[0]) {
+            await handleUpdate({ photoUrl: result.assets[0].uri });
           }
         },
       },
+      ...(record.photoUrl
+        ? [
+            {
+              text: "Remove Photo",
+              style: "destructive" as const,
+              onPress: async () => handleUpdate({ photoUrl: undefined }),
+            },
+          ]
+        : []),
+      { text: "Cancel", style: "cancel" as const },
     ]);
-  }, [record, patchRecord]);
+  }, [record, handleUpdate]);
 
-  const handleRemovePhoto = useCallback(() => {
-    Alert.alert("Remove Photo?", undefined, [
-      { text: "Cancel", style: "cancel" },
-      {
-        text: "Remove",
-        style: "destructive",
-        onPress: () => void patchRecord({ photoUrl: undefined }),
-      },
-    ]);
-  }, [patchRecord]);
-
-  const handleSelectType = useCallback(
+  const handleTypeChange = useCallback(
     (type: CalfType) => {
       if (Platform.OS !== "web") void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-      void patchRecord({ calfType: type });
+      void handleUpdate({ calfType: type });
     },
-    [patchRecord],
+    [handleUpdate],
   );
 
   if (!record) {
@@ -254,11 +254,12 @@ export default function CalvingRecordScreen() {
     );
   }
 
-  const cfg = CALF_TYPE_CONFIG[record.calfType] ?? CALF_TYPE_CONFIG.bull;
+  const cfg = TYPE_CONFIG[record.calfType] ?? TYPE_CONFIG.bull;
+
   const formattedDate = (() => {
     try {
       return new Date(record.date + "T12:00:00").toLocaleDateString([], {
-        weekday: "short",
+        weekday: "long",
         month: "long",
         day: "numeric",
         year: "numeric",
@@ -272,10 +273,10 @@ export default function CalvingRecordScreen() {
     <>
       <Stack.Screen
         options={{
-          title: "Calving Record",
+          title: `Cow ${record.cowTag} → Calf ${record.calfTag}`,
           headerRight: () => (
             <View style={styles.headerActions}>
-              {isSaving ? <ActivityIndicator size="small" color={Colors.primary} /> : null}
+              {isSaving && <ActivityIndicator size="small" color={Colors.primary} />}
               <TouchableOpacity
                 onPress={handleDelete}
                 hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
@@ -287,398 +288,371 @@ export default function CalvingRecordScreen() {
         }}
       />
 
-      <KeyboardAvoidingView
+      <ScrollView
         style={styles.container}
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        contentContainerStyle={styles.content}
+        showsVerticalScrollIndicator={false}
       >
-        <ScrollView
-          contentContainerStyle={styles.scrollContent}
-          showsVerticalScrollIndicator={false}
-          keyboardShouldPersistTaps="handled"
+        <TouchableOpacity
+          style={styles.photoArea}
+          onPress={handlePhotoPress}
+          activeOpacity={0.85}
         >
-          {/* ── Photo ── */}
-          <TouchableOpacity
-            style={styles.photoWrap}
-            onPress={handlePickPhoto}
-            activeOpacity={0.85}
-          >
-            {record.photoUrl ? (
-              <Image source={{ uri: record.photoUrl }} style={styles.photo} />
-            ) : (
-              <View style={[styles.photo, styles.photoPlaceholder]}>
-                <ImageIcon size={36} color={Colors.textTertiary} />
-                <Text style={styles.photoPlaceholderText}>Tap to add photo</Text>
-              </View>
-            )}
-            <View style={styles.cameraBtn}>
-              <Camera size={18} color="#fff" />
+          {record.photoUrl ? (
+            <Image source={{ uri: record.photoUrl }} style={styles.photo} resizeMode="cover" />
+          ) : (
+            <View style={styles.photoPlaceholder}>
+              <ImageIcon size={32} color={Colors.textTertiary} />
+              <Text style={styles.photoPlaceholderText}>Tap to add photo</Text>
             </View>
-            {record.photoUrl ? (
-              <TouchableOpacity style={styles.removePhotoBtn} onPress={handleRemovePhoto}>
-                <X size={16} color="#fff" />
-              </TouchableOpacity>
-            ) : null}
-          </TouchableOpacity>
-
-          {/* ── Header ── */}
-          <View style={styles.header}>
-            <Text style={styles.dateText}>{formattedDate}</Text>
-            <View style={styles.headerBadges}>
-              <View style={[styles.typeBadge, { backgroundColor: cfg.bg }]}>
-                <Text style={styles.typeEmoji}>{cfg.emoji}</Text>
-                <Text style={[styles.typeBadgeText, { color: cfg.color }]}>{cfg.label}</Text>
-              </View>
-              {list ? (
-                <View style={styles.listBadge}>
-                  <View style={[styles.listBadgeDot, { backgroundColor: list.color }]} />
-                  <Text style={styles.listBadgeText} numberOfLines={1}>
-                    {list.name}
-                  </Text>
-                </View>
-              ) : null}
-            </View>
+          )}
+          <View style={styles.photoCameraBtn}>
+            <Camera size={16} color="#fff" />
           </View>
+        </TouchableOpacity>
 
-          {/* ── Calf type switcher ── */}
+        <View style={styles.heroSection}>
+          <Text style={styles.heroDate}>{formattedDate}</Text>
+          <View style={[styles.typeBadge, { backgroundColor: cfg.bg }]}>
+            <Text style={styles.typeEmoji}>{cfg.emoji}</Text>
+            <Text style={[styles.typeBadgeText, { color: cfg.color }]}>{cfg.label}</Text>
+          </View>
+          {list && (
+            <View style={styles.listBadge}>
+              <View style={[styles.listBadgeDot, { backgroundColor: list.color }]} />
+              <Text style={styles.listBadgeText}>{list.name}</Text>
+            </View>
+          )}
+        </View>
+
+        <View style={styles.section}>
           <Text style={styles.sectionTitle}>Calf Type</Text>
           <View style={styles.typeRow}>
             {(["heifer", "steer", "bull"] as CalfType[]).map((type) => {
-              const tcfg = CALF_TYPE_CONFIG[type];
+              const c = TYPE_CONFIG[type];
               const selected = record.calfType === type;
               return (
                 <TouchableOpacity
                   key={type}
                   style={[
                     styles.typeBtn,
-                    selected && { backgroundColor: tcfg.color, borderColor: tcfg.color },
+                    selected && { backgroundColor: c.color, borderColor: c.color },
                   ]}
-                  onPress={() => handleSelectType(type)}
+                  onPress={() => handleTypeChange(type)}
                   activeOpacity={0.8}
                 >
-                  <Text style={styles.typeBtnEmoji}>{tcfg.emoji}</Text>
-                  <Text style={[styles.typeBtnText, selected && { color: "#fff" }]}>
-                    {tcfg.label}
+                  <Text style={styles.typeBtnEmoji}>{c.emoji}</Text>
+                  <Text style={[styles.typeBtnLabel, selected && { color: "#fff" }]}>
+                    {c.label}
                   </Text>
                 </TouchableOpacity>
               );
             })}
           </View>
+        </View>
 
-          {/* ── Core info ── */}
+        <View style={styles.section}>
           <Text style={styles.sectionTitle}>Core Information</Text>
-          <View style={styles.fieldGroup}>
-            <InlineField
+          <View style={styles.card}>
+            <EditableField
               label="Date"
               value={record.date}
+              onSave={(v) => handleUpdate({ date: v })}
               placeholder="YYYY-MM-DD"
-              onSave={(v) => patchRecord({ date: v })}
               keyboardType="numbers-and-punctuation"
             />
-            <InlineField
-              label="Cow Tag"
+            <View style={styles.divider} />
+            <EditableField
+              label="Cow Tag #"
               value={record.cowTag}
-              placeholder="e.g. 214"
-              onSave={(v) => patchRecord({ cowTag: v })}
+              onSave={(v) => handleUpdate({ cowTag: v })}
+              placeholder="Enter cow tag"
             />
-            <InlineField
-              label="Calf Tag"
+            <View style={styles.divider} />
+            <EditableField
+              label="Calf Tag #"
               value={record.calfTag}
-              placeholder="e.g. 2026-01"
-              onSave={(v) => patchRecord({ calfTag: v })}
+              onSave={(v) => handleUpdate({ calfTag: v })}
+              placeholder="Enter calf tag"
             />
-            <InlineField
+            <View style={styles.divider} />
+            <EditableField
               label="Calf Breed"
-              value={record.calfBreed}
-              placeholder="e.g. Angus"
-              onSave={(v) => patchRecord({ calfBreed: v || undefined })}
+              value={record.calfBreed ?? ""}
+              onSave={(v) => handleUpdate({ calfBreed: v })}
+              placeholder="e.g. Angus, Hereford"
             />
           </View>
+        </View>
 
-          {/* ── Birth details ── */}
+        <View style={styles.section}>
           <Text style={styles.sectionTitle}>Birth Details</Text>
-          <View style={styles.fieldGroup}>
-            <InlineField
+          <View style={styles.card}>
+            <EditableField
               label="Birth Weight"
-              value={record.birthWeight != null ? String(record.birthWeight) : ""}
-              placeholder="e.g. 75"
-              onSave={(v) => {
-                const num = parseFloat(v);
-                patchRecord({ birthWeight: isNaN(num) ? undefined : num });
-              }}
+              value={record.birthWeight ? String(record.birthWeight) : ""}
+              onSave={(v) => handleUpdate({ birthWeight: v ? Number(v) : undefined })}
+              placeholder="e.g. 82"
               keyboardType="numeric"
             />
-
+            <View style={styles.divider} />
             <View style={styles.fieldRow}>
-              <Text style={styles.fieldLabel}>Unit</Text>
-              <View style={styles.unitToggleWrap}>
-                {(["lbs", "kg"] as const).map((u) => {
-                  const selected = (record.birthWeightUnit ?? "lbs") === u;
-                  return (
-                    <TouchableOpacity
-                      key={u}
-                      onPress={() => patchRecord({ birthWeightUnit: u })}
-                      style={[
-                        styles.unitBtn,
-                        selected && { backgroundColor: Colors.primary, borderColor: Colors.primary },
-                      ]}
-                      activeOpacity={0.7}
-                    >
-                      <Text style={[styles.unitBtnText, selected && { color: "#fff" }]}>{u}</Text>
-                    </TouchableOpacity>
-                  );
-                })}
+              <View style={styles.fieldInfo}>
+                <Text style={styles.fieldLabel}>Weight Unit</Text>
+                <Text style={styles.fieldValue}>{record.birthWeightUnit ?? "lbs"}</Text>
+              </View>
+              <View style={styles.unitToggle}>
+                <TouchableOpacity
+                  style={[
+                    styles.unitBtn,
+                    (record.birthWeightUnit ?? "lbs") === "lbs" && styles.unitBtnActive,
+                  ]}
+                  onPress={() => handleUpdate({ birthWeightUnit: "lbs" })}
+                >
+                  <Text
+                    style={[
+                      styles.unitBtnText,
+                      (record.birthWeightUnit ?? "lbs") === "lbs" && styles.unitBtnTextActive,
+                    ]}
+                  >
+                    lbs
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[
+                    styles.unitBtn,
+                    record.birthWeightUnit === "kg" && styles.unitBtnActive,
+                  ]}
+                  onPress={() => handleUpdate({ birthWeightUnit: "kg" })}
+                >
+                  <Text
+                    style={[
+                      styles.unitBtnText,
+                      record.birthWeightUnit === "kg" && styles.unitBtnTextActive,
+                    ]}
+                  >
+                    kg
+                  </Text>
+                </TouchableOpacity>
               </View>
             </View>
-
+            <View style={styles.divider} />
             <View style={styles.fieldRow}>
-              <Text style={styles.fieldLabel}>Assisted Birth</Text>
+              <View style={styles.fieldInfo}>
+                <Text style={styles.fieldLabel}>Assisted Birth</Text>
+                <Text style={styles.fieldValue}>
+                  {record.assisted ? "Yes — assistance was needed" : "No — unassisted"}
+                </Text>
+              </View>
               <Switch
                 value={record.assisted ?? false}
-                onValueChange={(val) => patchRecord({ assisted: val })}
+                onValueChange={(v) => handleUpdate({ assisted: v })}
                 trackColor={{ false: Colors.border, true: Colors.primary }}
                 thumbColor={Colors.textInverse}
               />
             </View>
           </View>
+        </View>
 
-          {/* ── Notes ── */}
+        <View style={styles.section}>
           <Text style={styles.sectionTitle}>Notes</Text>
-          <View style={styles.fieldGroup}>
-            <InlineField
+          <View style={styles.card}>
+            <EditableField
               label="Cow Notes"
-              value={record.cowNotes}
-              placeholder="Any notes about the cow..."
-              onSave={(v) => patchRecord({ cowNotes: v || undefined })}
+              value={record.cowNotes ?? ""}
+              onSave={(v) => handleUpdate({ cowNotes: v })}
+              placeholder="Any notes about the cow during this event"
               multiline
             />
-            <InlineField
+            <View style={styles.divider} />
+            <EditableField
               label="Calf Notes"
-              value={record.calfNotes}
-              placeholder="Any notes about the calf..."
-              onSave={(v) => patchRecord({ calfNotes: v || undefined })}
+              value={record.calfNotes ?? ""}
+              onSave={(v) => handleUpdate({ calfNotes: v })}
+              placeholder="Any notes about the calf"
               multiline
             />
           </View>
+        </View>
 
-          {/* ── Linked calf profile ── */}
-          {linkedCalf ? (
-            <>
-              <Text style={styles.sectionTitle}>Linked Calf Profile</Text>
-              <TouchableOpacity
-                style={styles.linkedCard}
-                onPress={() => {
-                  if (Platform.OS !== "web")
-                    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                  router.push(`/animal/${linkedCalf.id}`);
-                }}
-                activeOpacity={0.75}
-              >
-                <View style={styles.linkedIcon}>
-                  <Text style={styles.linkedEmoji}>🐮</Text>
-                </View>
-                <View style={styles.linkedInfo}>
-                  <Text style={styles.linkedTag}>{linkedCalf.tagId}</Text>
-                  <Text style={styles.linkedMeta} numberOfLines={1}>
-                    {linkedCalf.breed || "—"} · {linkedCalf.sex}
-                  </Text>
-                </View>
-                <ChevronRight size={18} color={Colors.textTertiary} />
-              </TouchableOpacity>
-            </>
-          ) : null}
+        {calfAnimal && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Linked Calf Profile</Text>
+            <TouchableOpacity
+              style={styles.linkedCard}
+              onPress={() => router.push(`/animal/${calfAnimal.id}`)}
+              activeOpacity={0.75}
+            >
+              <View style={styles.linkedIcon}>
+                <Text style={styles.linkedEmoji}>🐮</Text>
+              </View>
+              <View style={styles.linkedInfo}>
+                <Text style={styles.linkedTag}>{calfAnimal.tagId}</Text>
+                <Text style={styles.linkedSubtitle}>
+                  {calfAnimal.breed || "Unknown breed"} · Tap to open profile
+                </Text>
+              </View>
+              <ChevronRight size={18} color={Colors.textTertiary} />
+            </TouchableOpacity>
+          </View>
+        )}
 
-          <View style={{ height: 40 }} />
-        </ScrollView>
-      </KeyboardAvoidingView>
+        <View style={styles.meta}>
+          {record.createdByName && (
+            <Text style={styles.metaText}>Logged by {record.createdByName}</Text>
+          )}
+          <Text style={styles.metaText}>
+            Created {new Date(record.createdAt).toLocaleDateString()}
+          </Text>
+          {record.updatedAt !== record.createdAt && (
+            <Text style={styles.metaText}>
+              Last edited {new Date(record.updatedAt).toLocaleDateString()}
+            </Text>
+          )}
+        </View>
+
+        <View style={styles.bottomSpace} />
+      </ScrollView>
     </>
   );
 }
 
-// ─── Styles ───────────────────────────────────────────────────────────────────
-
 function createStyles(Colors: ThemeColors) {
   return StyleSheet.create({
     container: { flex: 1, backgroundColor: Colors.background },
-    scrollContent: { paddingBottom: 20 },
-    notFound: {
+    content: { paddingBottom: 40 },
+    notFound: { flex: 1, alignItems: "center" as const, justifyContent: "center" as const },
+    notFoundText: { fontSize: 16, color: Colors.textSecondary },
+    headerActions: { flexDirection: "row" as const, alignItems: "center" as const, gap: 14 },
+
+    photoArea: {
+      height: 200,
+      backgroundColor: Colors.surface,
+      borderBottomWidth: 1,
+      borderBottomColor: Colors.border,
+      position: "relative" as const,
+    },
+    photo: { width: "100%" as const, height: "100%" as const },
+    photoPlaceholder: {
       flex: 1,
       alignItems: "center" as const,
       justifyContent: "center" as const,
-      backgroundColor: Colors.background,
-    },
-    notFoundText: { fontSize: 16, color: Colors.textSecondary },
-    headerActions: { flexDirection: "row" as const, alignItems: "center" as const, gap: 16 },
-
-    // Photo
-    photoWrap: {
-      width: "100%",
-      aspectRatio: 16 / 10,
-      backgroundColor: Colors.backgroundDark,
-      position: "relative" as const,
-    },
-    photo: { width: "100%", height: "100%" },
-    photoPlaceholder: {
-      alignItems: "center" as const,
-      justifyContent: "center" as const,
       gap: 8,
     },
-    photoPlaceholderText: {
-      fontSize: 13,
-      color: Colors.textTertiary,
-      fontWeight: "600" as const,
-    },
-    cameraBtn: {
+    photoPlaceholderText: { fontSize: 14, color: Colors.textTertiary, fontWeight: "500" as const },
+    photoCameraBtn: {
       position: "absolute" as const,
-      bottom: 14,
-      right: 14,
-      width: 42,
-      height: 42,
-      borderRadius: 21,
-      backgroundColor: "rgba(0,0,0,0.6)",
-      alignItems: "center" as const,
-      justifyContent: "center" as const,
-    },
-    removePhotoBtn: {
-      position: "absolute" as const,
-      top: 14,
-      right: 14,
-      width: 32,
-      height: 32,
-      borderRadius: 16,
-      backgroundColor: "rgba(0,0,0,0.6)",
+      bottom: 12,
+      right: 12,
+      width: 36,
+      height: 36,
+      borderRadius: 18,
+      backgroundColor: Colors.primary,
       alignItems: "center" as const,
       justifyContent: "center" as const,
     },
 
-    // Header
-    header: {
-      paddingHorizontal: 20,
+    heroSection: {
+      alignItems: "center" as const,
       paddingTop: 20,
-      paddingBottom: 8,
-      alignItems: "flex-start" as const,
+      paddingBottom: 16,
+      paddingHorizontal: 20,
+      gap: 10,
     },
-    dateText: {
-      fontSize: 14,
-      color: Colors.textSecondary,
-      fontWeight: "600" as const,
-      marginBottom: 10,
-    },
-    headerBadges: {
-      flexDirection: "row" as const,
-      flexWrap: "wrap" as const,
-      gap: 8,
+    heroDate: {
+      fontSize: 16,
+      fontWeight: "700" as const,
+      color: Colors.text,
+      textAlign: "center" as const,
     },
     typeBadge: {
       flexDirection: "row" as const,
       alignItems: "center" as const,
       gap: 6,
-      paddingHorizontal: 12,
+      paddingHorizontal: 14,
       paddingVertical: 7,
-      borderRadius: 10,
+      borderRadius: 20,
     },
-    typeEmoji: { fontSize: 16 },
-    typeBadgeText: {
-      fontSize: 13,
-      fontWeight: "800" as const,
-      textTransform: "uppercase" as const,
-      letterSpacing: 0.5,
-    },
+    typeEmoji: { fontSize: 18 },
+    typeBadgeText: { fontSize: 15, fontWeight: "800" as const },
     listBadge: {
       flexDirection: "row" as const,
       alignItems: "center" as const,
-      gap: 8,
-      paddingHorizontal: 12,
-      paddingVertical: 7,
-      borderRadius: 10,
-      borderWidth: 1,
-      borderColor: Colors.border,
+      gap: 6,
       backgroundColor: Colors.surface,
-      maxWidth: 220,
+      paddingHorizontal: 12,
+      paddingVertical: 6,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: Colors.borderLight,
     },
-    listBadgeDot: { width: 10, height: 10, borderRadius: 5 },
-    listBadgeText: { fontSize: 13, fontWeight: "700" as const, color: Colors.text },
+    listBadgeDot: { width: 8, height: 8, borderRadius: 4 },
+    listBadgeText: { fontSize: 13, fontWeight: "600" as const, color: Colors.textSecondary },
 
-    // Sections
-    sectionTitle: {
-      fontSize: 13,
-      fontWeight: "800" as const,
-      color: Colors.textSecondary,
-      textTransform: "uppercase" as const,
-      letterSpacing: 1.1,
-      marginTop: 24,
-      marginBottom: 10,
-      marginHorizontal: 20,
-    },
-
-    // Calf type
     typeRow: {
       flexDirection: "row" as const,
       gap: 10,
-      paddingHorizontal: 20,
     },
     typeBtn: {
       flex: 1,
       alignItems: "center" as const,
       justifyContent: "center" as const,
-      paddingVertical: 16,
+      paddingVertical: 14,
       borderRadius: 14,
       borderWidth: 2,
       borderColor: Colors.border,
       backgroundColor: Colors.surface,
       gap: 4,
     },
-    typeBtnEmoji: { fontSize: 24 },
-    typeBtnText: {
-      fontSize: 14,
+    typeBtnEmoji: { fontSize: 22 },
+    typeBtnLabel: {
+      fontSize: 13,
       fontWeight: "800" as const,
       color: Colors.textSecondary,
     },
 
-    // Field group
-    fieldGroup: {
-      marginHorizontal: 20,
+    section: { paddingHorizontal: 16, marginBottom: 20 },
+    sectionTitle: {
+      fontSize: 13,
+      fontWeight: "800" as const,
+      color: Colors.textSecondary,
+      textTransform: "uppercase" as const,
+      letterSpacing: 1.1,
+      marginBottom: 10,
+      marginLeft: 2,
+    },
+
+    card: {
       backgroundColor: Colors.surface,
       borderRadius: 16,
       borderWidth: 1,
       borderColor: Colors.borderLight,
       overflow: "hidden" as const,
     },
+    divider: { height: 1, backgroundColor: Colors.border, marginHorizontal: 16 },
+
     fieldRow: {
-      paddingHorizontal: 16,
-      paddingVertical: 14,
-      borderBottomWidth: StyleSheet.hairlineWidth,
-      borderBottomColor: Colors.border,
-    },
-    fieldLabel: {
-      fontSize: 12,
-      fontWeight: "700" as const,
-      color: Colors.textTertiary,
-      textTransform: "uppercase" as const,
-      letterSpacing: 0.6,
-      marginBottom: 6,
-    },
-    fieldValueRow: {
       flexDirection: "row" as const,
       alignItems: "center" as const,
       justifyContent: "space-between" as const,
+      paddingHorizontal: 16,
+      paddingVertical: 14,
       gap: 12,
     },
-    fieldValue: {
-      flex: 1,
-      fontSize: 16,
-      color: Colors.text,
-      fontWeight: "600" as const,
-    },
-    fieldPlaceholder: {
+    fieldInfo: { flex: 1 },
+    fieldLabel: {
+      fontSize: 11,
+      fontWeight: "700" as const,
       color: Colors.textTertiary,
-      fontWeight: "500" as const,
-      fontStyle: "italic" as const,
+      textTransform: "uppercase" as const,
+      letterSpacing: 0.8,
+      marginBottom: 3,
     },
-    editRow: {
-      flexDirection: "row" as const,
-      alignItems: "center" as const,
-      gap: 8,
-    },
+    fieldValue: { fontSize: 16, fontWeight: "600" as const, color: Colors.text },
+    fieldValueEmpty: { color: Colors.textTertiary, fontStyle: "italic" as const },
+
+    fieldEditing: { paddingHorizontal: 16, paddingVertical: 12 },
+    fieldEditRow: { flexDirection: "row" as const, alignItems: "flex-start" as const, gap: 10, marginTop: 6 },
     fieldInput: {
       flex: 1,
       fontSize: 16,
@@ -688,74 +662,66 @@ function createStyles(Colors: ThemeColors) {
       borderRadius: 10,
       paddingHorizontal: 12,
       paddingVertical: 10,
+      borderWidth: 1.5,
+      borderColor: Colors.primary,
     },
-    fieldInputMultiline: {
-      minHeight: 70,
-      textAlignVertical: "top" as const,
-      paddingTop: 10,
-    },
-    iconBtn: {
+    fieldInputMulti: { minHeight: 80, textAlignVertical: "top" as const },
+    fieldEditActions: { flexDirection: "column" as const, gap: 6 },
+    fieldSaveBtn: {
       width: 36,
       height: 36,
       borderRadius: 10,
+      backgroundColor: Colors.primary,
       alignItems: "center" as const,
       justifyContent: "center" as const,
     },
-    iconBtnConfirm: { backgroundColor: Colors.primary },
-    iconBtnCancel: { backgroundColor: Colors.backgroundDark },
-
-    // Unit toggle
-    unitToggleWrap: {
-      flexDirection: "row" as const,
-      gap: 8,
-    },
-    unitBtn: {
-      paddingHorizontal: 18,
-      paddingVertical: 8,
-      borderRadius: 20,
-      borderWidth: 1.5,
-      borderColor: Colors.border,
+    fieldCancelBtn: {
+      width: 36,
+      height: 36,
+      borderRadius: 10,
       backgroundColor: Colors.surface,
-    },
-    unitBtnText: {
-      fontSize: 14,
-      fontWeight: "800" as const,
-      color: Colors.textSecondary,
-      textTransform: "uppercase" as const,
+      borderWidth: 1,
+      borderColor: Colors.border,
+      alignItems: "center" as const,
+      justifyContent: "center" as const,
     },
 
-    // Linked card
+    unitToggle: { flexDirection: "row" as const, borderRadius: 8, overflow: "hidden" as const, borderWidth: 1, borderColor: Colors.border },
+    unitBtn: { paddingHorizontal: 14, paddingVertical: 8 },
+    unitBtnActive: { backgroundColor: Colors.primary },
+    unitBtnText: { fontSize: 13, fontWeight: "700" as const, color: Colors.textSecondary },
+    unitBtnTextActive: { color: "#fff" },
+
     linkedCard: {
       flexDirection: "row" as const,
       alignItems: "center" as const,
-      gap: 12,
-      marginHorizontal: 20,
       backgroundColor: Colors.surface,
-      borderRadius: 16,
+      borderRadius: 14,
       padding: 14,
+      gap: 12,
       borderWidth: 1,
       borderColor: Colors.borderLight,
     },
     linkedIcon: {
-      width: 46,
-      height: 46,
-      borderRadius: 14,
+      width: 44,
+      height: 44,
+      borderRadius: 12,
       backgroundColor: Colors.backgroundDark,
       alignItems: "center" as const,
       justifyContent: "center" as const,
     },
-    linkedEmoji: { fontSize: 24 },
+    linkedEmoji: { fontSize: 22 },
     linkedInfo: { flex: 1 },
-    linkedTag: {
-      fontSize: 17,
-      fontWeight: "800" as const,
-      color: Colors.text,
+    linkedTag: { fontSize: 16, fontWeight: "700" as const, color: Colors.text },
+    linkedSubtitle: { fontSize: 13, color: Colors.textSecondary, marginTop: 2 },
+
+    meta: {
+      paddingHorizontal: 16,
+      paddingTop: 8,
+      gap: 4,
+      alignItems: "center" as const,
     },
-    linkedMeta: {
-      fontSize: 13,
-      color: Colors.textSecondary,
-      marginTop: 2,
-      fontWeight: "500" as const,
-    },
+    metaText: { fontSize: 12, color: Colors.textTertiary, fontWeight: "500" as const },
+    bottomSpace: { height: 40 },
   });
 }
