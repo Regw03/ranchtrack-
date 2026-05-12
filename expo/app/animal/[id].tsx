@@ -43,7 +43,7 @@ import { useColors } from "@/providers/ThemeProvider";
 import { useRanch } from "@/providers/RanchProvider";
 import { SPECIES_ICONS, getAnimalDisplayName, getGenderTitle } from "@/mocks/animals";
 import { formatDate, getAnimalAge } from "@/utils/helpers";
-import { HealthRecord, WeightRecord, BreedingRecord, CustomList, IdentityStatus, GenerationConfidence, Animal, DoctoringEvent } from "@/types";
+import { HealthRecord, WeightRecord, BreedingRecord, CustomList, Animal, DoctoringEvent } from "@/types";
 
 function SectionHeader({ title, icon, onAdd }: { title: string; icon: React.ReactNode; onAdd?: () => void }) {
   const Colors = useColors();
@@ -233,7 +233,6 @@ export default function AnimalDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const { getAnimalById, getWeightRecordsForAnimal, getHealthRecordsForAnimal, getBreedingRecordsForAnimal, deleteAnimal, toggleMarkedForSale, markAsDeceased, undoDeceased, undoSold, getListsForAnimal, removeAnimalFromList, customLists, updateAnimal, getAnimalDisplayWithYear, getBusinessYearName, animals, mergeAnimals, isMergingAnimals, getDoctoringEventsForAnimal, updateDoctoringEvent } = useRanch();
-  const [showIdentityEditor, setShowIdentityEditor] = useState(false);
   const [showMergeModal, setShowMergeModal] = useState(false);
   const [mergeSearch, setMergeSearch] = useState("");
   const styles = useMemo(() => createStyles(Colors), [Colors]);
@@ -311,18 +310,6 @@ export default function AnimalDetailScreen() {
       { text: "Remove", style: "destructive", onPress: async () => { if (Platform.OS !== "web") void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning); await deleteAnimal(id ?? ""); router.back(); } },
     ]);
   }, [animal, deleteAnimal, id, router]);
-
-  const handleUpdateIdentityStatus = useCallback(async (status: IdentityStatus) => {
-    if (!animal) return;
-    await updateAnimal({ ...animal, identityStatus: status });
-    if (Platform.OS !== "web") void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-  }, [animal, updateAnimal]);
-
-  const handleUpdateGeneration = useCallback(async (gen: number | undefined, confidence: GenerationConfidence) => {
-    if (!animal) return;
-    await updateAnimal({ ...animal, generation: gen, generationConfidence: confidence });
-    if (Platform.OS !== "web") void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-  }, [animal, updateAnimal]);
 
   const handleMerge = useCallback(async (targetAnimal: Animal) => {
     if (!animal) return;
@@ -446,79 +433,17 @@ export default function AnimalDetailScreen() {
           </View>
         )}
 
-        <View style={styles.recordsSection}>
-          <SectionHeader title="Identity & Generation" icon={<Edit3 size={18} color={Colors.primary} />} />
-          <View style={styles.identityCard}>
-            <View style={styles.identityRow}>
-              <Text style={styles.identityLabel}>Identity Status</Text>
-              <View style={styles.identityChips}>
-                {(["confirmed", "estimated", "unknown"] as IdentityStatus[]).map((s) => (
-                  <TouchableOpacity
-                    key={s}
-                    style={[styles.identityChip, (animal.identityStatus ?? "confirmed") === s && styles.identityChipActive]}
-                    onPress={() => handleUpdateIdentityStatus(s)}
-                    activeOpacity={0.7}
-                  >
-                    {s === "confirmed" ? <CheckCircle size={12} color={(animal.identityStatus ?? "confirmed") === s ? Colors.textInverse : Colors.success} /> : s === "estimated" ? <HelpCircle size={12} color={(animal.identityStatus ?? "confirmed") === s ? Colors.textInverse : Colors.warning} /> : <AlertTriangle size={12} color={(animal.identityStatus ?? "confirmed") === s ? Colors.textInverse : Colors.textTertiary} />}
-                    <Text style={[styles.identityChipText, (animal.identityStatus ?? "confirmed") === s && styles.identityChipTextActive]}>{s === "confirmed" ? "Confirmed" : s === "estimated" ? "Estimated" : "Unknown"}</Text>
-                  </TouchableOpacity>
-                ))}
+        {animal.mergedFromIds && animal.mergedFromIds.length > 0 && (
+          <View style={styles.recordsSection}>
+            <SectionHeader title="Merged From" icon={<GitMerge size={18} color={Colors.primary} />} />
+            <View style={styles.identityCard}>
+              <View style={styles.identityRow}>
+                <Text style={styles.identityLabel}>Merged From</Text>
+                <Text style={styles.mergedCount}>{animal.mergedFromIds.length} animal{animal.mergedFromIds.length > 1 ? "s" : ""}</Text>
               </View>
             </View>
-            <View style={styles.identityDivider} />
-            <View style={styles.identityRow}>
-              <Text style={styles.identityLabel}>Generation</Text>
-              <View style={styles.generationEditRow}>
-                {!showIdentityEditor ? (
-                  <TouchableOpacity style={styles.generationDisplay} onPress={() => setShowIdentityEditor(true)} activeOpacity={0.7}>
-                    <Text style={styles.generationDisplayText}>
-                      {animal.generation != null ? `${animal.generationConfidence === "estimated" ? "~" : "#"}${animal.generation}` : "Not set"}
-                    </Text>
-                    <Edit3 size={14} color={Colors.textTertiary} />
-                  </TouchableOpacity>
-                ) : (
-                  <View style={styles.generationEditGroup}>
-                    <TextInput
-                      style={styles.generationEditInput}
-                      placeholder="Gen #"
-                      placeholderTextColor={Colors.textTertiary}
-                      defaultValue={animal.generation?.toString() ?? ""}
-                      keyboardType="numeric"
-                      onSubmitEditing={(e) => {
-                        const val = e.nativeEvent.text.trim();
-                        void handleUpdateGeneration(val ? parseInt(val, 10) : undefined, animal.generationConfidence ?? "confirmed");
-                        setShowIdentityEditor(false);
-                      }}
-                      autoFocus
-                    />
-                    <TouchableOpacity
-                      style={[styles.estChipSmall, (animal.generationConfidence ?? "confirmed") === "estimated" && styles.estChipSmallActive]}
-                      onPress={() => {
-                        const newConf = (animal.generationConfidence ?? "confirmed") === "confirmed" ? "estimated" : "confirmed";
-                        void handleUpdateGeneration(animal.generation, newConf as GenerationConfidence);
-                      }}
-                      activeOpacity={0.7}
-                    >
-                      <Text style={[styles.estChipSmallText, (animal.generationConfidence ?? "confirmed") === "estimated" && styles.estChipSmallTextActive]}>Est.</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity onPress={() => setShowIdentityEditor(false)} style={styles.generationDoneBtn}>
-                      <Text style={styles.generationDoneBtnText}>Done</Text>
-                    </TouchableOpacity>
-                  </View>
-                )}
-              </View>
-            </View>
-            {animal.mergedFromIds && animal.mergedFromIds.length > 0 && (
-              <>
-                <View style={styles.identityDivider} />
-                <View style={styles.identityRow}>
-                  <Text style={styles.identityLabel}>Merged From</Text>
-                  <Text style={styles.mergedCount}>{animal.mergedFromIds.length} animal{animal.mergedFromIds.length > 1 ? "s" : ""}</Text>
-                </View>
-              </>
-            )}
           </View>
-        </View>
+        )}
 
         <View style={styles.actionButtons}>
           <TouchableOpacity style={styles.mergeButton} onPress={() => setShowMergeModal(true)} activeOpacity={0.7}>
