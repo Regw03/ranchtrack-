@@ -40,8 +40,31 @@ export default function LogCalvingScreen() {
   const { logCalvingEvent, isLoggingCalvingEvent, calvingLists, getCalvingListById } = useRanch();
   const styles = useMemo(() => createStyles(Colors), [Colors]);
 
-  const today = new Date().toISOString().substring(0, 10);
-  const [date, setDate] = useState(today);
+  const todayIso = new Date().toISOString().substring(0, 10);
+  const isoToDisplay = useCallback((iso: string): string => {
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso);
+    if (!m) return iso;
+    return `${m[2]}-${m[3]}-${m[1]}`;
+  }, []);
+  const displayToIso = useCallback((display: string): string | null => {
+    const m = /^(\d{2})-(\d{2})-(\d{4})$/.exec(display.trim());
+    if (!m) return null;
+    const mm = parseInt(m[1], 10);
+    const dd = parseInt(m[2], 10);
+    const yyyy = parseInt(m[3], 10);
+    if (mm < 1 || mm > 12 || dd < 1 || dd > 31 || yyyy < 1900) return null;
+    return `${m[3]}-${m[1]}-${m[2]}`;
+  }, []);
+  const formatDateInput = useCallback((raw: string, prev: string): string => {
+    const isDeleting = raw.length < prev.length;
+    const digits = raw.replace(/\D/g, "").slice(0, 8);
+    if (isDeleting && /-$/.test(raw)) return raw;
+    let out = digits;
+    if (digits.length > 4) out = `${digits.slice(0, 2)}-${digits.slice(2, 4)}-${digits.slice(4)}`;
+    else if (digits.length > 2) out = `${digits.slice(0, 2)}-${digits.slice(2)}`;
+    return out;
+  }, []);
+  const [date, setDate] = useState<string>(isoToDisplay(todayIso));
   const [cowTag, setCowTag] = useState("");
   const [calfTag, setCalfTag] = useState("");
   const [calfType, setCalfType] = useState<CalfType>("heifer");
@@ -66,6 +89,7 @@ export default function LogCalvingScreen() {
     cowTag.trim().length > 0 &&
     calfTag.trim().length > 0 &&
     !!selectedListId &&
+    !!displayToIso(date) &&
     !isLoggingCalvingEvent;
 
   const flashSuccess = useCallback(() => {
@@ -80,9 +104,10 @@ export default function LogCalvingScreen() {
     if (Platform.OS !== "web") void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 
     try {
+      const isoDate = displayToIso(date) ?? todayIso;
       await logCalvingEvent({
         calvingListId: selectedListId,
-        date,
+        date: isoDate,
         cowTag: cowTag.trim(),
         calfTag: calfTag.trim(),
         calfType,
@@ -98,7 +123,7 @@ export default function LogCalvingScreen() {
       console.log("[log-calving] save error", e);
       Alert.alert("Error", "Could not save the calving record. Please try again.");
     }
-  }, [canSave, selectedListId, date, cowTag, calfTag, calfType, logCalvingEvent, flashSuccess]);
+  }, [canSave, selectedListId, date, cowTag, calfTag, calfType, logCalvingEvent, flashSuccess, displayToIso, todayIso]);
 
   const handleRepeatLast = useCallback(() => {
     if (!lastEntry) return;
@@ -205,11 +230,11 @@ export default function LogCalvingScreen() {
               <View style={styles.inputWrapper}>
                 <TextInput
                   value={date}
-                  onChangeText={setDate}
-                  placeholder="YYYY-MM-DD"
+                  onChangeText={(t) => setDate((prev) => formatDateInput(t, prev))}
+                  placeholder="MM-DD-YYYY"
                   placeholderTextColor={Colors.textTertiary}
                   style={styles.input}
-                  keyboardType="numbers-and-punctuation"
+                  keyboardType="number-pad"
                   returnKeyType="next"
                   maxLength={10}
                 />
