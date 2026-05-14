@@ -9,7 +9,7 @@ import {
   Platform,
 } from "react-native";
 import { useLocalSearchParams, useRouter, Stack } from "expo-router";
-import { Plus, Edit3, Trash2, Baby, ChevronRight, Search } from "lucide-react-native";
+import { Edit3, Trash2, Baby, ChevronRight, Search } from "lucide-react-native";
 import * as Haptics from "expo-haptics";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { ThemeColors } from "@/constants/colors";
@@ -349,16 +349,8 @@ export default function CalvingListDetailScreen() {
               </Text>
             </View>
           }
-          ListFooterComponent={<View style={{ height: 100 }} />}
+          ListFooterComponent={<View style={{ height: 40 }} />}
         />
-
-        <TouchableOpacity
-          style={[styles.fab, { backgroundColor: list.color }]}
-          onPress={handleLogCalving}
-          activeOpacity={0.85}
-        >
-          <Plus size={22} color="#fff" />
-        </TouchableOpacity>
       </View>
     </>
   );
@@ -553,20 +545,5 @@ function createStyles(Colors: ThemeColors) {
       lineHeight: 22,
     },
 
-    fab: {
-      position: "absolute" as const,
-      bottom: 24,
-      right: 20,
-      width: 56,
-      height: 56,
-      borderRadius: 28,
-      alignItems: "center" as const,
-      justifyContent: "center" as const,
-      shadowColor: "#000",
-      shadowOffset: { width: 0, height: 4 },
-      shadowOpacity: 0.25,
-      shadowRadius: 8,
-      elevation: 6,
-    },
   });
 }
