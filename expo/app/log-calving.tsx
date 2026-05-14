@@ -15,7 +15,7 @@ import {
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import * as Haptics from "expo-haptics";
-import { Check, RefreshCw } from "lucide-react-native";
+import { Check, RefreshCw, Plus } from "lucide-react-native";
 import { ThemeColors } from "@/constants/colors";
 import { useColors } from "@/providers/ThemeProvider";
 import { useRanch } from "@/providers/RanchProvider";
@@ -37,7 +37,7 @@ export default function LogCalvingScreen() {
   const Colors = useColors();
   const router = useRouter();
   const params = useLocalSearchParams<{ calvingListId?: string }>();
-  const { logCalvingEvent, isLoggingCalvingEvent, calvingLists, getCalvingListById } = useRanch();
+  const { logCalvingEvent, isLoggingCalvingEvent, calvingLists, getCalvingListById, createCalvingList } = useRanch();
   const styles = useMemo(() => createStyles(Colors), [Colors]);
 
   const todayIso = new Date().toISOString().substring(0, 10);
@@ -73,12 +73,21 @@ export default function LogCalvingScreen() {
   );
   const [saveCount, setSaveCount] = useState<number>(0);
   const [lastEntry, setLastEntry] = useState<LastEntry | null>(null);
+  const [isCreatingList, setIsCreatingList] = useState<boolean>(false);
+  const [newListName, setNewListName] = useState<string>("");
+  const [isSavingList, setIsSavingList] = useState<boolean>(false);
 
   const successAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     if (params.calvingListId) setSelectedListId(params.calvingListId);
   }, [params.calvingListId]);
+
+  useEffect(() => {
+    if (!selectedListId && calvingLists.length > 0) {
+      setSelectedListId(calvingLists[0].id);
+    }
+  }, [calvingLists, selectedListId]);
 
   const selectedList = useMemo(
     () => (selectedListId ? getCalvingListById(selectedListId) : undefined),
@@ -131,6 +140,25 @@ export default function LogCalvingScreen() {
     setCalfType(lastEntry.calfType);
   }, [lastEntry]);
 
+  const handleQuickCreateList = useCallback(async () => {
+    const name = newListName.trim();
+    if (!name || isSavingList) return;
+    if (Platform.OS !== "web") void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    setIsSavingList(true);
+    try {
+      const result = await createCalvingList({ name, color: "#3D8B5E" });
+      const created = (result as unknown as { newList?: { id: string } } | undefined)?.newList;
+      if (created?.id) setSelectedListId(created.id);
+      setNewListName("");
+      setIsCreatingList(false);
+    } catch (e) {
+      console.log("[log-calving] create list error", e);
+      Alert.alert("Error", "Could not create the list. Please try again.");
+    } finally {
+      setIsSavingList(false);
+    }
+  }, [newListName, isSavingList, createCalvingList]);
+
   const handleSelectType = useCallback((type: CalfType) => {
     if (Platform.OS !== "web") void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setCalfType(type);
@@ -179,11 +207,49 @@ export default function LogCalvingScreen() {
             <View style={styles.form}>
               <Text style={styles.sectionLabel}>Calving List</Text>
               {calvingLists.length === 0 ? (
-                <View style={styles.noListBanner}>
-                  <Text style={styles.noListText}>
-                    No calving lists yet. Create one from the Work tab first.
-                  </Text>
-                </View>
+                isCreatingList ? (
+                  <View style={styles.inlineCreateWrap}>
+                    <TextInput
+                      value={newListName}
+                      onChangeText={setNewListName}
+                      placeholder="e.g. Spring Heifers"
+                      placeholderTextColor={Colors.textTertiary}
+                      style={styles.inlineCreateInput}
+                      autoFocus
+                      autoCapitalize="words"
+                      returnKeyType="done"
+                      onSubmitEditing={handleQuickCreateList}
+                      maxLength={50}
+                      testID="inline-list-name"
+                    />
+                    <TouchableOpacity
+                      style={[styles.inlineCreateBtn, (!newListName.trim() || isSavingList) && styles.inlineCreateBtnDisabled]}
+                      onPress={handleQuickCreateList}
+                      disabled={!newListName.trim() || isSavingList}
+                      activeOpacity={0.85}
+                      testID="inline-list-save"
+                    >
+                      {isSavingList ? (
+                        <ActivityIndicator color="#fff" size="small" />
+                      ) : (
+                        <Check size={18} color="#fff" />
+                      )}
+                    </TouchableOpacity>
+                  </View>
+                ) : (
+                  <TouchableOpacity
+                    style={styles.createListBtn}
+                    onPress={() => {
+                      if (Platform.OS !== "web") void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                      setIsCreatingList(true);
+                    }}
+                    activeOpacity={0.85}
+                    testID="create-list-inline"
+                  >
+                    <Plus size={18} color="#fff" />
+                    <Text style={styles.createListBtnText}>Create your first list</Text>
+                  </TouchableOpacity>
+                )
               ) : (
                 <ScrollView
                   horizontal
@@ -410,6 +476,49 @@ function createStyles(Colors: ThemeColors) {
       color: Colors.warning,
       fontWeight: "600" as const,
       lineHeight: 20,
+    },
+    createListBtn: {
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      justifyContent: "center" as const,
+      gap: 8,
+      backgroundColor: Colors.primary,
+      paddingVertical: 14,
+      borderRadius: 14,
+    },
+    createListBtnText: {
+      fontSize: 15,
+      fontWeight: "800" as const,
+      color: "#fff",
+      letterSpacing: 0.2,
+    },
+    inlineCreateWrap: {
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      gap: 10,
+    },
+    inlineCreateInput: {
+      flex: 1,
+      backgroundColor: Colors.surface,
+      borderRadius: 14,
+      borderWidth: 1.5,
+      borderColor: Colors.border,
+      paddingHorizontal: 16,
+      paddingVertical: 14,
+      fontSize: 16,
+      fontWeight: "600" as const,
+      color: Colors.text,
+    },
+    inlineCreateBtn: {
+      width: 52,
+      height: 52,
+      borderRadius: 14,
+      backgroundColor: Colors.primary,
+      alignItems: "center" as const,
+      justifyContent: "center" as const,
+    },
+    inlineCreateBtnDisabled: {
+      opacity: 0.4,
     },
 
     listChips: {
