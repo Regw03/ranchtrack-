@@ -10,7 +10,7 @@ import {
   Animated,
 } from "react-native";
 import { useLocalSearchParams, useRouter, Stack } from "expo-router";
-import { ChevronRight, Edit3, Trash2, Plus, Baby, UserMinus, AlertCircle } from "lucide-react-native";
+import { ChevronRight, Edit3, Trash2, Baby, UserMinus, AlertCircle } from "lucide-react-native";
 import * as Haptics from "expo-haptics";
 import { ThemeColors } from "@/constants/colors";
 import { useColors } from "@/providers/ThemeProvider";
@@ -408,21 +408,6 @@ export default function CalvingGroupDetailScreen() {
           }
         />
 
-        <View style={styles.fabGroup}>
-          <TouchableOpacity
-            style={styles.fab}
-            onPress={() =>
-              router.push({
-                pathname: "/add-cows-to-group" as never,
-                params: { groupId: group.id },
-              })
-            }
-            activeOpacity={0.85}
-          >
-            <Plus size={20} color="#fff" />
-            <Text style={styles.fabText}>Add Cows</Text>
-          </TouchableOpacity>
-        </View>
       </View>
     </>
   );
