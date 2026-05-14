@@ -12,7 +12,6 @@ import { useRouter } from "expo-router";
 import {
   AlertTriangle,
   Stethoscope,
-  Baby,
   ClipboardList,
   Plus,
   ChevronRight,
@@ -26,7 +25,7 @@ import { ThemeColors } from "@/constants/colors";
 import { useColors } from "@/providers/ThemeProvider";
 import { useRanch } from "@/providers/RanchProvider";
 import { useProcessingSessions } from "@/providers/ProcessingSessionProvider";
-import { Animal, DoctoringEvent, CalvingGroup, ProcessingSession } from "@/types";
+import { Animal, DoctoringEvent, ProcessingSession } from "@/types";
 
 function QuickActionButton({
   label,
@@ -108,54 +107,6 @@ function AttentionItem({
   );
 }
 
-function CalvingGroupCard({
-  group,
-  cowsNotCalved,
-  calvedCount,
-  onPress,
-}: {
-  group: CalvingGroup;
-  cowsNotCalved: number;
-  calvedCount: number;
-  onPress: () => void;
-}) {
-  const Colors = useColors();
-  const styles = useMemo(() => createStyles(Colors), [Colors]);
-  const total = group.cowIds.length;
-  const progress = total > 0 ? calvedCount / total : 0;
-
-  return (
-    <TouchableOpacity
-      style={styles.calvingCard}
-      onPress={() => {
-        if (Platform.OS !== "web") void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-        onPress();
-      }}
-      activeOpacity={0.7}
-    >
-      <View style={styles.calvingCardHeader}>
-        <View style={[styles.calvingColorDot, { backgroundColor: group.color }]} />
-        <Text style={styles.calvingName} numberOfLines={1}>{group.name}</Text>
-        <ChevronRight size={16} color={Colors.textTertiary} />
-      </View>
-      <View style={styles.calvingStats}>
-        <View style={styles.calvingStat}>
-          <Text style={styles.calvingStatNum}>{cowsNotCalved}</Text>
-          <Text style={styles.calvingStatLabel}>Waiting</Text>
-        </View>
-        <View style={styles.calvingStatDivider} />
-        <View style={styles.calvingStat}>
-          <Text style={[styles.calvingStatNum, { color: Colors.success }]}>{calvedCount}</Text>
-          <Text style={styles.calvingStatLabel}>Calved</Text>
-        </View>
-      </View>
-      <View style={styles.progressTrack}>
-        <View style={[styles.progressFill, { width: `${Math.round(progress * 100)}%` }]} />
-      </View>
-    </TouchableOpacity>
-  );
-}
-
 function SessionCard({
   session,
   statusLabel,
@@ -212,8 +163,6 @@ export default function DashboardScreen() {
 
   const {
     needsAttentionAnimals,
-    calvingGroups,
-    calvingRecordsForYear,
     doctoringEvents,
     activeBusinessYear,
   } = useRanch();
@@ -236,21 +185,6 @@ export default function DashboardScreen() {
     return items;
   }, [needsAttentionAnimals, doctoringEvents]);
 
-  const calvingData = useMemo(() => {
-    return calvingGroups.map((group) => {
-      const calvedMotherIds = new Set(
-        calvingRecordsForYear
-          .filter((r) => group.cowIds.includes(r.motherId))
-          .map((r) => r.motherId),
-      );
-      const calvedCount = calvedMotherIds.size;
-      const cowsNotCalved = group.cowIds.length - calvedCount;
-      return { group, cowsNotCalved, calvedCount };
-    });
-  }, [calvingGroups, calvingRecordsForYear]);
-
-  const hasCalvingActivity = calvingData.some((d) => d.group.cowIds.length > 0);
-
   const activeSessions = useMemo(() => {
     return sessions
       .filter((s) => s.businessYearId === activeBusinessYear.id)
@@ -264,7 +198,6 @@ export default function DashboardScreen() {
   }, [sessions, activeBusinessYear.id, getSessionProgress, Colors]);
 
   const hasAttention = attentionItems.length > 0;
-  const hasCalving = hasCalvingActivity;
   const hasProcessing = activeSessions.length > 0;
 
   const handleQuickAction = useCallback((route: string) => {
@@ -283,12 +216,6 @@ export default function DashboardScreen() {
       </View>
 
       <View style={styles.quickActionsGrid}>
-        <QuickActionButton
-          label="Add Calf"
-          icon={<Baby size={22} color="#2D7A9C" />}
-          color="#2D7A9C"
-          onPress={() => handleQuickAction("/log-calving")}
-        />
         <QuickActionButton
           label="Add Cow"
           icon={<Plus size={22} color="#3D8B5E" />}
@@ -353,30 +280,6 @@ export default function DashboardScreen() {
         </View>
       )}
 
-      {hasCalving && (
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <View style={styles.sectionTitleRow}>
-              <View style={[styles.sectionIconWrap, { backgroundColor: "#2D7A9C" + "18" }]}>
-                <Baby size={16} color="#2D7A9C" />
-              </View>
-              <Text style={styles.sectionTitle}>Calving Activity</Text>
-            </View>
-          </View>
-          <View style={styles.sectionBody}>
-            {calvingData.filter((d) => d.group.cowIds.length > 0).map((d) => (
-              <CalvingGroupCard
-                key={d.group.id}
-                group={d.group}
-                cowsNotCalved={d.cowsNotCalved}
-                calvedCount={d.calvedCount}
-                onPress={() => router.push(`/calving-group/${d.group.id}`)}
-              />
-            ))}
-          </View>
-        </View>
-      )}
-
       {hasProcessing && (
         <View style={styles.section}>
           <TouchableOpacity
@@ -409,7 +312,7 @@ export default function DashboardScreen() {
         </View>
       )}
 
-      {!hasAttention && !hasCalving && !hasProcessing && (
+      {!hasAttention && !hasProcessing && (
         <View style={styles.emptyState}>
           <View style={styles.emptyIconWrap}>
             <CircleDot size={36} color={Colors.textTertiary} />

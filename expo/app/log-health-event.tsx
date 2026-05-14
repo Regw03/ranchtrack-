@@ -21,7 +21,6 @@ import {
   Check,
   ChevronDown,
   Fence,
-  Baby,
   Heart,
   Users,
   FileText,
@@ -47,7 +46,7 @@ export default function LogHealthEventScreen() {
   const Colors = useColors();
   const router = useRouter();
   const { templates, createEvent } = useHealth();
-  const { activeAnimals, calvingGroups, breedingGroups, customLists } = useRanch();
+  const { activeAnimals, breedingGroups, customLists } = useRanch();
   const styles = useMemo(() => createStyles(Colors), [Colors]);
 
   const [step, setStep] = useState<"template" | "details">("template");
@@ -81,9 +80,6 @@ export default function LogHealthEventScreen() {
     const options: HealthEventTarget[] = [
       { type: "herd", id: "entire-herd", name: `Entire Herd (${activeAnimals.length} head)` },
     ];
-    calvingGroups.forEach((g) => {
-      options.push({ type: "calving_group", id: g.id, name: `Calving: ${g.name}` });
-    });
     breedingGroups.forEach((g) => {
       options.push({ type: "breeding_group", id: g.id, name: `Breeding: ${g.name}` });
     });
@@ -91,7 +87,7 @@ export default function LogHealthEventScreen() {
       options.push({ type: "custom_group", id: l.id, name: l.name });
     });
     return options;
-  }, [activeAnimals.length, calvingGroups, breedingGroups, customLists]);
+  }, [activeAnimals.length, breedingGroups, customLists]);
 
   const handleSave = useCallback(async () => {
     if (!name.trim()) {
@@ -245,7 +241,6 @@ export default function LogHealthEventScreen() {
               {targetOptions.map((opt) => {
                 const isSelected = target?.id === opt.id;
                 const icon = opt.type === "herd" ? Fence
-                  : opt.type === "calving_group" ? Baby
                   : opt.type === "breeding_group" ? Heart
                   : Users;
                 const IconComponent = icon;

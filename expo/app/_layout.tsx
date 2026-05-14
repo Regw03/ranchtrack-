@@ -109,42 +109,6 @@ function RootLayoutNav() {
         options={{ presentation: "modal", title: "New Animal Profile" }}
       />
       <Stack.Screen
-        name="log-calving"
-        options={{ presentation: "modal", title: "Log Calving" }}
-      />
-      <Stack.Screen
-        name="create-calving-list"
-        options={{ presentation: "modal", title: "New Calving List" }}
-      />
-      <Stack.Screen
-        name="edit-calving-list"
-        options={{ presentation: "modal", title: "Edit Calving List" }}
-      />
-      <Stack.Screen
-        name="calving-list/[id]"
-        options={{ title: "Calving List" }}
-      />
-      <Stack.Screen
-        name="calving-record/[id]"
-        options={{ title: "Calving Record" }}
-      />
-      <Stack.Screen
-        name="calving-group/[id]"
-        options={{ title: "Calving Group" }}
-      />
-      <Stack.Screen
-        name="create-calving-group"
-        options={{ presentation: "modal", title: "New Calving Group" }}
-      />
-      <Stack.Screen
-        name="edit-calving-group"
-        options={{ presentation: "modal", title: "Edit Group" }}
-      />
-      <Stack.Screen
-        name="add-cows-to-group"
-        options={{ presentation: "modal", title: "Add Cows" }}
-      />
-      <Stack.Screen
         name="breeding-group/[id]"
         options={{ title: "Breeding Group" }}
       />

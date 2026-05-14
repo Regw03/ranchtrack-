@@ -10,7 +10,6 @@ import {
 } from "react-native";
 import { useRouter } from "expo-router";
 import {
-  Baby,
   Heart,
   ShieldCheck,
   ClipboardList,
@@ -118,8 +117,6 @@ export default function WorkScreen() {
   const styles = useMemo(() => createStyles(Colors), [Colors]);
 
   const {
-    calvingGroups,
-    calvingRecordsForYear,
     breedingGroups,
     bredAnimals,
     openAnimals,
@@ -143,12 +140,6 @@ export default function WorkScreen() {
         return { session: s, ...progress, statusColor };
       });
   }, [sessions, activeBusinessYear.id, getSessionProgress, Colors]);
-
-  const calvingStats = useMemo(() => {
-    const totalCows = calvingGroups.reduce((sum, g) => sum + g.cowIds.length, 0);
-    const calvedCount = calvingRecordsForYear.length;
-    return { totalCows, calvedCount, groups: calvingGroups.length };
-  }, [calvingGroups, calvingRecordsForYear]);
 
   const healthStats = useMemo(() => ({
     upcoming: upcomingEvents.length,
@@ -194,56 +185,6 @@ export default function WorkScreen() {
           <ChevronRight size={18} color="#C44D3D" />
         </TouchableOpacity>
       )}
-
-      <WorkSection
-        title="Calving"
-        subtitle={calvingStats.groups > 0
-          ? `${calvingStats.groups} group${calvingStats.groups !== 1 ? "s" : ""} · ${calvingStats.calvedCount} calved`
-          : "No groups yet"}
-        icon={<Baby size={18} color="#2D7A9C" />}
-        iconBg="#2D7A9C"
-      >
-        <View style={styles.chipGrid}>
-          <ActionChip
-            label="Log Calving"
-            icon={<Plus size={16} color="#2D7A9C" />}
-            color="#2D7A9C"
-            onPress={() => nav("/log-calving")}
-          />
-          <ActionChip
-            label="New Group"
-            icon={<FolderOpen size={16} color="#2D7A9C" />}
-            color="#2D7A9C"
-            onPress={() => nav("/create-calving-group")}
-          />
-
-        </View>
-        {calvingGroups.slice(0, 3).map((group) => {
-          const calvedMotherIds = new Set(
-            calvingRecordsForYear
-              .filter((r) => group.cowIds.includes(r.motherId))
-              .map((r) => r.motherId),
-          );
-          const calved = calvedMotherIds.size;
-          const total = group.cowIds.length;
-          const pct = total > 0 ? Math.round((calved / total) * 100) : 0;
-          return (
-            <TouchableOpacity
-              key={group.id}
-              style={styles.miniCard}
-              onPress={() => nav(`/calving-group/${group.id}`)}
-              activeOpacity={0.7}
-            >
-              <View style={[styles.miniDot, { backgroundColor: group.color }]} />
-              <Text style={styles.miniName} numberOfLines={1}>{group.name}</Text>
-              <Text style={styles.miniStat}>{calved}/{total}</Text>
-              <View style={styles.miniProgress}>
-                <View style={[styles.miniProgressFill, { width: `${pct}%`, backgroundColor: Colors.success }]} />
-              </View>
-            </TouchableOpacity>
-          );
-        })}
-      </WorkSection>
 
       <WorkSection
         title="Breeding"

@@ -31,7 +31,7 @@ export default function CreateProcessingSessionScreen() {
   const Colors = useColors();
   const router = useRouter();
   const { createSession, isCreating } = useProcessingSessions();
-  const { activeBusinessYear, calvingGroups, breedingGroups } = useRanch();
+  const { activeBusinessYear, breedingGroups } = useRanch();
   const insets = useSafeAreaInsets();
   const styles = useMemo(() => createStyles(Colors), [Colors]);
 
@@ -41,14 +41,6 @@ export default function CreateProcessingSessionScreen() {
   const [showGroupPicker, setShowGroupPicker] = useState(false);
   const [customGroupName, setCustomGroupName] = useState("");
 
-  const availableCalvingGroups = useMemo(
-    () =>
-      calvingGroups.filter(
-        (cg) => !groups.some((g) => g.type === "calving_group" && g.groupId === cg.id),
-      ),
-    [calvingGroups, groups],
-  );
-
   const availableBreedingGroups = useMemo(
     () =>
       breedingGroups.filter(
@@ -56,14 +48,6 @@ export default function CreateProcessingSessionScreen() {
       ),
     [breedingGroups, groups],
   );
-
-  const addCalvingGroup = useCallback((id: string, groupName: string) => {
-    setGroups((prev) => [
-      ...prev,
-      { type: "calving_group", groupId: id, name: groupName, status: "not_started" },
-    ]);
-    if (Platform.OS !== "web") void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-  }, []);
 
   const addBreedingGroup = useCallback((id: string, groupName: string) => {
     setGroups((prev) => [
@@ -149,7 +133,7 @@ export default function CreateProcessingSessionScreen() {
               <Users size={14} color={Colors.primary} />
               <Text style={styles.groupChipText}>{group.name}</Text>
               <Text style={styles.groupTypeLabel}>
-                {group.type === "calving_group" ? "Calving" : group.type === "breeding_group" ? "Breeding" : "Custom"}
+                {group.type === "breeding_group" ? "Breeding" : "Custom"}
               </Text>
               <TouchableOpacity
                 onPress={() => removeGroup(index)}
@@ -171,22 +155,6 @@ export default function CreateProcessingSessionScreen() {
             </TouchableOpacity>
           ) : (
             <View style={styles.groupPickerContainer}>
-              {availableCalvingGroups.length > 0 && (
-                <View style={styles.groupPickerSection}>
-                  <Text style={styles.groupPickerTitle}>Calving Groups</Text>
-                  {availableCalvingGroups.map((cg) => (
-                    <TouchableOpacity
-                      key={cg.id}
-                      style={styles.groupPickerItem}
-                      onPress={() => addCalvingGroup(cg.id, cg.name)}
-                    >
-                      <Text style={styles.groupPickerItemText}>{cg.name}</Text>
-                      <Plus size={16} color={Colors.primary} />
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              )}
-
               {availableBreedingGroups.length > 0 && (
                 <View style={styles.groupPickerSection}>
                   <Text style={styles.groupPickerTitle}>Breeding Groups</Text>

@@ -23,7 +23,7 @@ export default function AddGroupToSessionScreen() {
   const router = useRouter();
   const { sessionId } = useLocalSearchParams<{ sessionId: string }>();
   const { getSessionById, addGroupToSession } = useProcessingSessions();
-  const { calvingGroups, breedingGroups } = useRanch();
+  const { breedingGroups } = useRanch();
   const styles = useMemo(() => createStyles(Colors), [Colors]);
 
   const session = getSessionById(sessionId ?? "");
@@ -32,11 +32,6 @@ export default function AddGroupToSessionScreen() {
   const existingGroupIds = useMemo(
     () => new Set(session?.groups.map((g) => g.groupId).filter(Boolean) ?? []),
     [session],
-  );
-
-  const availableCalvingGroups = useMemo(
-    () => calvingGroups.filter((cg) => !existingGroupIds.has(cg.id)),
-    [calvingGroups, existingGroupIds],
   );
 
   const availableBreedingGroups = useMemo(
@@ -88,24 +83,6 @@ export default function AddGroupToSessionScreen() {
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
-        {availableCalvingGroups.length > 0 && (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Calving Groups</Text>
-            {availableCalvingGroups.map((cg) => (
-              <TouchableOpacity
-                key={cg.id}
-                style={styles.groupItem}
-                onPress={() => handleAddGroup("calving_group", cg.id, cg.name)}
-                activeOpacity={0.7}
-              >
-                <Users size={16} color={Colors.primary} />
-                <Text style={styles.groupItemText}>{cg.name}</Text>
-                <Plus size={16} color={Colors.primary} />
-              </TouchableOpacity>
-            ))}
-          </View>
-        )}
-
         {availableBreedingGroups.length > 0 && (
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Breeding Groups</Text>
@@ -144,7 +121,7 @@ export default function AddGroupToSessionScreen() {
           </View>
         </View>
 
-        {availableCalvingGroups.length === 0 && availableBreedingGroups.length === 0 && (
+        {availableBreedingGroups.length === 0 && (
           <View style={styles.emptyHint}>
             <Text style={styles.emptyHintText}>
               All existing groups are already added. You can create a custom group above.
