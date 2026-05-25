@@ -89,9 +89,9 @@ export interface BreedingRecord {
 // ─── Calving ──────────────────────────────────────────────────────────────────
 
 /**
- * A calving list is simply a named container for calving events.
- * No cow pre-assignment — cows are entered at the time of logging.
- * Tied to a business year but viewable across years.
+ * A calving list is a named group for organizing calving events.
+ * Completely optional naming — user names them however they want.
+ * Tied to a business year. At least one list must exist before logging.
  */
 export interface CalvingList {
   id: string;
@@ -104,32 +104,42 @@ export interface CalvingList {
 }
 
 /**
- * One calving event. Contains all information about a single cow/calf pair.
- * calfType replaces the old calfSex field with clearer ranch terminology.
- * All optional fields can be filled in later — nothing blocks saving.
+ * One calving event — a cow/calf pair record.
+ *
+ * Required at log time:
+ * cowTag, calfTag, birthMonth, birthDay, assisted
+ *
+ * Year is derived from the active business year — not entered by the user.
+ * All other fields are optional and fully editable at any time.
  */
 export interface CalvingRecord {
   id: string;
-  // Which list this record belongs to
   calvingListId: string;
-  // Business year for filtering
   businessYearId: string;
-  // Core fields — required at log time
-  date: string;
-  cowTag: string; // typed manually — no lookup required
-  calfTag: string; // typed manually
-  calfType: "heifer" | "steer" | "bull";
-  // Optional fields — can be added/edited at any time
-  calfBreed?: string;
+
+  // Date — only month and day entered by user
+  // year is derived from business year and stored in full ISO date for sorting
+  birthMonth: number; // 1–12
+  birthDay: number; // 1–31
+  date: string; // full ISO date built from month + day + business year
+
+  // Required
+  cowTag: string;
+  calfTag: string;
+  assisted: boolean;
+
+  // Optional — all editable after the fact
+  calfType?: "heifer" | "steer" | "bull";
+  sireTag?: string;
   birthWeight?: number;
   birthWeightUnit?: "lbs" | "kg";
-  assisted?: boolean;
-  cowNotes?: string; // notes specific to the cow during this event
-  calfNotes?: string; // notes specific to the calf
-  photoUrl?: string; // optional photo on the record profile
-  // Links to actual animal records if they exist
-  cowId?: string; // linked animal record for the cow (if found)
-  calfId?: string; // linked animal record for the calf (auto-created)
+  notes?: string;
+  photoUrl?: string; // hero image on pair profile
+
+  // Auto-linked animal IDs when tags match existing animals
+  cowId?: string;
+  calfId?: string;
+
   // Attribution
   createdBy?: string;
   createdByName?: string;

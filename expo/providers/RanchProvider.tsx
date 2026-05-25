@@ -1301,34 +1301,46 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
   const logCalvingEventMutation = useMutation({
     mutationFn: async (record: {
       calvingListId: string;
-      date: string;
+      birthMonth: number;
+      birthDay: number;
       cowTag: string;
       calfTag: string;
-      calfType: "heifer" | "steer" | "bull";
-      calfBreed?: string;
+      assisted: boolean;
+      calfType?: "heifer" | "steer" | "bull";
+      sireTag?: string;
       birthWeight?: number;
       birthWeightUnit?: "lbs" | "kg";
-      assisted?: boolean;
-      cowNotes?: string;
-      calfNotes?: string;
+      notes?: string;
       photoUrl?: string;
     }) => {
       requireRanch(ranch.id, "log calving event");
       const now = new Date().toISOString();
+
+      // Build the full ISO date from month + day + business year
+      const activeYear = queryClient.getQueryData<BusinessYear[]>(["businessYears"])
+        ?.find((y) => y.id === activeBusinessYearId);
+      const yearNum = activeYear
+        ? new Date(activeYear.startDate).getFullYear()
+        : new Date().getFullYear();
+      const mm = String(record.birthMonth).padStart(2, "0");
+      const dd = String(record.birthDay).padStart(2, "0");
+      const fullDate = `${yearNum}-${mm}-${dd}`;
+
       const newRecord: CalvingRecord = {
         id: generateId(),
         calvingListId: record.calvingListId,
         businessYearId: activeBusinessYearId,
-        date: record.date,
+        birthMonth: record.birthMonth,
+        birthDay: record.birthDay,
+        date: fullDate,
         cowTag: record.cowTag,
         calfTag: record.calfTag,
+        assisted: record.assisted,
         calfType: record.calfType,
-        calfBreed: record.calfBreed,
+        sireTag: record.sireTag,
         birthWeight: record.birthWeight,
         birthWeightUnit: record.birthWeightUnit,
-        assisted: record.assisted,
-        cowNotes: record.cowNotes,
-        calfNotes: record.calfNotes,
+        notes: record.notes,
         photoUrl: record.photoUrl,
         createdBy: currentUserId,
         createdByName: currentUserName,
@@ -1336,12 +1348,14 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
         updatedAt: now,
       };
 
+      // Try to link to existing cow animal by tag
       const currentAnimals = queryClient.getQueryData<Animal[]>(["animals"]) ?? [];
       const matchedCow = currentAnimals.find(
         (a) => a.tagId.toLowerCase() === record.cowTag.toLowerCase() && a.status === "active",
       );
       if (matchedCow) newRecord.cowId = matchedCow.id;
 
+      // Auto-create the calf animal record
       const calfSex: Animal["sex"] =
         record.calfType === "heifer" ? "heifer" :
         record.calfType === "steer" ? "steer" : "male";
@@ -1351,10 +1365,10 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
         ranchId: ranch.id,
         tagId: record.calfTag,
         species: "cattle",
-        breed: record.calfBreed ?? matchedCow?.breed ?? "",
-        birthDate: record.date.substring(0, 10),
+        breed: matchedCow?.breed ?? "",
+        birthDate: fullDate,
         sex: calfSex,
-        notes: record.calfNotes ?? "",
+        notes: record.notes ?? "",
         status: "active",
         markedForSale: false,
         motherId: matchedCow?.id,
@@ -1376,7 +1390,7 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
 
       const list = allCalvingLists.find((l) => l.id === record.calvingListId);
       await logActivity(
-        `Logged calving: Cow ${record.cowTag} → ${record.calfType} calf ${record.calfTag}${list ? ` (${list.name})` : ""}`,
+        `Logged calving: Cow ${record.cowTag} → calf ${record.calfTag}${list ? ` (${list.name})` : ""}`,
         "calving",
         newRecord.id,
       );
