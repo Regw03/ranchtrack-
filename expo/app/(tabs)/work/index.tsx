@@ -118,6 +118,8 @@ export default function WorkScreen() {
   const styles = useMemo(() => createStyles(Colors), [Colors]);
 
   const {
+    calvingLists,
+    calvingRecords,
     breedingGroups,
     bredAnimals,
     openAnimals,
@@ -125,8 +127,6 @@ export default function WorkScreen() {
     soldAnimals,
     needsAttentionAnimals,
     activeBusinessYear,
-    calvingLists,
-    calvingRecordsForYear,
   } = useRanch();
 
   const { upcomingEvents, overdueEvents, completedEvents } = useHealth();
@@ -149,6 +149,17 @@ export default function WorkScreen() {
     overdue: overdueEvents.length,
     completed: completedEvents.length,
   }), [upcomingEvents, overdueEvents, completedEvents]);
+
+  const calvingStats = useMemo(() => {
+    const yearRecords = calvingRecords.filter(
+      (r) => r.businessYearId === activeBusinessYear?.id,
+    );
+    return {
+      lists: calvingLists.length,
+      total: yearRecords.length,
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [calvingLists.length, calvingRecords.length, activeBusinessYear?.id]);
 
   const nav = useCallback((route: string) => {
     router.push(route as never);
@@ -188,6 +199,49 @@ export default function WorkScreen() {
           <ChevronRight size={18} color="#C44D3D" />
         </TouchableOpacity>
       )}
+
+      <WorkSection
+        title="Calving"
+        subtitle={
+          calvingStats.lists > 0
+            ? `${calvingStats.lists} list${calvingStats.lists !== 1 ? "s" : ""} · ${calvingStats.total} record${calvingStats.total !== 1 ? "s" : ""}`
+            : "No lists yet — create one to start"
+        }
+        icon={<Baby size={18} color="#2D7A9C" />}
+        iconBg="#2D7A9C"
+      >
+        <View style={styles.chipGrid}>
+          <ActionChip
+            label="Log Calving"
+            icon={<Plus size={16} color="#2D7A9C" />}
+            color="#2D7A9C"
+            onPress={() => nav("/log-calving")}
+          />
+          <ActionChip
+            label="New List"
+            icon={<FolderOpen size={16} color="#2D7A9C" />}
+            color="#2D7A9C"
+            onPress={() => nav("/create-calving-list")}
+          />
+        </View>
+        {calvingLists.map((list) => {
+          const listRecords = calvingRecords.filter(
+            (r) => r.calvingListId === list.id,
+          );
+          return (
+            <TouchableOpacity
+              key={list.id}
+              style={[styles.miniCard, { borderLeftWidth: 3, borderLeftColor: list.color }]}
+              onPress={() => nav(`/calving-list/${list.id}`)}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.miniName} numberOfLines={1}>{list.name}</Text>
+              <Text style={styles.miniStat}>{listRecords.length} records</Text>
+              <ChevronRight size={14} color={Colors.textTertiary} />
+            </TouchableOpacity>
+          );
+        })}
+      </WorkSection>
 
       <WorkSection
         title="Breeding"
@@ -298,45 +352,6 @@ export default function WorkScreen() {
             <Text style={styles.createBtnText}>New Session</Text>
           </TouchableOpacity>
         )}
-      </WorkSection>
-
-      <WorkSection
-        title="Calving"
-        subtitle={calvingLists.length > 0
-          ? `${calvingLists.length} list${calvingLists.length !== 1 ? "s" : ""} · ${calvingRecordsForYear.length} record${calvingRecordsForYear.length !== 1 ? "s" : ""}`
-          : "No lists created"}
-        icon={<Baby size={18} color="#2D7A9C" />}
-        iconBg="#2D7A9C"
-      >
-        <View style={styles.chipGrid}>
-          <ActionChip
-            label="Log Calf"
-            icon={<Plus size={16} color="#2D7A9C" />}
-            color="#2D7A9C"
-            onPress={() => nav("/log-calving")}
-          />
-          <ActionChip
-            label="New List"
-            icon={<FolderOpen size={16} color="#2D7A9C" />}
-            color="#2D7A9C"
-            onPress={() => nav("/create-calving-list")}
-          />
-        </View>
-        {calvingLists.length > 0 && calvingLists.slice(0, 3).map((list) => {
-          const count = calvingRecordsForYear.filter((r) => r.calvingListId === list.id).length;
-          return (
-            <TouchableOpacity
-              key={list.id}
-              style={[styles.miniCard, { borderLeftWidth: 3, borderLeftColor: list.color }]}
-              onPress={() => nav(`/calving-list/${list.id}`)}
-              activeOpacity={0.7}
-            >
-              <Text style={styles.miniName} numberOfLines={1}>{list.name}</Text>
-              <Text style={styles.miniStat}>{count} record{count !== 1 ? "s" : ""}</Text>
-              <ChevronRight size={14} color={Colors.textTertiary} />
-            </TouchableOpacity>
-          );
-        })}
       </WorkSection>
 
       <WorkSection
