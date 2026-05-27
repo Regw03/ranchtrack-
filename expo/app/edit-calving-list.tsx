@@ -12,10 +12,10 @@ import {
  Alert,
  ActivityIndicator,
 } from "react-native";
-import { useLocalSearchParams, useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter, Stack } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import * as Haptics from "expo-haptics";
-import { Check, Trash2 } from "lucide-react-native";
+import { Check } from "lucide-react-native";
 import { ThemeColors } from "@/constants/colors";
 import { useColors } from "@/providers/ThemeProvider";
 import { useRanch } from "@/providers/RanchProvider";
@@ -37,12 +37,11 @@ export default function EditCalvingListScreen() {
  const Colors = useColors();
  const router = useRouter();
  const { id } = useLocalSearchParams<{ id: string }>();
- const { getCalvingListById, updateCalvingList, deleteCalvingList, calvingRecords } = useRanch();
+ const { getCalvingListById, updateCalvingList } = useRanch();
  const styles = useMemo(() => createStyles(Colors), [Colors]);
 
  const list = useMemo(
  () => getCalvingListById(id ?? ""),
- // eslint-disable-next-line react-hooks/exhaustive-deps
  [id, getCalvingListById],
  );
 
@@ -50,12 +49,13 @@ export default function EditCalvingListScreen() {
  const [selectedColor, setSelectedColor] = useState(list?.color ?? LIST_COLORS[0]);
  const [isLoading, setIsLoading] = useState(false);
 
+ // Sync if list loads after mount
  useEffect(() => {
  if (list) {
  setName(list.name);
  setSelectedColor(list.color);
  }
- }, [list]);
+ }, [list?.id]);
 
  const fadeAnim = useRef(new Animated.Value(0)).current;
  const slideAnim = useRef(new Animated.Value(20)).current;
@@ -68,49 +68,29 @@ export default function EditCalvingListScreen() {
  }, [fadeAnim, slideAnim]);
 
  const trimmedName = name.trim();
- const canSave = trimmedName.length > 0 && !isLoading;
-
- const recordCount = useMemo(
- () => calvingRecords.filter((r) => r.calvingListId === id).length,
- // eslint-disable-next-line react-hooks/exhaustive-deps
- [calvingRecords.length, id],
- );
+ const hasChanges =
+ list && (trimmedName !== list.name || selectedColor !== list.color);
+ const canSave = trimmedName.length > 0 && !!hasChanges && !isLoading;
 
  const handleSave = useCallback(async () => {
  if (!canSave || !list) return;
  if (Platform.OS !== "web")
- void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+ void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
  setIsLoading(true);
  try {
- await updateCalvingList({ ...list, name: trimmedName, color: selectedColor });
+ await updateCalvingList({
+ ...list,
+ name: trimmedName,
+ color: selectedColor,
+ updatedAt: new Date().toISOString(),
+ });
  router.back();
  } catch (e) {
- Alert.alert("Error", "Could not update the list. Please try again.");
+ Alert.alert("Error", "Could not save changes. Please try again.");
  } finally {
  setIsLoading(false);
  }
  }, [canSave, list, trimmedName, selectedColor, updateCalvingList, router]);
-
- const handleDelete = useCallback(() => {
- if (!list) return;
- Alert.alert(
- "Delete List",
- `Delete "${list.name}" and all ${recordCount} record${recordCount !== 1 ? "s" : ""} in it? This cannot be undone.`,
- [
- { text: "Cancel", style: "cancel" },
- {
- text: "Delete",
- style: "destructive",
- onPress: async () => {
- if (Platform.OS !== "web")
- void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
- await deleteCalvingList(list.id);
- router.back();
- },
- },
- ],
- );
- }, [list, recordCount, deleteCalvingList, router]);
 
  if (!list) {
  return (
@@ -121,6 +101,8 @@ export default function EditCalvingListScreen() {
  }
 
  return (
+ <>
+ <Stack.Screen options={{ title: "Edit Calving List" }} />
  <View style={styles.container}>
  <SafeAreaView style={styles.safeArea} edges={["bottom"]}>
  <KeyboardAvoidingView
@@ -138,6 +120,7 @@ export default function EditCalvingListScreen() {
  { opacity: fadeAnim, transform: [{ translateY: slideAnim }] },
  ]}
  >
+ {/* Name */}
  <Text style={styles.label}>List Name</Text>
  <View style={styles.inputWrapper}>
  <TextInput
@@ -154,6 +137,7 @@ export default function EditCalvingListScreen() {
  />
  </View>
 
+ {/* Color */}
  <Text style={styles.label}>Color</Text>
  <View style={styles.colorGrid}>
  {LIST_COLORS.map((color) => (
@@ -178,27 +162,24 @@ export default function EditCalvingListScreen() {
  ))}
  </View>
 
+ {/* Preview */}
  <Text style={styles.label}>Preview</Text>
  <View style={styles.previewCard}>
  <View style={[styles.previewDot, { backgroundColor: selectedColor }]} />
  <Text style={styles.previewName} numberOfLines={1}>
  {trimmedName || "List Name"}
  </Text>
- <Text style={styles.previewCount}>{recordCount} record{recordCount !== 1 ? "s" : ""}</Text>
+ <Text style={[
+ styles.previewStatus,
+ hasChanges ? { color: Colors.warning } : { color: Colors.textTertiary },
+ ]}>
+ {hasChanges ? "Unsaved changes" : "No changes"}
+ </Text>
  </View>
  </Animated.View>
  </ScrollView>
 
  <View style={styles.bottomBar}>
- <TouchableOpacity
- style={styles.deleteBtn}
- onPress={handleDelete}
- activeOpacity={0.7}
- >
- <Trash2 size={18} color={Colors.error} />
- <Text style={styles.deleteBtnText}>Delete List</Text>
- </TouchableOpacity>
-
  <TouchableOpacity
  style={[
  styles.saveBtn,
@@ -221,6 +202,7 @@ export default function EditCalvingListScreen() {
  </KeyboardAvoidingView>
  </SafeAreaView>
  </View>
+ </>
  );
 }
 
@@ -229,10 +211,15 @@ function createStyles(Colors: ThemeColors) {
  container: { flex: 1, backgroundColor: Colors.background },
  safeArea: { flex: 1 },
  flex: { flex: 1 },
+ notFound: {
+ flex: 1,
+ alignItems: "center" as const,
+ justifyContent: "center" as const,
+ backgroundColor: Colors.background,
+ },
+ notFoundText: { fontSize: 16, color: Colors.textSecondary },
  scrollContent: { flexGrow: 1 },
  content: { paddingHorizontal: 20, paddingTop: 24, paddingBottom: 12 },
- notFound: { flex: 1, alignItems: "center" as const, justifyContent: "center" as const },
- notFoundText: { fontSize: 16, color: Colors.textSecondary },
  label: {
  fontSize: 13,
  fontWeight: "800" as const,
@@ -299,30 +286,14 @@ function createStyles(Colors: ThemeColors) {
  fontWeight: "700" as const,
  color: Colors.text,
  },
- previewCount: {
- fontSize: 13,
- color: Colors.textTertiary,
- fontWeight: "500" as const,
+ previewStatus: {
+ fontSize: 12,
+ fontWeight: "600" as const,
  },
  bottomBar: {
  paddingHorizontal: 20,
  paddingBottom: 16,
  paddingTop: 8,
- gap: 10,
- },
- deleteBtn: {
- flexDirection: "row" as const,
- alignItems: "center" as const,
- justifyContent: "center" as const,
- gap: 8,
- borderRadius: 16,
- paddingVertical: 14,
- backgroundColor: Colors.error + "12",
- },
- deleteBtnText: {
- fontSize: 16,
- fontWeight: "700" as const,
- color: Colors.error,
  },
  saveBtn: {
  borderRadius: 16,
