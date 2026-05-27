@@ -22,6 +22,7 @@ import {
   Clock,
   Activity,
   FolderOpen,
+  Baby,
 } from "lucide-react-native";
 import * as Haptics from "expo-haptics";
 import { ThemeColors } from "@/constants/colors";
@@ -124,6 +125,8 @@ export default function WorkScreen() {
     soldAnimals,
     needsAttentionAnimals,
     activeBusinessYear,
+    calvingLists,
+    calvingRecordsForYear,
   } = useRanch();
 
   const { upcomingEvents, overdueEvents, completedEvents } = useHealth();
@@ -295,6 +298,45 @@ export default function WorkScreen() {
             <Text style={styles.createBtnText}>New Session</Text>
           </TouchableOpacity>
         )}
+      </WorkSection>
+
+      <WorkSection
+        title="Calving"
+        subtitle={calvingLists.length > 0
+          ? `${calvingLists.length} list${calvingLists.length !== 1 ? "s" : ""} · ${calvingRecordsForYear.length} record${calvingRecordsForYear.length !== 1 ? "s" : ""}`
+          : "No lists created"}
+        icon={<Baby size={18} color="#2D7A9C" />}
+        iconBg="#2D7A9C"
+      >
+        <View style={styles.chipGrid}>
+          <ActionChip
+            label="Log Calf"
+            icon={<Plus size={16} color="#2D7A9C" />}
+            color="#2D7A9C"
+            onPress={() => nav("/log-calving")}
+          />
+          <ActionChip
+            label="New List"
+            icon={<FolderOpen size={16} color="#2D7A9C" />}
+            color="#2D7A9C"
+            onPress={() => nav("/create-calving-list")}
+          />
+        </View>
+        {calvingLists.length > 0 && calvingLists.slice(0, 3).map((list) => {
+          const count = calvingRecordsForYear.filter((r) => r.calvingListId === list.id).length;
+          return (
+            <TouchableOpacity
+              key={list.id}
+              style={[styles.miniCard, { borderLeftWidth: 3, borderLeftColor: list.color }]}
+              onPress={() => nav(`/calving-list/${list.id}`)}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.miniName} numberOfLines={1}>{list.name}</Text>
+              <Text style={styles.miniStat}>{count} record{count !== 1 ? "s" : ""}</Text>
+              <ChevronRight size={14} color={Colors.textTertiary} />
+            </TouchableOpacity>
+          );
+        })}
       </WorkSection>
 
       <WorkSection
