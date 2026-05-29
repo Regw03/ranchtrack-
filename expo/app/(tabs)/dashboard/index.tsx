@@ -14,6 +14,7 @@ import {
   Stethoscope,
   ClipboardList,
   Plus,
+  Baby,
   ChevronRight,
   Activity,
   CircleDot,
@@ -217,16 +218,22 @@ export default function DashboardScreen() {
 
       <View style={styles.quickActionsGrid}>
         <QuickActionButton
+          label="Log Calving"
+          icon={<Baby size={22} color="#2D7A9C" />}
+          color="#2D7A9C"
+          onPress={() => handleQuickAction("/log-calving")}
+        />
+        <QuickActionButton
+          label="Processing"
+          icon={<ClipboardList size={22} color="#D4943A" />}
+          color="#D4943A"
+          onPress={() => handleQuickAction("/processing-sessions")}
+        />
+        <QuickActionButton
           label="Add Cow"
           icon={<Plus size={22} color="#3D8B5E" />}
           color="#3D8B5E"
           onPress={() => handleQuickAction("/add-animal")}
-        />
-        <QuickActionButton
-          label="Process"
-          icon={<ClipboardList size={22} color="#D4943A" />}
-          color="#D4943A"
-          onPress={() => handleQuickAction("/processing-sessions")}
         />
         <QuickActionButton
           label="Doctor"
@@ -488,65 +495,6 @@ const createStyles = (Colors: ThemeColors) =>
       fontSize: 14,
       fontWeight: "600" as const,
       color: Colors.primary,
-    },
-    calvingCard: {
-      backgroundColor: Colors.background,
-      borderRadius: 14,
-      padding: 14,
-      marginBottom: 8,
-    },
-    calvingCardHeader: {
-      flexDirection: "row",
-      alignItems: "center",
-      marginBottom: 12,
-    },
-    calvingColorDot: {
-      width: 10,
-      height: 10,
-      borderRadius: 5,
-      marginRight: 10,
-    },
-    calvingName: {
-      flex: 1,
-      fontSize: 15,
-      fontWeight: "700" as const,
-      color: Colors.text,
-    },
-    calvingStats: {
-      flexDirection: "row",
-      alignItems: "center",
-      marginBottom: 10,
-    },
-    calvingStat: {
-      flex: 1,
-      alignItems: "center",
-    },
-    calvingStatNum: {
-      fontSize: 20,
-      fontWeight: "800" as const,
-      color: Colors.text,
-    },
-    calvingStatLabel: {
-      fontSize: 11,
-      fontWeight: "600" as const,
-      color: Colors.textTertiary,
-      marginTop: 1,
-    },
-    calvingStatDivider: {
-      width: 1,
-      height: 28,
-      backgroundColor: Colors.borderLight,
-    },
-    progressTrack: {
-      height: 6,
-      borderRadius: 3,
-      backgroundColor: Colors.borderLight,
-      overflow: "hidden",
-    },
-    progressFill: {
-      height: 6,
-      borderRadius: 3,
-      backgroundColor: Colors.success,
     },
     sessionCard: {
       backgroundColor: Colors.background,
