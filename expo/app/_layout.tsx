@@ -7,7 +7,6 @@ import React, { useEffect, useMemo, useState } from "react";
 import { Platform } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { RanchProvider } from "@/providers/RanchProvider";
-import { HealthProvider } from "@/providers/HealthProvider";
 import { ProcessingSessionProvider } from "@/providers/ProcessingSessionProvider";
 import { ThemeProvider, useColors } from "@/providers/ThemeProvider";
 import { OnboardingProvider, useOnboarding } from "@/providers/OnboardingProvider";
@@ -123,14 +122,6 @@ function RootLayoutNav() {
       <Stack.Screen
         name="add-animals-to-breeding-group"
         options={{ presentation: "modal", title: "Add Animals" }}
-      />
-      <Stack.Screen
-        name="health-templates"
-        options={{ presentation: "modal", title: "Health Templates" }}
-      />
-      <Stack.Screen
-        name="log-health-event"
-        options={{ presentation: "modal", title: "Log Health Event" }}
       />
       <Stack.Screen
         name="processing-sessions"
@@ -272,13 +263,11 @@ export default function RootLayout() {
         <ThemeProvider>
           <OnboardingProvider>
             <RanchProvider>
-              <HealthProvider>
-                <ProcessingSessionProvider>
-                  <OnboardingGate />
-                  <RootLayoutNav />
-                  <UserSwitchToast />
-                </ProcessingSessionProvider>
-              </HealthProvider>
+              <ProcessingSessionProvider>
+                <OnboardingGate />
+                <RootLayoutNav />
+                <UserSwitchToast />
+              </ProcessingSessionProvider>
             </RanchProvider>
           </OnboardingProvider>
         </ThemeProvider>

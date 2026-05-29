@@ -23,7 +23,7 @@ import * as Haptics from "expo-haptics";
 import { ThemeColors } from "@/constants/colors";
 import { useColors } from "@/providers/ThemeProvider";
 import { useProcessingSessions } from "@/providers/ProcessingSessionProvider";
-import { HEALTH_EVENT_TYPE_CONFIG } from "@/providers/HealthProvider";
+import { HEALTH_EVENT_TYPE_CONFIG } from "@/constants/health";
 import { HealthEventType } from "@/types";
 
 const EVENT_TYPES: { key: HealthEventType; icon: React.ComponentType<{ size: number; color: string }> }[] = [

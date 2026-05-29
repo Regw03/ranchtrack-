@@ -11,7 +11,6 @@ import {
 import { useRouter } from "expo-router";
 import {
   Heart,
-  ShieldCheck,
   ClipboardList,
   Stethoscope,
   DollarSign,
@@ -28,7 +27,6 @@ import * as Haptics from "expo-haptics";
 import { ThemeColors } from "@/constants/colors";
 import { useColors } from "@/providers/ThemeProvider";
 import { useRanch } from "@/providers/RanchProvider";
-import { useHealth } from "@/providers/HealthProvider";
 import { useProcessingSessions } from "@/providers/ProcessingSessionProvider";
 import BusinessYearPicker from "@/components/BusinessYearPicker";
 
@@ -129,7 +127,6 @@ export default function WorkScreen() {
     activeBusinessYear,
   } = useRanch();
 
-  const { upcomingEvents, overdueEvents, completedEvents } = useHealth();
   const { sessions, getSessionProgress } = useProcessingSessions();
 
   const activeSessions = useMemo(() => {
@@ -143,12 +140,6 @@ export default function WorkScreen() {
         return { session: s, ...progress, statusColor };
       });
   }, [sessions, activeBusinessYear.id, getSessionProgress, Colors]);
-
-  const healthStats = useMemo(() => ({
-    upcoming: upcomingEvents.length,
-    overdue: overdueEvents.length,
-    completed: completedEvents.length,
-  }), [upcomingEvents, overdueEvents, completedEvents]);
 
   const calvingStats = useMemo(() => {
     const yearRecords = calvingRecords.filter(
@@ -275,46 +266,6 @@ export default function WorkScreen() {
             <ChevronRight size={14} color={Colors.textTertiary} />
           </TouchableOpacity>
         ))}
-      </WorkSection>
-
-      <WorkSection
-        title="Health Events"
-        subtitle={healthStats.overdue > 0
-          ? `${healthStats.overdue} overdue`
-          : `${healthStats.upcoming} upcoming`}
-        icon={<ShieldCheck size={18} color={Colors.primary} />}
-        iconBg={Colors.primary}
-      >
-        <View style={styles.healthStatsRow}>
-          <View style={styles.healthStatBox}>
-            <Text style={[styles.healthStatNum, { color: Colors.primary }]}>{healthStats.upcoming}</Text>
-            <Text style={styles.healthStatLabel}>Upcoming</Text>
-          </View>
-          <View style={styles.healthStatBox}>
-            <Text style={[styles.healthStatNum, { color: healthStats.overdue > 0 ? Colors.error : Colors.textTertiary }]}>
-              {healthStats.overdue}
-            </Text>
-            <Text style={styles.healthStatLabel}>Overdue</Text>
-          </View>
-          <View style={styles.healthStatBox}>
-            <Text style={[styles.healthStatNum, { color: Colors.success }]}>{healthStats.completed}</Text>
-            <Text style={styles.healthStatLabel}>Done</Text>
-          </View>
-        </View>
-        <View style={styles.chipGrid}>
-          <ActionChip
-            label="Log Event"
-            icon={<Plus size={16} color={Colors.primary} />}
-            color={Colors.primary}
-            onPress={() => nav("/log-health-event")}
-          />
-          <ActionChip
-            label="Templates"
-            icon={<ClipboardList size={16} color={Colors.primary} />}
-            color={Colors.primary}
-            onPress={() => nav("/health-templates")}
-          />
-        </View>
       </WorkSection>
 
       <WorkSection
@@ -579,29 +530,6 @@ const createStyles = (Colors: ThemeColors) =>
     miniProgressFill: {
       height: 5,
       borderRadius: 3,
-    },
-    healthStatsRow: {
-      flexDirection: "row",
-      gap: 8,
-      marginBottom: 10,
-    },
-    healthStatBox: {
-      flex: 1,
-      alignItems: "center",
-      backgroundColor: Colors.background,
-      borderRadius: 12,
-      paddingVertical: 12,
-    },
-    healthStatNum: {
-      fontSize: 20,
-      fontWeight: "800" as const,
-      letterSpacing: -0.5,
-    },
-    healthStatLabel: {
-      fontSize: 11,
-      fontWeight: "600" as const,
-      color: Colors.textSecondary,
-      marginTop: 2,
     },
     sessionRow: {
       flexDirection: "row",

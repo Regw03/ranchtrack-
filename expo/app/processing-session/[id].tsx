@@ -32,7 +32,7 @@ import { useColors } from "@/providers/ThemeProvider";
 import { useProcessingSessions } from "@/providers/ProcessingSessionProvider";
 import { useRanch } from "@/providers/RanchProvider";
 import { SessionGroup, SessionEvent, SessionGroupStatus, HealthEventType } from "@/types";
-import { HEALTH_EVENT_TYPE_CONFIG } from "@/providers/HealthProvider";
+import { HEALTH_EVENT_TYPE_CONFIG } from "@/constants/health";
 import { formatDate } from "@/utils/helpers";
 
 const GROUP_STATUS_CONFIG: Record<SessionGroupStatus, { label: string; color: string; icon: React.ComponentType<{ size: number; color: string }> }> = {
