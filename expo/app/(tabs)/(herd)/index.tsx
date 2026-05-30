@@ -181,7 +181,7 @@ function AnimalRow({ animal, yearLabel, showYear }: { animal: Animal; yearLabel:
 export default function HerdScreen() {
   const Colors = useColors();
   const router = useRouter();
-  const { activeAnimals, animalsByHerdGroup, getBusinessYearName, animals, deceasedAnimals, needsAttentionAnimals } = useRanch();
+  const { activeAnimals, animalsByHerdGroup, getBusinessYearName, animals, deceasedAnimals, needsAttentionAnimals, animalStats } = useRanch();
   const [selectedGroup, setSelectedGroup] = useState<HerdGroup | "deceased" | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const styles = useMemo(() => createStyles(Colors), [Colors]);
@@ -251,7 +251,9 @@ export default function HerdScreen() {
       <View style={styles.topBar}>
         <View>
           <Text style={styles.screenTitle}>Herd</Text>
-          <Text style={styles.headcount}>{activeAnimals.length} head total</Text>
+          <Text style={styles.headcount}>
+            {animalStats.total} head breeding{animalStats.calvesCount > 0 ? ` · ${animalStats.calvesCount} calves` : ""}
+          </Text>
           {deceasedAnimals.length > 0 && (
             <Text style={styles.headcount}>{deceasedAnimals.length} deceased</Text>
           )}
