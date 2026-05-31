@@ -1,4 +1,4 @@
-import React, { useMemo, useCallback, useRef } from "react";
+import React, { useMemo, useCallback, useRef, useState } from "react";
 import {
   View,
   Text,
@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   Animated,
   Platform,
+  TextInput,
 } from "react-native";
 import { useRouter } from "expo-router";
 import {
@@ -22,6 +23,8 @@ import {
   Activity,
   FolderOpen,
   Baby,
+  Search,
+  X,
 } from "lucide-react-native";
 import * as Haptics from "expo-haptics";
 import { ThemeColors } from "@/constants/colors";
@@ -152,6 +155,20 @@ export default function WorkScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [calvingLists.length, calvingRecords.length, activeBusinessYear?.id]);
 
+  const [calvingSearch, setCalvingSearch] = useState("");
+
+  // Cross-list calving search results
+  const calvingSearchResults = useMemo(() => {
+    const q = calvingSearch.trim().toLowerCase();
+    if (!q) return [];
+    return calvingRecords.filter(
+      (r) =>
+        r.businessYearId === activeBusinessYear?.id &&
+        (r.cowTag.toLowerCase().includes(q) || r.calfTag.toLowerCase().includes(q)),
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [calvingSearch, calvingRecords.length, calvingRecords, activeBusinessYear?.id]);
+
   const nav = useCallback((route: string) => {
     router.push(route as never);
   }, [router]);
@@ -215,23 +232,89 @@ export default function WorkScreen() {
             onPress={() => nav("/create-calving-list")}
           />
         </View>
-        {calvingLists.map((list) => {
-          const listRecords = calvingRecords.filter(
-            (r) => r.calvingListId === list.id,
-          );
-          return (
-            <TouchableOpacity
-              key={list.id}
-              style={[styles.miniCard, { borderLeftWidth: 3, borderLeftColor: list.color }]}
-              onPress={() => nav(`/calving-list/${list.id}`)}
-              activeOpacity={0.7}
-            >
-              <Text style={styles.miniName} numberOfLines={1}>{list.name}</Text>
-              <Text style={styles.miniStat}>{listRecords.length} records</Text>
-              <ChevronRight size={14} color={Colors.textTertiary} />
-            </TouchableOpacity>
-          );
-        })}
+
+        {/* Cross-list search */}
+        {calvingStats.total > 0 && (
+          <View style={styles.calvingSearchBar}>
+            <Search size={15} color={Colors.textTertiary} />
+            <TextInput
+              value={calvingSearch}
+              onChangeText={setCalvingSearch}
+              placeholder="Search all lists by cow or calf tag..."
+              placeholderTextColor={Colors.textTertiary}
+              style={styles.calvingSearchInput}
+              autoCapitalize="none"
+              autoCorrect={false}
+              returnKeyType="search"
+            />
+            {calvingSearch.length > 0 && (
+              <TouchableOpacity onPress={() => setCalvingSearch("")} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                <X size={15} color={Colors.textTertiary} />
+              </TouchableOpacity>
+            )}
+          </View>
+        )}
+
+        {/* Search results */}
+        {calvingSearch.trim().length > 0 ? (
+          calvingSearchResults.length === 0 ? (
+            <Text style={styles.calvingSearchEmpty}>
+              No records found for "{calvingSearch}"
+            </Text>
+          ) : (
+            calvingSearchResults.map((record) => {
+              const list = calvingLists.find((l) => l.id === record.calvingListId);
+              return (
+                <TouchableOpacity
+                  key={record.id}
+                  style={styles.searchResultCard}
+                  onPress={() => {
+                    setCalvingSearch("");
+                    router.push({ pathname: "/calving-record/[id]" as never, params: { id: record.id } });
+                  }}
+                  activeOpacity={0.75}
+                >
+                  <View style={styles.searchResultTags}>
+                    <Text style={styles.searchResultLabel}>COW</Text>
+                    <Text style={styles.searchResultTag}>{record.cowTag}</Text>
+                    <Text style={styles.searchResultArrow}>→</Text>
+                    <Text style={styles.searchResultLabel}>CALF</Text>
+                    <Text style={styles.searchResultTag}>{record.calfTag}</Text>
+                  </View>
+                  <View style={styles.searchResultMeta}>
+                    {list && (
+                      <View style={styles.searchResultListBadge}>
+                        <View style={[styles.searchResultDot, { backgroundColor: list.color }]} />
+                        <Text style={styles.searchResultListName} numberOfLines={1}>{list.name}</Text>
+                      </View>
+                    )}
+                    <Text style={styles.searchResultDate}>
+                      {["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][(record.birthMonth ?? 1) - 1]} {String(record.birthDay ?? 1).padStart(2, "0")}
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+              );
+            })
+          )
+        ) : (
+          calvingLists.map((list) => {
+            const listRecords = calvingRecords.filter(
+              (r) => r.calvingListId === list.id,
+            );
+            return (
+              <TouchableOpacity
+                key={list.id}
+                style={[styles.miniCard, { borderLeftWidth: 3, borderLeftColor: list.color }]}
+                onPress={() => nav(`/calving-list/${list.id}`)}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.miniName} numberOfLines={1}>{list.name}</Text>
+                <Text style={styles.miniStat}>{listRecords.length} records</Text>
+                <ChevronRight size={14} color={Colors.textTertiary} />
+              </TouchableOpacity>
+            );
+          })
+        )}
       </WorkSection>
 
       <WorkSection
@@ -571,4 +654,17 @@ const createStyles = (Colors: ThemeColors) =>
       fontWeight: "700" as const,
       color: Colors.textInverse,
     },
+    calvingSearchBar: { flexDirection: "row" as const, alignItems: "center" as const, backgroundColor: Colors.surface, borderRadius: 10, borderWidth: 1, borderColor: Colors.border, paddingHorizontal: 12, paddingVertical: 10, gap: 8, marginBottom: 8 },
+    calvingSearchInput: { flex: 1, fontSize: 14, color: Colors.text, fontWeight: "500" as const },
+    calvingSearchEmpty: { fontSize: 13, color: Colors.textTertiary, textAlign: "center" as const, paddingVertical: 12, fontStyle: "italic" as const },
+    searchResultCard: { backgroundColor: Colors.surface, borderRadius: 12, padding: 12, marginBottom: 8, borderWidth: 1, borderColor: Colors.borderLight },
+    searchResultTags: { flexDirection: "row" as const, alignItems: "center" as const, gap: 6, marginBottom: 6 },
+    searchResultLabel: { fontSize: 10, fontWeight: "800" as const, color: Colors.textTertiary, letterSpacing: 0.8 },
+    searchResultTag: { fontSize: 16, fontWeight: "700" as const, color: Colors.text },
+    searchResultArrow: { fontSize: 14, color: Colors.textTertiary, marginHorizontal: 2 },
+    searchResultMeta: { flexDirection: "row" as const, alignItems: "center" as const, justifyContent: "space-between" as const },
+    searchResultListBadge: { flexDirection: "row" as const, alignItems: "center" as const, gap: 5 },
+    searchResultDot: { width: 8, height: 8, borderRadius: 4 },
+    searchResultListName: { fontSize: 12, color: Colors.textSecondary, fontWeight: "600" as const, maxWidth: 160 },
+    searchResultDate: { fontSize: 12, color: Colors.textTertiary, fontWeight: "500" as const },
   });
