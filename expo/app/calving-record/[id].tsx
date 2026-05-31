@@ -132,7 +132,7 @@ export default function CalvingRecordScreen() {
  deleteCalvingRecord,
  getCalvingListById,
  getAnimalById,
- activeBusinessYear,
+ businessYears,
  } = useRanch();
  const styles = useMemo(() => createStyles(Colors), [Colors]);
 
@@ -159,15 +159,28 @@ export default function CalvingRecordScreen() {
  if (!record) return;
  setIsSaving(true);
  try {
- await updateCalvingRecord({ ...record, ...patch, updatedAt: new Date().toISOString() });
+ const updated = { ...record, ...patch, updatedAt: new Date().toISOString() };
+
+ // Recompute full ISO date when month or day changes
+ if (patch.birthMonth !== undefined || patch.birthDay !== undefined) {
+ const by = businessYears.find((y) => y.id === record.businessYearId);
+ const yearNum = by
+ ? new Date(by.startDate).getFullYear()
+ : new Date().getFullYear();
+ const mm = String(updated.birthMonth).padStart(2, "0");
+ const dd = String(updated.birthDay).padStart(2, "0");
+ updated.date = `${yearNum}-${mm}-${dd}`;
+ }
+
+ await updateCalvingRecord(updated);
  } catch (e) {
  Alert.alert("Error", "Could not save. Please try again.");
  } finally {
  setIsSaving(false);
  }
  },
- [record, updateCalvingRecord],
- );
+ [record, updateCalvingRecord, businessYears],
+  );
 
  const handleDelete = useCallback(() => {
  if (!record) return;
@@ -264,8 +277,8 @@ export default function CalvingRecordScreen() {
  // Build display date
  const monthName = MONTHS[(record.birthMonth ?? 1) - 1] ?? "";
  const dayStr = String(record.birthDay ?? 1).padStart(2, "0");
- const yearNum = activeBusinessYear
- ? new Date(activeBusinessYear.startDate).getFullYear()
+ const yearNum = record.date
+ ? new Date(record.date).getFullYear()
  : new Date().getFullYear();
  const displayDate = `${monthName} ${dayStr}, ${yearNum}`;
 
