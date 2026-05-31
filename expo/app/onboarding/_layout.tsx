@@ -19,10 +19,6 @@ export default function OnboardingLayout() {
       <Stack.Screen name="ranch-name" />
       <Stack.Screen name="join-ranch" />
       <Stack.Screen name="welcome" />
-      <Stack.Screen name="import-data" />
-      <Stack.Screen name="manual-entry" />
-      <Stack.Screen name="guided-setup" />
-      <Stack.Screen name="import-review" />
     </Stack>
   );
 }
