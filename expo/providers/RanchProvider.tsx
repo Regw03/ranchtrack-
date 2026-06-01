@@ -12,6 +12,11 @@ import {
   pushAnimalsBatchToCloud,
   deleteAnimalInCloud,
   fetchRanchAnimals,
+  pushBusinessYearToCloud,
+  pushActiveBusinessYearToCloud,
+  fetchBusinessYears,
+  pushBusinessYearsBatchToCloud,
+  type UserRole,
 } from "@/lib/supabase";
 // eslint-disable-next-line rork/general-context-optimization
 import {
@@ -669,6 +674,12 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
         queryClient.setQueryData(["activeBusinessYearId"], newYear.id);
       }
 
+      // Push new year to cloud; if active, push the active year selection too
+      void pushBusinessYearToCloud(newYear, ranch.id, currentUserRole);
+      if (year.isActive) {
+        void pushActiveBusinessYearToCloud(newYear.id, ranch.id, currentUserRole);
+      }
+
       const currentAnimals = queryClient.getQueryData<Animal[]>(["animals"]) ?? [];
       const promotedCalves: Animal[] = [];
       const updatedAnimals = currentAnimals.map((a) => {
@@ -702,6 +713,8 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
   const setActiveBusinessYearMutation = useMutation({
     mutationFn: async (yearId: string) => {
       await saveToStorage(STORAGE_KEYS.activeBusinessYearId, yearId);
+      // Push active year change to cloud (owner/manager only enforced by the function)
+      void pushActiveBusinessYearToCloud(yearId, ranch.id, currentUserRole);
       return yearId;
     },
     onSuccess: (yearId) => {
@@ -2245,6 +2258,74 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
     },
   });
 
+  // ─── Business Year sync ────────────────────────────────────────────────────
+
+  const syncBusinessYearsMutation = useMutation({
+    mutationFn: async () => {
+      const current = queryClient.getQueryData<Ranch>(["ranch"]) ?? ranch;
+      if (!current.id || current.id === MOCK_RANCH.id) {
+        console.log("[syncBusinessYears] no remote ranch yet, skipping");
+        return null;
+      }
+      const { years: remoteYears, activeYearId: remoteActiveYearId, error } = await fetchBusinessYears(current.id);
+      if (error) {
+        console.log("[syncBusinessYears] fetch error", error);
+        return null;
+      }
+
+      const localYears = queryClient.getQueryData<BusinessYear[]>(["businessYears"]) ?? [];
+      const localIds = new Set(localYears.map((y) => y.id));
+
+      // If nothing on server, push all local years up
+      if (remoteYears.length === 0 && localYears.length > 0) {
+        console.log("[syncBusinessYears] no remote years, pushing all local");
+        void pushBusinessYearsBatchToCloud(localYears, current.id, currentUserRole);
+        void pushActiveBusinessYearToCloud(activeBusinessYearId, current.id, currentUserRole);
+        return { merged: localYears, activeYearId: activeBusinessYearId };
+      }
+
+      // Merge remote years into local
+      const merged = [...localYears];
+      for (const row of remoteYears) {
+        if (!localIds.has(row.id)) {
+          merged.push({
+            id: row.id,
+            name: row.name,
+            startDate: row.start_date,
+            endDate: row.end_date,
+            isActive: row.is_active,
+            createdAt: row.created_at,
+          });
+        }
+      }
+
+      await saveToStorage(STORAGE_KEYS.businessYears, merged);
+
+      // Push any local-only years to server
+      const remoteIds = new Set(remoteYears.map((r) => r.id));
+      const localOnly = localYears.filter((y) => !remoteIds.has(y.id));
+      if (localOnly.length > 0) {
+        void pushBusinessYearsBatchToCloud(localOnly, current.id, currentUserRole);
+      }
+
+      // Members automatically follow the owner's active year selection
+      const resolvedActiveYearId = remoteActiveYearId ?? activeBusinessYearId;
+      if (resolvedActiveYearId !== activeBusinessYearId) {
+        console.log("[syncBusinessYears] adopting remote active year", resolvedActiveYearId);
+        await saveToStorage(STORAGE_KEYS.activeBusinessYearId, resolvedActiveYearId);
+      }
+
+      console.log(`[syncBusinessYears] merged ${merged.length} years (remote: ${remoteYears.length})`);
+      return { merged, activeYearId: resolvedActiveYearId };
+    },
+    onSuccess: (result) => {
+      if (result) {
+        queryClient.setQueryData(["businessYears"], result.merged);
+        queryClient.setQueryData(["activeBusinessYearId"], result.activeYearId);
+      }
+    },
+  });
+
   const lastSyncedRanchIdRef = useRef<string>("");
   useEffect(() => {
     const rid = ranch.id;
@@ -2253,6 +2334,7 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
     lastSyncedRanchIdRef.current = rid;
     console.log("[syncAnimals] initial sync for ranch", rid);
     syncAnimalsMutation.mutate();
+    syncBusinessYearsMutation.mutate();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ranch.id]);
 
@@ -2266,8 +2348,9 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
       if (wasBackground && nowActive) {
         const currentRanch = queryClient.getQueryData<Ranch>(["ranch"]);
         if (currentRanch?.id && currentRanch.id !== MOCK_RANCH.id) {
-          console.log("[AppState] app foregrounded — refreshing ranch members");
+          console.log("[AppState] app foregrounded — refreshing ranch data");
           refreshRanchMutation.mutate();
+          syncBusinessYearsMutation.mutate();
         }
       }
     });
@@ -2322,6 +2405,7 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
     onSuccess: (updated) => {
       if (updated) queryClient.setQueryData(["ranch"], updated);
       void syncAnimalsMutation.mutateAsync();
+      void syncBusinessYearsMutation.mutateAsync();
     },
   });
 
@@ -2554,5 +2638,7 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
     isResettingApp: resetAppMutation.isPending,
     syncAnimals: syncAnimalsMutation.mutateAsync,
     isSyncingAnimals: syncAnimalsMutation.isPending,
+    syncBusinessYears: syncBusinessYearsMutation.mutateAsync,
+    isSyncingBusinessYears: syncBusinessYearsMutation.isPending,
   };
 });
