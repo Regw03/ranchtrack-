@@ -28,6 +28,13 @@ import {
   deleteDoctoringEventInCloud,
   fetchDoctoringEvents,
   type RemoteDoctoringEventRow,
+  pushBreedingRecordToCloud,
+  deleteBreedingRecordInCloud,
+  pushBreedingGroupToCloud,
+  deleteBreedingGroupInCloud,
+  fetchBreedingData,
+  type RemoteBreedingRecordRow,
+  type RemoteBreedingGroupRow,
 } from "@/lib/supabase";
 // eslint-disable-next-line rork/general-context-optimization
 import {
@@ -626,6 +633,7 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
       if (animal) {
         await logActivity(`Added breeding record for ${getAnimalDisplayName(animal)}`, "breeding", animal.id);
       }
+      void pushBreedingRecordToCloud(newRecord, ranch.id, currentUserRole);
       return updated;
     },
     onSuccess: (updated) => {
@@ -659,6 +667,8 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
       }
 
       await saveToStorage(STORAGE_KEYS.breedingRecords, updated);
+      const changedRecord = updated.find((r) => r.animalId === animalId && r.businessYearId === activeBusinessYearId);
+      if (changedRecord) void pushBreedingRecordToCloud(changedRecord, ranch.id, currentUserRole);
       const animal = animals.find((a) => a.id === animalId);
       if (animal) {
         await logActivity(`Set ${getAnimalDisplayName(animal)} as ${status}`, "breeding", animalId);
@@ -1609,6 +1619,7 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
       const updated = [...current, newGroup];
       await saveToStorage(STORAGE_KEYS.breedingGroups, updated);
       await logActivity(`Created breeding group "${newGroup.name}"`);
+      void pushBreedingGroupToCloud(newGroup, currentUserRole);
       return { updated, newGroup };
     },
     onSuccess: ({ updated }) => {
@@ -1623,6 +1634,8 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
         g.id === group.id ? { ...group, updatedAt: new Date().toISOString() } : g,
       );
       await saveToStorage(STORAGE_KEYS.breedingGroups, updated);
+      const updatedGroup = updated.find((g) => g.id === group.id);
+      if (updatedGroup) void pushBreedingGroupToCloud(updatedGroup, currentUserRole);
       return updated;
     },
     onSuccess: (updated) => {
@@ -1638,6 +1651,7 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
       await saveToStorage(STORAGE_KEYS.breedingGroups, updated);
       if (group) {
         await logActivity(`Deleted breeding group "${group.name}"`);
+        void deleteBreedingGroupInCloud(groupId, currentUserRole);
       }
       return updated;
     },
@@ -1656,6 +1670,8 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
         return g;
       });
       await saveToStorage(STORAGE_KEYS.breedingGroups, updated);
+      const updatedGroup = updated.find((g) => g.id === groupId);
+      if (updatedGroup) void pushBreedingGroupToCloud(updatedGroup, currentUserRole);
       return updated;
     },
     onSuccess: (updated) => {
@@ -1673,6 +1689,8 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
         return g;
       });
       await saveToStorage(STORAGE_KEYS.breedingGroups, updated);
+      const updatedGroup = updated.find((g) => g.id === groupId);
+      if (updatedGroup) void pushBreedingGroupToCloud(updatedGroup, currentUserRole);
       return updated;
     },
     onSuccess: (updated) => {
@@ -2357,6 +2375,7 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
     syncBusinessYearsMutation.mutate();
     syncCalvingDataMutation.mutate();
     syncDoctoringEventsMutation.mutate();
+    syncBreedingDataMutation.mutate();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ranch.id]);
 
@@ -2375,6 +2394,7 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
           syncBusinessYearsMutation.mutate();
           syncCalvingDataMutation.mutate();
           syncDoctoringEventsMutation.mutate();
+          syncBreedingDataMutation.mutate();
         }
       }
     });
@@ -2528,6 +2548,78 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
       for (const e of localOnly) void pushDoctoringEventToCloud(e, currentUserRole);
     },
     onError: (e) => console.log("[syncDoctoring] error", e),
+  });
+
+  // ─── Breeding sync mutation ───────────────────────────────────────────────
+  const syncBreedingDataMutation = useMutation({
+    mutationFn: async () => {
+      const currentRanch = queryClient.getQueryData<Ranch>(["ranch"]) ?? ranch;
+      if (!currentRanch.id || currentRanch.id === MOCK_RANCH.id) return;
+
+      const { records: remoteRecords, groups: remoteGroups, error } = await fetchBreedingData(currentRanch.id);
+      if (error) {
+        const localRecords = queryClient.getQueryData<BreedingRecord[]>(["breedingRecords"]) ?? [];
+        const localGroups = queryClient.getQueryData<BreedingGroup[]>(["breedingGroups"]) ?? [];
+        for (const r of localRecords) void pushBreedingRecordToCloud(r, currentRanch.id, currentUserRole);
+        for (const g of localGroups) void pushBreedingGroupToCloud(g, currentUserRole);
+        return;
+      }
+
+      // ── Merge records ────────────────────────────────────────────────────
+      const localRecords = queryClient.getQueryData<BreedingRecord[]>(["breedingRecords"]) ?? [];
+      const localRecordIds = new Set(localRecords.map((r) => r.id));
+      const remoteRecordIds = new Set(remoteRecords.map((r: RemoteBreedingRecordRow) => r.id));
+
+      const newRecords: BreedingRecord[] = remoteRecords
+        .filter((r: RemoteBreedingRecordRow) => !localRecordIds.has(r.id))
+        .map((r: RemoteBreedingRecordRow) => ({
+          id: r.id,
+          animalId: r.animal_id,
+          sireId: r.sire_id ?? undefined,
+          lastBredDate: r.last_bred_date,
+          expectedDueDate: r.expected_due_date,
+          status: r.status as BreedingRecord["status"],
+          businessYearId: r.business_year_id ?? undefined,
+          notes: r.notes,
+        }));
+
+      if (newRecords.length > 0) {
+        const merged = [...localRecords, ...newRecords];
+        await saveToStorage(STORAGE_KEYS.breedingRecords, merged);
+        queryClient.setQueryData(["breedingRecords"], merged);
+        console.log(`[syncBreeding] added ${newRecords.length} records from server`);
+      }
+      const localOnlyRecords = localRecords.filter((r) => !remoteRecordIds.has(r.id));
+      for (const r of localOnlyRecords) void pushBreedingRecordToCloud(r, currentRanch.id, currentUserRole);
+
+      // ── Merge groups ─────────────────────────────────────────────────────
+      const localGroups = queryClient.getQueryData<BreedingGroup[]>(["breedingGroups"]) ?? [];
+      const localGroupIds = new Set(localGroups.map((g) => g.id));
+      const remoteGroupIds = new Set(remoteGroups.map((g: RemoteBreedingGroupRow) => g.id));
+
+      const newGroups: BreedingGroup[] = remoteGroups
+        .filter((g: RemoteBreedingGroupRow) => !localGroupIds.has(g.id))
+        .map((g: RemoteBreedingGroupRow) => ({
+          id: g.id,
+          ranchId: currentRanch.id,
+          name: g.name,
+          color: g.color,
+          animalIds: g.animal_ids,
+          businessYearId: g.business_year_id,
+          createdAt: g.created_at,
+          updatedAt: g.updated_at,
+        }));
+
+      if (newGroups.length > 0) {
+        const merged = [...localGroups, ...newGroups];
+        await saveToStorage(STORAGE_KEYS.breedingGroups, merged);
+        queryClient.setQueryData(["breedingGroups"], merged);
+        console.log(`[syncBreeding] added ${newGroups.length} groups from server`);
+      }
+      const localOnlyGroups = localGroups.filter((g) => !remoteGroupIds.has(g.id));
+      for (const g of localOnlyGroups) void pushBreedingGroupToCloud(g, currentUserRole);
+    },
+    onError: (e) => console.log("[syncBreeding] error", e),
   });
 
   const refreshRanchMutation = useMutation({
@@ -2816,5 +2908,7 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
     isSyncingCalvingData: syncCalvingDataMutation.isPending,
     syncDoctoringEvents: syncDoctoringEventsMutation.mutateAsync,
     isSyncingDoctoringEvents: syncDoctoringEventsMutation.isPending,
+    syncBreedingData: syncBreedingDataMutation.mutateAsync,
+    isSyncingBreedingData: syncBreedingDataMutation.isPending,
   };
 });
