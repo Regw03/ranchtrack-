@@ -24,6 +24,10 @@ import {
   type UserRole,
   type RemoteCalvingListRow,
   type RemoteCalvingRecordRow,
+  pushDoctoringEventToCloud,
+  deleteDoctoringEventInCloud,
+  fetchDoctoringEvents,
+  type RemoteDoctoringEventRow,
 } from "@/lib/supabase";
 // eslint-disable-next-line rork/general-context-optimization
 import {
@@ -1822,6 +1826,7 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
       if (animal) {
         await logActivity(`Doctored ${getAnimalDisplayName(animal)} — ${event.type}`, "health", animal.id);
       }
+      void pushDoctoringEventToCloud(newEvent, currentUserRole);
       return { updated, newEvent };
     },
     onSuccess: ({ updated }) => {
@@ -1836,6 +1841,7 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
         e.id === event.id ? { ...event, updatedAt: new Date().toISOString() } : e,
       );
       await saveToStorage(STORAGE_KEYS.doctoringEvents, updated);
+      void pushDoctoringEventToCloud(event, currentUserRole);
       return updated;
     },
     onSuccess: (updated) => {
@@ -2350,6 +2356,7 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
     syncAnimalsMutation.mutate();
     syncBusinessYearsMutation.mutate();
     syncCalvingDataMutation.mutate();
+    syncDoctoringEventsMutation.mutate();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ranch.id]);
 
@@ -2367,6 +2374,7 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
           refreshRanchMutation.mutate();
           syncBusinessYearsMutation.mutate();
           syncCalvingDataMutation.mutate();
+          syncDoctoringEventsMutation.mutate();
         }
       }
     });
@@ -2466,6 +2474,60 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
       for (const r of localOnlyRecords) void pushCalvingRecordToCloud(r, currentRanch.id, currentUserRole);
     },
     onError: (e) => console.log("[syncCalving] error", e),
+  });
+
+  // ─── Doctoring Events sync mutation ──────────────────────────────────────
+  const syncDoctoringEventsMutation = useMutation({
+    mutationFn: async () => {
+      const currentRanch = queryClient.getQueryData<Ranch>(["ranch"]) ?? ranch;
+      if (!currentRanch.id || currentRanch.id === MOCK_RANCH.id) return;
+
+      const { events: remoteEvents, error } = await fetchDoctoringEvents(currentRanch.id);
+      if (error) {
+        // Server unreachable — push all local events up
+        const localEvents = queryClient.getQueryData<DoctoringEvent[]>(["doctoringEvents"]) ?? [];
+        for (const e of localEvents) void pushDoctoringEventToCloud(e, currentUserRole);
+        return;
+      }
+
+      // Merge: add remote events not seen locally
+      const localEvents = queryClient.getQueryData<DoctoringEvent[]>(["doctoringEvents"]) ?? [];
+      const localIds = new Set(localEvents.map((e) => e.id));
+      const remoteIds = new Set(remoteEvents.map((e: RemoteDoctoringEventRow) => e.id));
+
+      const newFromRemote: DoctoringEvent[] = remoteEvents
+        .filter((r: RemoteDoctoringEventRow) => !localIds.has(r.id))
+        .map((r: RemoteDoctoringEventRow) => ({
+          id: r.id,
+          ranchId: currentRanch.id,
+          animalId: r.animal_id,
+          date: r.date,
+          type: r.type as DoctoringEvent["type"],
+          customTypeName: r.custom_type_name ?? undefined,
+          notes: r.notes,
+          treatment: r.treatment ?? undefined,
+          followUpNeeded: r.follow_up_needed,
+          resolved: r.resolved,
+          createdBy: r.created_by ?? undefined,
+          createdByName: r.created_by_name ?? undefined,
+          createdAt: r.created_at,
+          updatedAt: r.updated_at,
+        }));
+
+      if (newFromRemote.length > 0) {
+        const merged = [...localEvents, ...newFromRemote].sort(
+          (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime(),
+        );
+        await saveToStorage(STORAGE_KEYS.doctoringEvents, merged);
+        queryClient.setQueryData(["doctoringEvents"], merged);
+        console.log(`[syncDoctoring] added ${newFromRemote.length} events from server`);
+      }
+
+      // Push local-only events to server
+      const localOnly = localEvents.filter((e) => !remoteIds.has(e.id));
+      for (const e of localOnly) void pushDoctoringEventToCloud(e, currentUserRole);
+    },
+    onError: (e) => console.log("[syncDoctoring] error", e),
   });
 
   const refreshRanchMutation = useMutation({
@@ -2752,5 +2814,7 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
     isSyncingBusinessYears: syncBusinessYearsMutation.isPending,
     syncCalvingData: syncCalvingDataMutation.mutateAsync,
     isSyncingCalvingData: syncCalvingDataMutation.isPending,
+    syncDoctoringEvents: syncDoctoringEventsMutation.mutateAsync,
+    isSyncingDoctoringEvents: syncDoctoringEventsMutation.isPending,
   };
 });
