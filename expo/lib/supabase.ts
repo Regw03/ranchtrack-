@@ -524,3 +524,122 @@ export async function fetchCalvingData(ranchId: string): Promise<CalvingListSync
  return { lists: [], records: [], error: msg };
  }
 }
+
+// ─── Doctoring Events sync ────────────────────────────────────────────────────
+
+export interface RemoteDoctoringEventRow {
+ id: string;
+ ranch_id: string;
+ animal_id: string;
+ date: string;
+ type: string;
+ custom_type_name: string | null;
+ notes: string;
+ treatment: string | null;
+ follow_up_needed: boolean;
+ resolved: boolean;
+ created_by: string | null;
+ created_by_name: string | null;
+ deleted: boolean;
+ created_at: string;
+ updated_at: string;
+}
+
+/**
+ * Push a single doctoring event to Supabase.
+ * Owner/Manager: last write wins.
+ * Member: insert new records only, update only their own.
+ */
+export async function pushDoctoringEventToCloud(
+ event: import("@/types").DoctoringEvent,
+ userRole: UserRole,
+): Promise<void> {
+ if (!isRemoteRanch(event.ranchId)) return;
+ try {
+ const row: RemoteDoctoringEventRow = {
+ id: event.id,
+ ranch_id: event.ranchId,
+ animal_id: event.animalId,
+ date: event.date,
+ type: event.type,
+ custom_type_name: event.customTypeName ?? null,
+ notes: event.notes,
+ treatment: event.treatment ?? null,
+ follow_up_needed: event.followUpNeeded,
+ resolved: event.resolved,
+ created_by: event.createdBy ?? null,
+ created_by_name: event.createdByName ?? null,
+ deleted: false,
+ created_at: event.createdAt,
+ updated_at: event.updatedAt,
+ };
+
+ if (canOverwrite(userRole)) {
+ const { error } = await supabase
+ .from("doctoring_events")
+ .upsert(row, { onConflict: "id" });
+ if (error) console.log("[sync] pushDoctoringEvent upsert error", error.message);
+ } else {
+ // Member — insert new, or update only if they created it
+ const { data: existing } = await supabase
+ .from("doctoring_events")
+ .select("id, created_by")
+ .eq("id", event.id)
+ .maybeSingle();
+ if (!existing) {
+ const { error } = await supabase.from("doctoring_events").insert(row);
+ if (error && error.code !== "23505")
+ console.log("[sync] pushDoctoringEvent insert error", error.message);
+ } else if (existing.created_by === event.createdBy) {
+ const { error } = await supabase
+ .from("doctoring_events")
+ .update(row)
+ .eq("id", event.id);
+ if (error) console.log("[sync] pushDoctoringEvent update error", error.message);
+ }
+ }
+ } catch (e) {
+ console.log("[sync] pushDoctoringEvent exception", e);
+ }
+}
+
+/** Soft-delete a doctoring event in Supabase. */
+export async function deleteDoctoringEventInCloud(eventId: string): Promise<void> {
+ try {
+ const { error } = await supabase
+ .from("doctoring_events")
+ .update({ deleted: true, updated_at: new Date().toISOString() })
+ .eq("id", eventId);
+ if (error) console.log("[sync] deleteDoctoringEvent error", error.message);
+ } catch (e) {
+ console.log("[sync] deleteDoctoringEvent exception", e);
+ }
+}
+
+export interface DoctoringEventSyncResult {
+ events: RemoteDoctoringEventRow[];
+ error?: string;
+}
+
+/** Fetch all doctoring events for a ranch from Supabase. */
+export async function fetchDoctoringEvents(
+ ranchId: string,
+): Promise<DoctoringEventSyncResult> {
+ if (!isRemoteRanch(ranchId)) return { events: [] };
+ try {
+ const { data, error } = await supabase
+ .from("doctoring_events")
+ .select("*")
+ .eq("ranch_id", ranchId)
+ .eq("deleted", false);
+ if (error) {
+ console.log("[sync] fetchDoctoringEvents error", error.message);
+ return { events: [], error: error.message };
+ }
+ return { events: (data ?? []) as RemoteDoctoringEventRow[] };
+ } catch (e) {
+ const msg = e instanceof Error ? e.message : "Unknown error";
+ console.log("[sync] fetchDoctoringEvents exception", msg);
+ return { events: [], error: msg };
+ }
+}
