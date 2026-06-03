@@ -102,7 +102,7 @@ function isRemoteRanch(ranchId: string | undefined | null): ranchId is string {
  return !!ranchId && ranchId.length > 0;
 }
 
-type UserRole = "owner" | "manager" | "member" | "worker" | null;
+export type UserRole = "owner" | "manager" | "member" | "worker" | null;
 const canOverwrite = (role: UserRole) => role === "owner" || role === "manager";
 
 // ─── Animal sync ──────────────────────────────────────────────────────────────
