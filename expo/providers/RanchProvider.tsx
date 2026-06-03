@@ -16,7 +16,14 @@ import {
   pushActiveBusinessYearToCloud,
   fetchBusinessYears,
   pushBusinessYearsBatchToCloud,
+  pushCalvingListToCloud,
+  deleteCalvingListInCloud,
+  pushCalvingRecordToCloud,
+  deleteCalvingRecordInCloud,
+  fetchCalvingData,
   type UserRole,
+  type RemoteCalvingListRow,
+  type RemoteCalvingRecordRow,
 } from "@/lib/supabase";
 // eslint-disable-next-line rork/general-context-optimization
 import {
@@ -1272,6 +1279,7 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
       const updated = [...current, newList];
       await saveToStorage(STORAGE_KEYS.calvingLists, updated);
       await logActivity(`Created calving list "${newList.name}"`);
+      void pushCalvingListToCloud(newList, ranch.id, currentUserRole);
       return { updated, newList };
     },
     onSuccess: ({ updated }) => {
@@ -1286,6 +1294,8 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
         l.id === list.id ? { ...list, updatedAt: new Date().toISOString() } : l,
       );
       await saveToStorage(STORAGE_KEYS.calvingLists, updated);
+      const updatedList = updated.find((l) => l.id === list.id);
+      if (updatedList) void pushCalvingListToCloud(updatedList, ranch.id, currentUserRole);
       return updated;
     },
     onSuccess: (updated) => {
@@ -1304,6 +1314,7 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
       await saveToStorage(STORAGE_KEYS.calvingRecords, updatedRecords);
       queryClient.setQueryData(["calvingRecords"], updatedRecords);
       if (list) await logActivity(`Deleted calving list "${list.name}"`);
+      void deleteCalvingListInCloud(listId, currentUserRole);
       return updated;
     },
     onSuccess: (updated) => {
@@ -1408,6 +1419,7 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
         newRecord.id,
       );
 
+      void pushCalvingRecordToCloud(newRecord, ranch.id, currentUserRole);
       return { newRecord, updatedRecords, calfAnimal };
     },
     onSuccess: ({ updatedRecords }) => {
@@ -1422,6 +1434,7 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
         r.id === record.id ? { ...record, updatedAt: new Date().toISOString() } : r,
       );
       await saveToStorage(STORAGE_KEYS.calvingRecords, updated);
+      void pushCalvingRecordToCloud(record, ranch.id, currentUserRole);
       return updated;
     },
     onSuccess: (updated) => {
@@ -1435,6 +1448,7 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
       const updated = current.filter((r) => r.id !== recordId);
       await saveToStorage(STORAGE_KEYS.calvingRecords, updated);
       await logActivity("Deleted calving record", "calving", recordId);
+      void deleteCalvingRecordInCloud(recordId);
       return updated;
     },
     onSuccess: (updated) => {
@@ -2335,6 +2349,7 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
     console.log("[syncAnimals] initial sync for ranch", rid);
     syncAnimalsMutation.mutate();
     syncBusinessYearsMutation.mutate();
+    syncCalvingDataMutation.mutate();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ranch.id]);
 
@@ -2351,12 +2366,107 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
           console.log("[AppState] app foregrounded — refreshing ranch data");
           refreshRanchMutation.mutate();
           syncBusinessYearsMutation.mutate();
+          syncCalvingDataMutation.mutate();
         }
       }
     });
     return () => subscription.remove();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // ─── Calving sync mutation ───────────────────────────────────────────────
+  const syncCalvingDataMutation = useMutation({
+    mutationFn: async () => {
+      const currentRanch = queryClient.getQueryData<Ranch>(["ranch"]) ?? ranch;
+      if (!currentRanch.id || currentRanch.id === MOCK_RANCH.id) return;
+
+      const { lists: remoteLists, records: remoteRecords, error } = await fetchCalvingData(currentRanch.id);
+      if (error) {
+        // Server error — push local data up
+        const localLists = queryClient.getQueryData<CalvingList[]>(["calvingLists"]) ?? [];
+        const localRecords = queryClient.getQueryData<CalvingRecord[]>(["calvingRecords"]) ?? [];
+        for (const l of localLists) void pushCalvingListToCloud(l, currentRanch.id, currentUserRole);
+        for (const r of localRecords) void pushCalvingRecordToCloud(r, currentRanch.id, currentUserRole);
+        return;
+      }
+
+      // ── Merge lists ──────────────────────────────────────────────────────
+      const localLists = queryClient.getQueryData<CalvingList[]>(["calvingLists"]) ?? [];
+      const localListIds = new Set(localLists.map((l) => l.id));
+      const remoteListIds = new Set(remoteLists.map((l: RemoteCalvingListRow) => l.id));
+
+      // Add remote lists not seen locally
+      const newLists: CalvingList[] = remoteLists
+        .filter((r: RemoteCalvingListRow) => !localListIds.has(r.id))
+        .map((r: RemoteCalvingListRow) => ({
+          id: r.id,
+          ranchId: currentRanch.id,
+          name: r.name,
+          color: r.color,
+          businessYearId: r.business_year_id,
+          createdAt: r.created_at,
+          updatedAt: r.updated_at,
+        }));
+
+      let mergedLists = localLists;
+      if (newLists.length > 0) {
+        mergedLists = [...localLists, ...newLists];
+        await saveToStorage(STORAGE_KEYS.calvingLists, mergedLists);
+        queryClient.setQueryData(["calvingLists"], mergedLists);
+        console.log(`[syncCalving] added ${newLists.length} lists from server`);
+      }
+
+      // Push local-only lists to server
+      const localOnlyLists = localLists.filter((l) => !remoteListIds.has(l.id));
+      for (const l of localOnlyLists) void pushCalvingListToCloud(l, currentRanch.id, currentUserRole);
+
+      // ── Merge records ────────────────────────────────────────────────────
+      const localRecords = queryClient.getQueryData<CalvingRecord[]>(["calvingRecords"]) ?? [];
+      const localRecordIds = new Set(localRecords.map((r) => r.id));
+      const remoteRecordIds = new Set(remoteRecords.map((r: RemoteCalvingRecordRow) => r.id));
+
+      // Add remote records not seen locally
+      const newRecords: CalvingRecord[] = remoteRecords
+        .filter((r: RemoteCalvingRecordRow) => !localRecordIds.has(r.id))
+        .map((r: RemoteCalvingRecordRow) => ({
+          id: r.id,
+          calvingListId: r.calving_list_id,
+          businessYearId: r.business_year_id,
+          birthMonth: r.birth_month,
+          birthDay: r.birth_day,
+          date: r.date,
+          cowTag: r.cow_tag,
+          calfTag: r.calf_tag,
+          assisted: r.assisted,
+          calfType: (r.calf_type as CalvingRecord["calfType"]) ?? undefined,
+          sireTag: r.sire_tag ?? undefined,
+          birthWeight: r.birth_weight ?? undefined,
+          birthWeightUnit: (r.birth_weight_unit as CalvingRecord["birthWeightUnit"]) ?? undefined,
+          notes: r.notes ?? undefined,
+          photoUrl: r.photo_url ?? undefined,
+          cowId: r.cow_id ?? undefined,
+          calfId: r.calf_id ?? undefined,
+          createdBy: r.created_by ?? undefined,
+          createdByName: r.created_by_name ?? undefined,
+          createdAt: r.created_at,
+          updatedAt: r.updated_at,
+        }));
+
+      if (newRecords.length > 0) {
+        const mergedRecords = [...localRecords, ...newRecords].sort(
+          (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime(),
+        );
+        await saveToStorage(STORAGE_KEYS.calvingRecords, mergedRecords);
+        queryClient.setQueryData(["calvingRecords"], mergedRecords);
+        console.log(`[syncCalving] added ${newRecords.length} records from server`);
+      }
+
+      // Push local-only records to server
+      const localOnlyRecords = localRecords.filter((r) => !remoteRecordIds.has(r.id));
+      for (const r of localOnlyRecords) void pushCalvingRecordToCloud(r, currentRanch.id, currentUserRole);
+    },
+    onError: (e) => console.log("[syncCalving] error", e),
+  });
 
   const refreshRanchMutation = useMutation({
     mutationFn: async () => {
@@ -2640,5 +2750,7 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
     isSyncingAnimals: syncAnimalsMutation.isPending,
     syncBusinessYears: syncBusinessYearsMutation.mutateAsync,
     isSyncingBusinessYears: syncBusinessYearsMutation.isPending,
+    syncCalvingData: syncCalvingDataMutation.mutateAsync,
+    isSyncingCalvingData: syncCalvingDataMutation.isPending,
   };
 });
