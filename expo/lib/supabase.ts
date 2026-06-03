@@ -343,3 +343,184 @@ export async function pushBusinessYearsBatchToCloud(
  console.log("[sync] pushBusinessYearsBatch exception", e);
  }
 }
+
+// ─── Calving List sync ────────────────────────────────────────────────────────
+
+export interface RemoteCalvingListRow {
+ id: string;
+ ranch_id: string;
+ name: string;
+ color: string;
+ business_year_id: string;
+ deleted: boolean;
+ created_at: string;
+ updated_at: string;
+}
+
+export interface RemoteCalvingRecordRow {
+ id: string;
+ ranch_id: string;
+ calving_list_id: string;
+ business_year_id: string;
+ birth_month: number;
+ birth_day: number;
+ date: string;
+ cow_tag: string;
+ calf_tag: string;
+ assisted: boolean;
+ calf_type: string | null;
+ sire_tag: string | null;
+ birth_weight: number | null;
+ birth_weight_unit: string | null;
+ notes: string | null;
+ photo_url: string | null;
+ cow_id: string | null;
+ calf_id: string | null;
+ created_by: string | null;
+ created_by_name: string | null;
+ deleted: boolean;
+ created_at: string;
+ updated_at: string;
+}
+
+/** Push a single calving list to Supabase. */
+export async function pushCalvingListToCloud(
+ list: import("@/types").CalvingList,
+ ranchId: string,
+ userRole: UserRole,
+): Promise<void> {
+ if (!isRemoteRanch(ranchId)) return;
+ try {
+ const row: RemoteCalvingListRow = {
+ id: list.id,
+ ranch_id: ranchId,
+ name: list.name,
+ color: list.color,
+ business_year_id: list.businessYearId,
+ deleted: false,
+ created_at: list.createdAt,
+ updated_at: list.updatedAt,
+ };
+ if (canOverwrite(userRole)) {
+ const { error } = await supabase.from("calving_lists").upsert(row, { onConflict: "id" });
+ if (error) console.log("[sync] pushCalvingList upsert error", error.message);
+ } else {
+ const { error } = await supabase.from("calving_lists").insert(row);
+ if (error && error.code !== "23505") console.log("[sync] pushCalvingList insert error", error.message);
+ }
+ } catch (e) { console.log("[sync] pushCalvingList exception", e); }
+}
+
+/** Soft-delete a calving list in Supabase (owner/manager only). */
+export async function deleteCalvingListInCloud(
+ listId: string,
+ userRole: UserRole,
+): Promise<void> {
+ if (!canOverwrite(userRole)) return;
+ try {
+ const { error } = await supabase
+ .from("calving_lists")
+ .update({ deleted: true, updated_at: new Date().toISOString() })
+ .eq("id", listId);
+ if (error) console.log("[sync] deleteCalvingList error", error.message);
+ } catch (e) { console.log("[sync] deleteCalvingList exception", e); }
+}
+
+/** Push a single calving record to Supabase. Merge strategy — all roles can push. */
+export async function pushCalvingRecordToCloud(
+ record: import("@/types").CalvingRecord,
+ ranchId: string,
+ userRole: UserRole,
+): Promise<void> {
+ if (!isRemoteRanch(ranchId)) return;
+ try {
+ const row: RemoteCalvingRecordRow = {
+ id: record.id,
+ ranch_id: ranchId,
+ calving_list_id: record.calvingListId,
+ business_year_id: record.businessYearId,
+ birth_month: record.birthMonth,
+ birth_day: record.birthDay,
+ date: record.date,
+ cow_tag: record.cowTag,
+ calf_tag: record.calfTag,
+ assisted: record.assisted,
+ calf_type: record.calfType ?? null,
+ sire_tag: record.sireTag ?? null,
+ birth_weight: record.birthWeight ?? null,
+ birth_weight_unit: record.birthWeightUnit ?? null,
+ notes: record.notes ?? null,
+ photo_url: record.photoUrl ?? null,
+ cow_id: record.cowId ?? null,
+ calf_id: record.calfId ?? null,
+ created_by: record.createdBy ?? null,
+ created_by_name: record.createdByName ?? null,
+ deleted: false,
+ created_at: record.createdAt,
+ updated_at: record.updatedAt,
+ };
+ if (canOverwrite(userRole)) {
+ // Owner/manager — last write wins
+ const { error } = await supabase.from("calving_records").upsert(row, { onConflict: "id" });
+ if (error) console.log("[sync] pushCalvingRecord upsert error", error.message);
+ } else {
+ // Member — insert new, update only if they created it
+ const { data: existing } = await supabase
+ .from("calving_records")
+ .select("id, created_by")
+ .eq("id", record.id)
+ .maybeSingle();
+ if (!existing) {
+ const { error } = await supabase.from("calving_records").insert(row);
+ if (error && error.code !== "23505") console.log("[sync] pushCalvingRecord insert error", error.message);
+ } else if (existing.created_by === record.createdBy) {
+ // Only update records they created
+ const { error } = await supabase
+ .from("calving_records")
+ .update({ ...row })
+ .eq("id", record.id);
+ if (error) console.log("[sync] pushCalvingRecord update error", error.message);
+ }
+ }
+ } catch (e) { console.log("[sync] pushCalvingRecord exception", e); }
+}
+
+/** Soft-delete a calving record in Supabase. */
+export async function deleteCalvingRecordInCloud(recordId: string): Promise<void> {
+ try {
+ const { error } = await supabase
+ .from("calving_records")
+ .update({ deleted: true, updated_at: new Date().toISOString() })
+ .eq("id", recordId);
+ if (error) console.log("[sync] deleteCalvingRecord error", error.message);
+ } catch (e) { console.log("[sync] deleteCalvingRecord exception", e); }
+}
+
+export interface CalvingListSyncResult {
+ lists: RemoteCalvingListRow[];
+ records: RemoteCalvingRecordRow[];
+ error?: string;
+}
+
+/** Fetch all calving lists and records for a ranch from Supabase. */
+export async function fetchCalvingData(ranchId: string): Promise<CalvingListSyncResult> {
+ if (!isRemoteRanch(ranchId)) return { lists: [], records: [] };
+ try {
+ const [listsResult, recordsResult] = await Promise.all([
+ supabase.from("calving_lists").select("*").eq("ranch_id", ranchId).eq("deleted", false),
+ supabase.from("calving_records").select("*").eq("ranch_id", ranchId).eq("deleted", false),
+ ]);
+ if (listsResult.error) {
+ console.log("[sync] fetchCalvingData lists error", listsResult.error.message);
+ return { lists: [], records: [], error: listsResult.error.message };
+ }
+ return {
+ lists: (listsResult.data ?? []) as RemoteCalvingListRow[],
+ records: (recordsResult.data ?? []) as RemoteCalvingRecordRow[],
+ };
+ } catch (e) {
+ const msg = e instanceof Error ? e.message : "Unknown error";
+ console.log("[sync] fetchCalvingData exception", msg);
+ return { lists: [], records: [], error: msg };
+ }
+}
