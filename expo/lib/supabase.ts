@@ -643,3 +643,147 @@ export async function fetchDoctoringEvents(
  return { events: [], error: msg };
  }
 }
+
+// ─── Breeding sync ────────────────────────────────────────────────────────────
+
+export interface RemoteBreedingRecordRow {
+ id: string;
+ ranch_id: string;
+ animal_id: string;
+ sire_id: string | null;
+ last_bred_date: string;
+ expected_due_date: string;
+ status: string;
+ business_year_id: string | null;
+ notes: string;
+ deleted: boolean;
+ created_at: string;
+ updated_at: string;
+}
+
+export interface RemoteBreedingGroupRow {
+ id: string;
+ ranch_id: string;
+ name: string;
+ color: string;
+ animal_ids: string[];
+ business_year_id: string;
+ deleted: boolean;
+ created_at: string;
+ updated_at: string;
+}
+
+/** Push a single breeding record. Owner/manager: upsert. Member: insert or update own. */
+export async function pushBreedingRecordToCloud(
+ record: import("@/types").BreedingRecord,
+ ranchId: string,
+ userRole: UserRole,
+): Promise<void> {
+ if (!isRemoteRanch(ranchId)) return;
+ try {
+ const row: RemoteBreedingRecordRow = {
+ id: record.id,
+ ranch_id: ranchId,
+ animal_id: record.animalId,
+ sire_id: record.sireId ?? null,
+ last_bred_date: record.lastBredDate,
+ expected_due_date: record.expectedDueDate,
+ status: record.status,
+ business_year_id: record.businessYearId ?? null,
+ notes: record.notes,
+ deleted: false,
+ created_at: new Date().toISOString(),
+ updated_at: new Date().toISOString(),
+ };
+ if (canOverwrite(userRole)) {
+ const { error } = await supabase.from("breeding_records").upsert(row, { onConflict: "id" });
+ if (error) console.log("[sync] pushBreedingRecord error", error.message);
+ } else {
+ const { error } = await supabase.from("breeding_records").insert(row);
+ if (error && error.code !== "23505") console.log("[sync] pushBreedingRecord insert error", error.message);
+ }
+ } catch (e) { console.log("[sync] pushBreedingRecord exception", e); }
+}
+
+/** Soft-delete a breeding record. */
+export async function deleteBreedingRecordInCloud(recordId: string): Promise<void> {
+ try {
+ const { error } = await supabase
+ .from("breeding_records")
+ .update({ deleted: true, updated_at: new Date().toISOString() })
+ .eq("id", recordId);
+ if (error) console.log("[sync] deleteBreedingRecord error", error.message);
+ } catch (e) { console.log("[sync] deleteBreedingRecord exception", e); }
+}
+
+/** Push a single breeding group. Owner/manager: upsert. Member: insert only. */
+export async function pushBreedingGroupToCloud(
+ group: import("@/types").BreedingGroup,
+ userRole: UserRole,
+): Promise<void> {
+ if (!isRemoteRanch(group.ranchId)) return;
+ try {
+ const row: RemoteBreedingGroupRow = {
+ id: group.id,
+ ranch_id: group.ranchId,
+ name: group.name,
+ color: group.color,
+ animal_ids: group.animalIds,
+ business_year_id: group.businessYearId,
+ deleted: false,
+ created_at: group.createdAt,
+ updated_at: group.updatedAt,
+ };
+ if (canOverwrite(userRole)) {
+ const { error } = await supabase.from("breeding_groups").upsert(row, { onConflict: "id" });
+ if (error) console.log("[sync] pushBreedingGroup error", error.message);
+ } else {
+ const { error } = await supabase.from("breeding_groups").insert(row);
+ if (error && error.code !== "23505") console.log("[sync] pushBreedingGroup insert error", error.message);
+ }
+ } catch (e) { console.log("[sync] pushBreedingGroup exception", e); }
+}
+
+/** Soft-delete a breeding group (owner/manager only). */
+export async function deleteBreedingGroupInCloud(
+ groupId: string,
+ userRole: UserRole,
+): Promise<void> {
+ if (!canOverwrite(userRole)) return;
+ try {
+ const { error } = await supabase
+ .from("breeding_groups")
+ .update({ deleted: true, updated_at: new Date().toISOString() })
+ .eq("id", groupId);
+ if (error) console.log("[sync] deleteBreedingGroup error", error.message);
+ } catch (e) { console.log("[sync] deleteBreedingGroup exception", e); }
+}
+
+export interface BreedingSyncResult {
+ records: RemoteBreedingRecordRow[];
+ groups: RemoteBreedingGroupRow[];
+ error?: string;
+}
+
+/** Fetch all breeding records and groups for a ranch. */
+export async function fetchBreedingData(ranchId: string): Promise<BreedingSyncResult> {
+ if (!isRemoteRanch(ranchId)) return { records: [], groups: [] };
+ try {
+ const [recordsResult, groupsResult] = await Promise.all([
+ supabase.from("breeding_records").select("*").eq("ranch_id", ranchId).eq("deleted", false),
+ supabase.from("breeding_groups").select("*").eq("ranch_id", ranchId).eq("deleted", false),
+ ]);
+ if (recordsResult.error) {
+ console.log("[sync] fetchBreedingData error", recordsResult.error.message);
+ return { records: [], groups: [], error: recordsResult.error.message };
+ }
+ return {
+ records: (recordsResult.data ?? []) as RemoteBreedingRecordRow[],
+ groups: (groupsResult.data ?? []) as RemoteBreedingGroupRow[],
+ };
+ } catch (e) {
+ const msg = e instanceof Error ? e.message : "Unknown error";
+ console.log("[sync] fetchBreedingData exception", msg);
+ return { records: [], groups: [], error: msg };
+ }
+}
