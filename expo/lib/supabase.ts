@@ -782,8 +782,116 @@ export async function fetchBreedingData(ranchId: string): Promise<BreedingSyncRe
  groups: (groupsResult.data ?? []) as RemoteBreedingGroupRow[],
  };
  } catch (e) {
- const msg = e instanceof Error ? e.message : "Unknown error";
- console.log("[sync] fetchBreedingData exception", msg);
- return { records: [], groups: [], error: msg };
- }
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "Unknown error";
+    console.log("[sync] fetchBreedingData exception", msg);
+    return { records: [], groups: [], error: msg };
+  }
+}
+
+// ─── Weight & Health Records sync ────────────────────────────────────────────
+
+export interface RemoteWeightRecordRow {
+  id: string;
+  ranch_id: string;
+  animal_id: string;
+  date: string;
+  weight: number;
+  unit: string;
+  deleted: boolean;
+  created_at: string;
+}
+
+export interface RemoteHealthRecordRow {
+  id: string;
+  ranch_id: string;
+  animal_id: string;
+  type: string;
+  date: string;
+  description: string;
+  notes: string;
+  administered_by: string | null;
+  deleted: boolean;
+  created_at: string;
+}
+
+/** Push a weight record. All roles can add — merge strategy. */
+export async function pushWeightRecordToCloud(
+  record: import("@/types").WeightRecord,
+  ranchId: string,
+): Promise<void> {
+  if (!isRemoteRanch(ranchId)) return;
+  try {
+    const row: RemoteWeightRecordRow = {
+      id: record.id,
+      ranch_id: ranchId,
+      animal_id: record.animalId,
+      date: record.date,
+      weight: record.weight,
+      unit: record.unit,
+      deleted: false,
+      created_at: new Date().toISOString(),
+    };
+    const { error } = await supabase
+      .from("weight_records")
+      .upsert(row, { onConflict: "id" });
+    if (error) console.log("[sync] pushWeightRecord error", error.message);
+  } catch (e) { console.log("[sync] pushWeightRecord exception", e); }
+}
+
+/** Push a health record. All roles can add — merge strategy. */
+export async function pushHealthRecordToCloud(
+  record: import("@/types").HealthRecord,
+  ranchId: string,
+): Promise<void> {
+  if (!isRemoteRanch(ranchId)) return;
+  try {
+    const row: RemoteHealthRecordRow = {
+      id: record.id,
+      ranch_id: ranchId,
+      animal_id: record.animalId,
+      type: record.type,
+      date: record.date,
+      description: record.description,
+      notes: record.notes,
+      administered_by: record.administeredBy ?? null,
+      deleted: false,
+      created_at: new Date().toISOString(),
+    };
+    const { error } = await supabase
+      .from("health_records")
+      .upsert(row, { onConflict: "id" });
+    if (error) console.log("[sync] pushHealthRecord error", error.message);
+  } catch (e) { console.log("[sync] pushHealthRecord exception", e); }
+}
+
+export interface WeightHealthSyncResult {
+  weightRecords: RemoteWeightRecordRow[];
+  healthRecords: RemoteHealthRecordRow[];
+  error?: string;
+}
+
+/** Fetch all weight and health records for a ranch. */
+export async function fetchWeightHealthData(
+  ranchId: string,
+): Promise<WeightHealthSyncResult> {
+  if (!isRemoteRanch(ranchId)) return { weightRecords: [], healthRecords: [] };
+  try {
+    const [weightResult, healthResult] = await Promise.all([
+      supabase.from("weight_records").select("*").eq("ranch_id", ranchId).eq("deleted", false),
+      supabase.from("health_records").select("*").eq("ranch_id", ranchId).eq("deleted", false),
+    ]);
+    if (weightResult.error) {
+      console.log("[sync] fetchWeightHealth error", weightResult.error.message);
+      return { weightRecords: [], healthRecords: [], error: weightResult.error.message };
+    }
+    return {
+      weightRecords: (weightResult.data ?? []) as RemoteWeightRecordRow[],
+      healthRecords: (healthResult.data ?? []) as RemoteHealthRecordRow[],
+    };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "Unknown error";
+    console.log("[sync] fetchWeightHealth exception", msg);
+    return { weightRecords: [], healthRecords: [], error: msg };
+  }
 }
