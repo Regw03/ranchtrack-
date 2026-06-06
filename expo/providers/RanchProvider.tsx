@@ -35,6 +35,11 @@ import {
   fetchBreedingData,
   type RemoteBreedingRecordRow,
   type RemoteBreedingGroupRow,
+  pushWeightRecordToCloud,
+  pushHealthRecordToCloud,
+  fetchWeightHealthData,
+  type RemoteWeightRecordRow,
+  type RemoteHealthRecordRow,
 } from "@/lib/supabase";
 // eslint-disable-next-line rork/general-context-optimization
 import {
@@ -591,6 +596,7 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
       const current = queryClient.getQueryData<WeightRecord[]>(["weightRecords"]) ?? [];
       const updated = [...current, newRecord];
       await saveToStorage(STORAGE_KEYS.weightRecords, updated);
+      void pushWeightRecordToCloud(newRecord, ranch.id);
       const animal = animals.find((a) => a.id === record.animalId);
       if (animal) {
         await logActivity(`Added weight record for ${getAnimalDisplayName(animal)} (${record.weight} ${record.unit})`, "weight", animal.id);
@@ -608,6 +614,7 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
       const current = queryClient.getQueryData<HealthRecord[]>(["healthRecords"]) ?? [];
       const updated = [...current, newRecord];
       await saveToStorage(STORAGE_KEYS.healthRecords, updated);
+      void pushHealthRecordToCloud(newRecord, ranch.id);
       const animal = animals.find((a) => a.id === record.animalId);
       if (animal) {
         await logActivity(`Logged ${record.type} for ${getAnimalDisplayName(animal)}`, "health", animal.id);
@@ -2376,6 +2383,7 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
     syncCalvingDataMutation.mutate();
     syncDoctoringEventsMutation.mutate();
     syncBreedingDataMutation.mutate();
+    syncWeightHealthMutation.mutate();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ranch.id]);
 
@@ -2395,6 +2403,7 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
           syncCalvingDataMutation.mutate();
           syncDoctoringEventsMutation.mutate();
           syncBreedingDataMutation.mutate();
+          syncWeightHealthMutation.mutate();
         }
       }
     });
@@ -2620,6 +2629,77 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
       for (const g of localOnlyGroups) void pushBreedingGroupToCloud(g, currentUserRole);
     },
     onError: (e) => console.log("[syncBreeding] error", e),
+  });
+
+  // ─── Weight + Health Records sync mutation ───────────────────────────────
+  const syncWeightHealthMutation = useMutation({
+    mutationFn: async () => {
+      const currentRanch = queryClient.getQueryData<Ranch>(["ranch"]) ?? ranch;
+      if (!currentRanch.id || currentRanch.id === MOCK_RANCH.id) return;
+
+      const { weightRecords: remoteWeights, healthRecords: remoteHealth, error } =
+        await fetchWeightHealthData(currentRanch.id);
+
+      if (error) {
+        // Server unreachable — push all local records up
+        const localWeights = queryClient.getQueryData<WeightRecord[]>(["weightRecords"]) ?? [];
+        const localHealth = queryClient.getQueryData<HealthRecord[]>(["healthRecords"]) ?? [];
+        for (const r of localWeights) void pushWeightRecordToCloud(r, currentRanch.id);
+        for (const r of localHealth) void pushHealthRecordToCloud(r, currentRanch.id);
+        return;
+      }
+
+      // ── Merge weight records ─────────────────────────────────────────────
+      const localWeights = queryClient.getQueryData<WeightRecord[]>(["weightRecords"]) ?? [];
+      const localWeightIds = new Set(localWeights.map((r) => r.id));
+      const remoteWeightIds = new Set(remoteWeights.map((r: RemoteWeightRecordRow) => r.id));
+
+      const newWeights: WeightRecord[] = remoteWeights
+        .filter((r: RemoteWeightRecordRow) => !localWeightIds.has(r.id))
+        .map((r: RemoteWeightRecordRow) => ({
+          id: r.id,
+          animalId: r.animal_id,
+          date: r.date,
+          weight: r.weight,
+          unit: r.unit as WeightRecord["unit"],
+        }));
+
+      if (newWeights.length > 0) {
+        const merged = [...localWeights, ...newWeights];
+        await saveToStorage(STORAGE_KEYS.weightRecords, merged);
+        queryClient.setQueryData(["weightRecords"], merged);
+        console.log(`[syncWeightHealth] added ${newWeights.length} weight records from server`);
+      }
+      const localOnlyWeights = localWeights.filter((r) => !remoteWeightIds.has(r.id));
+      for (const r of localOnlyWeights) void pushWeightRecordToCloud(r, currentRanch.id);
+
+      // ── Merge health records ─────────────────────────────────────────────
+      const localHealth = queryClient.getQueryData<HealthRecord[]>(["healthRecords"]) ?? [];
+      const localHealthIds = new Set(localHealth.map((r) => r.id));
+      const remoteHealthIds = new Set(remoteHealth.map((r: RemoteHealthRecordRow) => r.id));
+
+      const newHealth: HealthRecord[] = remoteHealth
+        .filter((r: RemoteHealthRecordRow) => !localHealthIds.has(r.id))
+        .map((r: RemoteHealthRecordRow) => ({
+          id: r.id,
+          animalId: r.animal_id,
+          type: r.type as HealthRecord["type"],
+          date: r.date,
+          description: r.description,
+          notes: r.notes,
+          administeredBy: r.administered_by ?? undefined,
+        }));
+
+      if (newHealth.length > 0) {
+        const merged = [...localHealth, ...newHealth];
+        await saveToStorage(STORAGE_KEYS.healthRecords, merged);
+        queryClient.setQueryData(["healthRecords"], merged);
+        console.log(`[syncWeightHealth] added ${newHealth.length} health records from server`);
+      }
+      const localOnlyHealth = localHealth.filter((r) => !remoteHealthIds.has(r.id));
+      for (const r of localOnlyHealth) void pushHealthRecordToCloud(r, currentRanch.id);
+    },
+    onError: (e) => console.log("[syncWeightHealth] error", e),
   });
 
   const refreshRanchMutation = useMutation({
@@ -2910,5 +2990,7 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
     isSyncingDoctoringEvents: syncDoctoringEventsMutation.isPending,
     syncBreedingData: syncBreedingDataMutation.mutateAsync,
     isSyncingBreedingData: syncBreedingDataMutation.isPending,
+    syncWeightHealth: syncWeightHealthMutation.mutateAsync,
+    isSyncingWeightHealth: syncWeightHealthMutation.isPending,
   };
 });
