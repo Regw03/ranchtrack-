@@ -782,7 +782,6 @@ export async function fetchBreedingData(ranchId: string): Promise<BreedingSyncRe
  groups: (groupsResult.data ?? []) as RemoteBreedingGroupRow[],
  };
  } catch (e) {
-  } catch (e) {
     const msg = e instanceof Error ? e.message : "Unknown error";
     console.log("[sync] fetchBreedingData exception", msg);
     return { records: [], groups: [], error: msg };
