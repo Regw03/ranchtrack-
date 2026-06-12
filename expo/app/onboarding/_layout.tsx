@@ -19,6 +19,7 @@ export default function OnboardingLayout() {
       <Stack.Screen name="ranch-name" />
       <Stack.Screen name="join-ranch" />
       <Stack.Screen name="welcome" />
+      <Stack.Screen name="forgot-password" />
     </Stack>
   );
 }
