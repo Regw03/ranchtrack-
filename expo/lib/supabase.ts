@@ -45,6 +45,11 @@ export async function getCurrentAuthUserId(): Promise<string | null> {
  return data.session?.user?.id ?? null;
 }
 
+export async function sendPasswordResetEmail(email: string): Promise<void> {
+ const { error } = await supabase.auth.resetPasswordForEmail(email);
+ if (error) throw new Error(error.message);
+}
+
 // ─── Invite code ──────────────────────────────────────────────────────────────
 
 export function generateInviteCode(): string {
