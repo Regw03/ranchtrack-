@@ -608,6 +608,18 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
     },
   });
 
+  const deleteWeightRecordMutation = useMutation({
+    mutationFn: async (recordId: string) => {
+      const current = queryClient.getQueryData<WeightRecord[]>(["weightRecords"]) ?? [];
+      const updated = current.filter((r) => r.id !== recordId);
+      await saveToStorage(STORAGE_KEYS.weightRecords, updated);
+      return updated;
+    },
+    onSuccess: (updated) => {
+      queryClient.setQueryData(["weightRecords"], updated);
+    },
+  });
+
   const addHealthRecordMutation = useMutation({
     mutationFn: async (record: Omit<HealthRecord, "id">) => {
       const newRecord: HealthRecord = { ...record, id: generateId() };
@@ -619,6 +631,18 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
       if (animal) {
         await logActivity(`Logged ${record.type} for ${getAnimalDisplayName(animal)}`, "health", animal.id);
       }
+      return updated;
+    },
+    onSuccess: (updated) => {
+      queryClient.setQueryData(["healthRecords"], updated);
+    },
+  });
+
+  const deleteHealthRecordMutation = useMutation({
+    mutationFn: async (recordId: string) => {
+      const current = queryClient.getQueryData<HealthRecord[]>(["healthRecords"]) ?? [];
+      const updated = current.filter((r) => r.id !== recordId);
+      await saveToStorage(STORAGE_KEYS.healthRecords, updated);
       return updated;
     },
     onSuccess: (updated) => {
@@ -641,6 +665,19 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
         await logActivity(`Added breeding record for ${getAnimalDisplayName(animal)}`, "breeding", animal.id);
       }
       void pushBreedingRecordToCloud(newRecord, ranch.id, currentUserRole);
+      return updated;
+    },
+    onSuccess: (updated) => {
+      queryClient.setQueryData(["breedingRecords"], updated);
+    },
+  });
+
+  const deleteBreedingRecordMutation = useMutation({
+    mutationFn: async (recordId: string) => {
+      const current = queryClient.getQueryData<BreedingRecord[]>(["breedingRecords"]) ?? [];
+      const updated = current.filter((r) => r.id !== recordId);
+      await saveToStorage(STORAGE_KEYS.breedingRecords, updated);
+      void deleteBreedingRecordInCloud(recordId);
       return updated;
     },
     onSuccess: (updated) => {
@@ -2918,6 +2955,9 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
     addWeightRecord: addWeightRecordMutation.mutateAsync,
     addHealthRecord: addHealthRecordMutation.mutateAsync,
     addBreedingRecord: addBreedingRecordMutation.mutateAsync,
+    deleteWeightRecord: deleteWeightRecordMutation.mutateAsync,
+    deleteHealthRecord: deleteHealthRecordMutation.mutateAsync,
+    deleteBreedingRecord: deleteBreedingRecordMutation.mutateAsync,
     quickSetBreedingStatus: quickSetBreedingStatus.mutateAsync,
     createBusinessYear: createBusinessYearMutation.mutateAsync,
     setActiveBusinessYear: setActiveBusinessYearMutation.mutateAsync,

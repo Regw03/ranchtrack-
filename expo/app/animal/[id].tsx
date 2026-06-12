@@ -56,7 +56,7 @@ function SectionHeader({ title, icon, onAdd }: { title: string; icon: React.Reac
   );
 }
 
-function WeightChart({ records }: { records: WeightRecord[] }) {
+function WeightChart({ records, onDelete }: { records: WeightRecord[]; onDelete: (id: string) => void }) {
   const Colors = useColors();
   const styles = useMemo(() => createStyles(Colors), [Colors]);
   if (records.length === 0) return null;
@@ -84,11 +84,22 @@ function WeightChart({ records }: { records: WeightRecord[] }) {
           <Text style={styles.trendText}>{records[records.length - 1].weight - records[0].weight > 0 ? "+" : ""}{records[records.length - 1].weight - records[0].weight} {records[0].unit} total change</Text>
         </View>
       )}
+      <View style={styles.recordList}>
+        {records.map((record) => (
+          <View key={record.id} style={styles.recordRow}>
+            <Text style={styles.recordRowDate}>{formatDate(record.date)}</Text>
+            <Text style={styles.recordRowValue}>{record.weight} {record.unit}</Text>
+            <TouchableOpacity onPress={() => onDelete(record.id)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+              <Trash2 size={14} color={Colors.error} />
+            </TouchableOpacity>
+          </View>
+        ))}
+      </View>
     </View>
   );
 }
 
-function HealthTimeline({ records }: { records: HealthRecord[] }) {
+function HealthTimeline({ records, onDelete }: { records: HealthRecord[]; onDelete: (id: string) => void }) {
   const Colors = useColors();
   const styles = useMemo(() => createStyles(Colors), [Colors]);
   const TYPE_COLORS: Record<string, string> = { vaccination: Colors.success, treatment: Colors.accent, checkup: Colors.primary, injury: Colors.error, other: Colors.textSecondary };
@@ -107,6 +118,9 @@ function HealthTimeline({ records }: { records: HealthRecord[] }) {
                 <Text style={[styles.typeBadgeText, { color: TYPE_COLORS[record.type] || Colors.primary }]}>{record.type}</Text>
               </View>
               <Text style={styles.timelineDate}>{formatDate(record.date)}</Text>
+              <TouchableOpacity onPress={() => onDelete(record.id)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} style={{ marginLeft: "auto" }}>
+                <Trash2 size={14} color={Colors.error} />
+              </TouchableOpacity>
             </View>
             <Text style={styles.timelineDescription}>{record.description}</Text>
             {record.notes ? <Text style={styles.timelineNotes}>{record.notes}</Text> : null}
@@ -118,7 +132,7 @@ function HealthTimeline({ records }: { records: HealthRecord[] }) {
   );
 }
 
-function BreedingSection({ records }: { records: BreedingRecord[] }) {
+function BreedingSection({ records, onDelete }: { records: BreedingRecord[]; onDelete: (id: string) => void }) {
   const Colors = useColors();
   const styles = useMemo(() => createStyles(Colors), [Colors]);
   const STATUS_COLORS: Record<string, string> = { bred: Colors.accent, confirmed: Colors.success, delivered: Colors.primary, open: Colors.textSecondary };
@@ -130,6 +144,9 @@ function BreedingSection({ records }: { records: BreedingRecord[] }) {
           <View style={styles.breedingRow}>
             <View style={[styles.statusDot, { backgroundColor: STATUS_COLORS[record.status] || Colors.primary }]} />
             <Text style={styles.breedingStatus}>{record.status}</Text>
+            <TouchableOpacity onPress={() => onDelete(record.id)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} style={{ marginLeft: "auto" }}>
+              <Trash2 size={14} color={Colors.error} />
+            </TouchableOpacity>
           </View>
           <View style={styles.breedingDates}>
             <View style={styles.breedingDateItem}><Calendar size={14} color={Colors.textTertiary} /><Text style={styles.breedingDateLabel}>Bred: {formatDate(record.lastBredDate)}</Text></View>
@@ -232,7 +249,7 @@ export default function AnimalDetailScreen() {
   const Colors = useColors();
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
-  const { getAnimalById, getWeightRecordsForAnimal, getHealthRecordsForAnimal, getBreedingRecordsForAnimal, deleteAnimal, toggleMarkedForSale, markAsDeceased, undoDeceased, undoSold, getListsForAnimal, removeAnimalFromList, customLists, updateAnimal, getAnimalDisplayWithYear, getBusinessYearName, animals, mergeAnimals, isMergingAnimals, getDoctoringEventsForAnimal, updateDoctoringEvent } = useRanch();
+  const { getAnimalById, getWeightRecordsForAnimal, getHealthRecordsForAnimal, getBreedingRecordsForAnimal, deleteAnimal, toggleMarkedForSale, markAsDeceased, undoDeceased, undoSold, getListsForAnimal, removeAnimalFromList, customLists, updateAnimal, getAnimalDisplayWithYear, getBusinessYearName, animals, mergeAnimals, isMergingAnimals, getDoctoringEventsForAnimal, updateDoctoringEvent, deleteWeightRecord, deleteHealthRecord, deleteBreedingRecord } = useRanch();
   const [showMergeModal, setShowMergeModal] = useState(false);
   const [mergeSearch, setMergeSearch] = useState("");
   const styles = useMemo(() => createStyles(Colors), [Colors]);
@@ -338,6 +355,27 @@ export default function AnimalDetailScreen() {
     ).slice(0, 20);
   }, [animals, animal, mergeSearch]);
 
+  const handleDeleteWeightRecord = useCallback((recordId: string) => {
+    Alert.alert("Delete Record", "Delete this weight record?", [
+      { text: "Cancel", style: "cancel" },
+      { text: "Delete", style: "destructive", onPress: () => void deleteWeightRecord(recordId) },
+    ]);
+  }, [deleteWeightRecord]);
+
+  const handleDeleteHealthRecord = useCallback((recordId: string) => {
+    Alert.alert("Delete Record", "Delete this health record?", [
+      { text: "Cancel", style: "cancel" },
+      { text: "Delete", style: "destructive", onPress: () => void deleteHealthRecord(recordId) },
+    ]);
+  }, [deleteHealthRecord]);
+
+  const handleDeleteBreedingRecord = useCallback((recordId: string) => {
+    Alert.alert("Delete Record", "Delete this breeding record?", [
+      { text: "Cancel", style: "cancel" },
+      { text: "Delete", style: "destructive", onPress: () => void deleteBreedingRecord(recordId) },
+    ]);
+  }, [deleteBreedingRecord]);
+
   if (!animal) {
     return (<View style={styles.notFound}><Text style={styles.notFoundText}>Animal not found</Text></View>);
   }
@@ -416,15 +454,15 @@ export default function AnimalDetailScreen() {
 
         <View style={styles.recordsSection}>
           <SectionHeader title="Weight Tracking" icon={<Scale size={18} color={Colors.accent} />} onAdd={() => router.push({ pathname: "/add-weight-record", params: { animalId: animal.id } })} />
-          <WeightChart records={weightRecords} />
+          <WeightChart records={weightRecords} onDelete={handleDeleteWeightRecord} />
         </View>
         <View style={styles.recordsSection}>
           <SectionHeader title="Health Records" icon={<Heart size={18} color={Colors.error} />} onAdd={() => router.push({ pathname: "/add-health-record", params: { animalId: animal.id } })} />
-          <HealthTimeline records={healthRecords} />
+          <HealthTimeline records={healthRecords} onDelete={handleDeleteHealthRecord} />
         </View>
         <View style={styles.recordsSection}>
           <SectionHeader title="Breeding" icon={<Baby size={18} color={Colors.success} />} onAdd={() => router.push({ pathname: "/add-breeding-record", params: { animalId: animal.id } })} />
-          <BreedingSection records={breedingRecords} />
+          <BreedingSection records={breedingRecords} onDelete={handleDeleteBreedingRecord} />
         </View>
         {customLists.length > 0 && (
           <View style={styles.recordsSection}>
@@ -580,6 +618,10 @@ const createStyles = (Colors: ThemeColors) => StyleSheet.create({
   breedingDateLabel: { fontSize: 13, color: Colors.textSecondary },
   breedingNotes: { fontSize: 13, color: Colors.textSecondary, marginTop: 8, fontStyle: "italic" as const },
   emptyRecordText: { fontSize: 14, color: Colors.textTertiary, textAlign: "center" as const, paddingVertical: 20 },
+  recordList: { marginTop: 12, gap: 6 },
+  recordRow: { flexDirection: "row" as const, alignItems: "center" as const, paddingVertical: 6, paddingHorizontal: 2, borderTopWidth: 1, borderTopColor: Colors.border, gap: 8 },
+  recordRowDate: { fontSize: 13, color: Colors.textSecondary, flex: 1 },
+  recordRowValue: { fontSize: 14, fontWeight: "600" as const, color: Colors.text },
   actionButtons: { paddingHorizontal: 20, marginTop: 36, gap: 10 },
   saleButton: { flexDirection: "row", alignItems: "center", justifyContent: "center", paddingVertical: 14, borderRadius: 14, backgroundColor: Colors.surface, gap: 8, borderWidth: 1, borderColor: Colors.accent + "40" },
   saleButtonActive: { backgroundColor: Colors.accent, borderColor: Colors.accent },
