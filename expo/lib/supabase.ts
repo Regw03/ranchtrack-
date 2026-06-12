@@ -894,3 +894,112 @@ export async function fetchWeightHealthData(
     return { weightRecords: [], healthRecords: [], error: msg };
   }
 }
+
+// ─── Processing Sessions sync ─────────────────────────────────────────────────
+
+export interface RemoteProcessingSessionRow {
+  id: string;
+  ranch_id: string;
+  name: string;
+  business_year_id: string;
+  groups: import("@/types").SessionGroup[];
+  events: import("@/types").SessionEvent[];
+  notes: string;
+  deleted: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+/**
+ * Push a single processing session to Supabase.
+ * Sessions store groups and events as JSON — whole session pushed on any change.
+ * Owner/Manager: last write wins. Member: insert new, update own.
+ */
+export async function pushProcessingSessionToCloud(
+  session: import("@/types").ProcessingSession,
+  userRole: UserRole,
+): Promise<void> {
+  if (!isRemoteRanch(session.ranchId)) return;
+  try {
+    const row: RemoteProcessingSessionRow = {
+      id: session.id,
+      ranch_id: session.ranchId,
+      name: session.name,
+      business_year_id: session.businessYearId,
+      groups: session.groups,
+      events: session.events,
+      notes: session.notes,
+      deleted: false,
+      created_at: session.createdAt,
+      updated_at: session.updatedAt,
+    };
+    if (canOverwrite(userRole)) {
+      const { error } = await supabase
+        .from("processing_sessions")
+        .upsert(row, { onConflict: "id" });
+      if (error) console.log("[sync] pushProcessingSession upsert error", error.message);
+    } else {
+      // Member — insert new sessions, don't overwrite existing ones
+      const { data: existing } = await supabase
+        .from("processing_sessions")
+        .select("id")
+        .eq("id", session.id)
+        .maybeSingle();
+      if (!existing) {
+        const { error } = await supabase.from("processing_sessions").insert(row);
+        if (error && error.code !== "23505")
+          console.log("[sync] pushProcessingSession insert error", error.message);
+      } else {
+        // Member can update — they work inside sessions logging events
+        const { error } = await supabase
+          .from("processing_sessions")
+          .update({ groups: row.groups, events: row.events, updated_at: row.updated_at })
+          .eq("id", session.id);
+        if (error) console.log("[sync] pushProcessingSession update error", error.message);
+      }
+    }
+  } catch (e) { console.log("[sync] pushProcessingSession exception", e); }
+}
+
+/** Soft-delete a processing session (owner/manager only). */
+export async function deleteProcessingSessionInCloud(
+  sessionId: string,
+  userRole: UserRole,
+): Promise<void> {
+  if (!canOverwrite(userRole)) return;
+  try {
+    const { error } = await supabase
+      .from("processing_sessions")
+      .update({ deleted: true, updated_at: new Date().toISOString() })
+      .eq("id", sessionId);
+    if (error) console.log("[sync] deleteProcessingSession error", error.message);
+  } catch (e) { console.log("[sync] deleteProcessingSession exception", e); }
+}
+
+export interface ProcessingSessionSyncResult {
+  sessions: RemoteProcessingSessionRow[];
+  error?: string;
+}
+
+/** Fetch all processing sessions for a ranch. */
+export async function fetchProcessingSessions(
+  ranchId: string,
+): Promise<ProcessingSessionSyncResult> {
+  if (!isRemoteRanch(ranchId)) return { sessions: [] };
+  try {
+    const { data, error } = await supabase
+      .from("processing_sessions")
+      .select("*")
+      .eq("ranch_id", ranchId)
+      .eq("deleted", false);
+    if (error) {
+      console.log("[sync] fetchProcessingSessions error", error.message);
+      return { sessions: [], error: error.message };
+    }
+    return { sessions: (data ?? []) as RemoteProcessingSessionRow[] };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "Unknown error";
+    console.log("[sync] fetchProcessingSessions exception", msg);
+    return { sessions: [], error: msg };
+  }
+}
