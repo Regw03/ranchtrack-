@@ -290,7 +290,11 @@ export default function SettingsScreen() {
             {[
               { label: "Animals", value: "Synced to cloud ✓" },
               { label: "Ranch & Members", value: "Synced to cloud ✓" },
-              { label: "Calving & Health Records", value: "Local only (coming soon)" },
+              { label: "Calving Lists & Records", value: "Synced to cloud ✓" },
+              { label: "Breeding Records & Groups", value: "Synced to cloud ✓" },
+              { label: "Doctoring Events", value: "Synced to cloud ✓" },
+              { label: "Weight & Health Records", value: "Synced to cloud ✓" },
+              { label: "Processing Sessions", value: "Synced to cloud ✓" },
             ].map((item) => (
               <View key={item.label} style={styles.syncInfoRow}>
                 <Text style={styles.syncInfoLabel}>{item.label}</Text>
@@ -463,7 +467,7 @@ export default function SettingsScreen() {
 
             <Text style={styles.helpSection}>☁️ Account & Sync</Text>
             {[
-              { q: "What syncs to the cloud?", a: "Animals and ranch/member information sync automatically. Calving, health, breeding, and processing records are stored locally — full cloud sync is coming in a future update." },
+              { q: "What syncs to the cloud?", a: "Everything syncs automatically — animals, ranch and member info, business years, calving lists and records, breeding records and groups, doctoring events, weight records, health records, and processing sessions." },
               { q: "Signing in on a new device", a: "Open RanchTrack, tap Sign In on the welcome screen, and enter your email and password. Your ranch and animals are pulled down automatically." },
               { q: "Signing out", a: "Go to Settings and tap Sign Out at the bottom. Your local data is cleared from this device but remains on the server." },
               { q: "Clearing local data", a: "Go to Settings → Data & Storage → Clear Local Data. This removes all data from this device only. Sign back in to restore everything from the server." },
