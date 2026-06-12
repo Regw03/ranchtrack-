@@ -195,6 +195,17 @@ export default function SignInScreen() {
               </View>
 
               <TouchableOpacity
+                style={styles.forgotLink}
+                onPress={() => router.push("/onboarding/forgot-password")}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.forgotLinkText}>
+                  Forgot your password?{" "}
+                  <Text style={{ color: Colors.primary, fontWeight: "700" }}>Reset it</Text>
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
                 style={styles.signUpLink}
                 onPress={() => router.push("/onboarding/sign-up")}
                 activeOpacity={0.7}
@@ -315,6 +326,15 @@ function createStyles(Colors: ThemeColors) {
       fontWeight: "500" as const,
       color: Colors.text,
       paddingVertical: 16,
+    },
+    forgotLink: {
+      alignItems: "center" as const,
+      paddingVertical: 8,
+      marginTop: 8,
+    },
+    forgotLinkText: {
+      fontSize: 14,
+      color: Colors.textSecondary,
     },
     signUpLink: {
       marginTop: 4,
