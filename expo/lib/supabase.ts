@@ -1008,3 +1008,101 @@ export async function fetchProcessingSessions(
     return { sessions: [], error: msg };
   }
 }
+
+// ─── Custom Lists sync ────────────────────────────────────────────────────────
+
+export interface RemoteCustomListRow {
+  id: string;
+  ranch_id: string;
+  name: string;
+  color: string;
+  icon: string;
+  list_type: string;
+  species: string | null;
+  parent_id: string | null;
+  animal_ids: string[];
+  created_by: string;
+  deleted: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+/**
+ * Push a custom list to Supabase.
+ * Owner/Manager: upsert (last write wins).
+ * Member: insert new only — never overwrites.
+ */
+export async function pushCustomListToCloud(
+  list: import("@/types").CustomList,
+  userRole: UserRole,
+): Promise<void> {
+  if (!isRemoteRanch(list.ranchId)) return;
+  try {
+    const row: RemoteCustomListRow = {
+      id: list.id,
+      ranch_id: list.ranchId,
+      name: list.name,
+      color: list.color,
+      icon: list.icon,
+      list_type: list.listType,
+      species: list.species ?? null,
+      parent_id: list.parentId ?? null,
+      animal_ids: list.animalIds,
+      created_by: list.createdBy,
+      deleted: false,
+      created_at: list.createdAt,
+      updated_at: list.updatedAt,
+    };
+    if (canOverwrite(userRole)) {
+      const { error } = await supabase
+        .from("custom_lists")
+        .upsert(row, { onConflict: "id" });
+      if (error) console.log("[sync] pushCustomList upsert error", error.message);
+    } else {
+      const { error } = await supabase.from("custom_lists").insert(row);
+      if (error && error.code !== "23505")
+        console.log("[sync] pushCustomList insert error", error.message);
+    }
+  } catch (e) { console.log("[sync] pushCustomList exception", e); }
+}
+
+/** Soft-delete a custom list (owner/manager only). */
+export async function deleteCustomListInCloud(
+  listId: string,
+  userRole: UserRole,
+): Promise<void> {
+  if (!canOverwrite(userRole)) return;
+  try {
+    const { error } = await supabase
+      .from("custom_lists")
+      .update({ deleted: true, updated_at: new Date().toISOString() })
+      .eq("id", listId);
+    if (error) console.log("[sync] deleteCustomList error", error.message);
+  } catch (e) { console.log("[sync] deleteCustomList exception", e); }
+}
+
+export interface CustomListSyncResult {
+  lists: RemoteCustomListRow[];
+  error?: string;
+}
+
+/** Fetch all custom lists for a ranch. */
+export async function fetchCustomLists(ranchId: string): Promise<CustomListSyncResult> {
+  if (!isRemoteRanch(ranchId)) return { lists: [] };
+  try {
+    const { data, error } = await supabase
+      .from("custom_lists")
+      .select("*")
+      .eq("ranch_id", ranchId)
+      .eq("deleted", false);
+    if (error) {
+      console.log("[sync] fetchCustomLists error", error.message);
+      return { lists: [], error: error.message };
+    }
+    return { lists: (data ?? []) as RemoteCustomListRow[] };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "Unknown error";
+    console.log("[sync] fetchCustomLists exception", msg);
+    return { lists: [], error: msg };
+  }
+}
