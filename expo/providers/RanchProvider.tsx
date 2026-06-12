@@ -40,6 +40,10 @@ import {
   fetchWeightHealthData,
   type RemoteWeightRecordRow,
   type RemoteHealthRecordRow,
+  pushCustomListToCloud,
+  deleteCustomListInCloud,
+  fetchCustomLists,
+  type RemoteCustomListRow,
 } from "@/lib/supabase";
 // eslint-disable-next-line rork/general-context-optimization
 import {
@@ -894,6 +898,7 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
       const updated = [...customLists, newList];
       await saveToStorage(STORAGE_KEYS.customLists, updated);
       await logActivity(`Created list "${newList.name}"`);
+      void pushCustomListToCloud(newList, currentUserRole);
       return { updated, newList };
     },
     onSuccess: ({ updated }) => {
@@ -907,6 +912,8 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
         l.id === list.id ? { ...list, updatedAt: new Date().toISOString() } : l,
       );
       await saveToStorage(STORAGE_KEYS.customLists, updated);
+      const updatedList = updated.find((l) => l.id === list.id);
+      if (updatedList) void pushCustomListToCloud(updatedList, currentUserRole);
       return updated;
     },
     onSuccess: (updated) => {
@@ -921,6 +928,7 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
       await saveToStorage(STORAGE_KEYS.customLists, updated);
       if (list) {
         await logActivity(`Deleted list "${list.name}"`);
+        void deleteCustomListInCloud(listId, currentUserRole);
       }
       return updated;
     },
@@ -938,6 +946,8 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
         return l;
       });
       await saveToStorage(STORAGE_KEYS.customLists, updated);
+      const updatedList = updated.find((l) => l.id === listId);
+      if (updatedList) void pushCustomListToCloud(updatedList, currentUserRole);
       return updated;
     },
     onSuccess: (updated) => {
@@ -954,6 +964,8 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
         return l;
       });
       await saveToStorage(STORAGE_KEYS.customLists, updated);
+      const updatedList = updated.find((l) => l.id === listId);
+      if (updatedList) void pushCustomListToCloud(updatedList, currentUserRole);
       return updated;
     },
     onSuccess: (updated) => {
@@ -2421,6 +2433,7 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
     syncDoctoringEventsMutation.mutate();
     syncBreedingDataMutation.mutate();
     syncWeightHealthMutation.mutate();
+    syncCustomListsMutation.mutate();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ranch.id]);
 
@@ -2441,12 +2454,60 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
           syncDoctoringEventsMutation.mutate();
           syncBreedingDataMutation.mutate();
           syncWeightHealthMutation.mutate();
+          syncCustomListsMutation.mutate();
         }
       }
     });
     return () => subscription.remove();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // ─── Custom Lists sync mutation ──────────────────────────────────────────
+  const syncCustomListsMutation = useMutation({
+    mutationFn: async () => {
+      const currentRanch = queryClient.getQueryData<Ranch>(["ranch"]) ?? ranch;
+      if (!currentRanch.id || currentRanch.id === MOCK_RANCH.id) return;
+
+      const { lists: remoteLists, error } = await fetchCustomLists(currentRanch.id);
+      if (error) {
+        const local = queryClient.getQueryData<CustomList[]>(["customLists"]) ?? [];
+        for (const l of local) void pushCustomListToCloud(l, currentUserRole);
+        return;
+      }
+
+      const local = queryClient.getQueryData<CustomList[]>(["customLists"]) ?? [];
+      const localIds = new Set(local.map((l) => l.id));
+      const remoteIds = new Set(remoteLists.map((l: RemoteCustomListRow) => l.id));
+
+      const newFromRemote: CustomList[] = remoteLists
+        .filter((r: RemoteCustomListRow) => !localIds.has(r.id))
+        .map((r: RemoteCustomListRow) => ({
+          id: r.id,
+          ranchId: currentRanch.id,
+          name: r.name,
+          color: r.color,
+          icon: r.icon,
+          listType: r.list_type as CustomList["listType"],
+          species: (r.species as CustomList["species"]) ?? undefined,
+          parentId: r.parent_id ?? undefined,
+          animalIds: r.animal_ids,
+          createdBy: r.created_by,
+          createdAt: r.created_at,
+          updatedAt: r.updated_at,
+        }));
+
+      if (newFromRemote.length > 0) {
+        const merged = [...local, ...newFromRemote];
+        await saveToStorage(STORAGE_KEYS.customLists, merged);
+        queryClient.setQueryData(["customLists"], merged);
+        console.log(`[syncCustomLists] added ${newFromRemote.length} lists from server`);
+      }
+
+      const localOnly = local.filter((l) => !remoteIds.has(l.id));
+      for (const l of localOnly) void pushCustomListToCloud(l, currentUserRole);
+    },
+    onError: (e) => console.log("[syncCustomLists] error", e),
+  });
 
   // ─── Calving sync mutation ───────────────────────────────────────────────
   const syncCalvingDataMutation = useMutation({
@@ -3032,5 +3093,7 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
     isSyncingBreedingData: syncBreedingDataMutation.isPending,
     syncWeightHealth: syncWeightHealthMutation.mutateAsync,
     isSyncingWeightHealth: syncWeightHealthMutation.isPending,
+    syncCustomLists: syncCustomListsMutation.mutateAsync,
+    isSyncingCustomLists: syncCustomListsMutation.isPending,
   };
 });
