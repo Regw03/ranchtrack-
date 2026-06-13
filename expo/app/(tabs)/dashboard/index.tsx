@@ -16,6 +16,7 @@ import {
   Plus,
   Baby,
   ChevronRight,
+  FileText,
   Activity,
   CircleDot,
   CheckCircle2,
@@ -166,6 +167,7 @@ export default function DashboardScreen() {
     needsAttentionAnimals,
     doctoringEvents,
     activeBusinessYear,
+    ranchNotes,
   } = useRanch();
 
   const { sessions, getSessionProgress } = useProcessingSessions();
@@ -284,6 +286,36 @@ export default function DashboardScreen() {
               </TouchableOpacity>
             )}
           </View>
+        </View>
+      )}
+
+      {ranchNotes.length > 0 && (
+        <View style={styles.section}>
+          <TouchableOpacity
+            style={styles.sectionHeader}
+            onPress={() => router.push("/ranch-notes" as never)}
+            activeOpacity={0.7}
+          >
+            <View style={[styles.sectionIconWrap, { backgroundColor: "#D4943A18" }]}>
+              <FileText size={18} color="#D4943A" />
+            </View>
+            <Text style={styles.sectionTitle}>Ranch Notes</Text>
+            <Text style={styles.sectionCount}>{ranchNotes.length}</Text>
+            <ChevronRight size={16} color={Colors.textTertiary} />
+          </TouchableOpacity>
+          {ranchNotes.slice(0, 2).map((note) => (
+            <TouchableOpacity
+              key={note.id}
+              style={styles.noteCard}
+              onPress={() => router.push("/ranch-notes" as never)}
+              activeOpacity={0.75}
+            >
+              <Text style={styles.noteText} numberOfLines={2}>{note.text}</Text>
+              <Text style={styles.noteMeta}>
+                {new Date(note.updatedAt || note.createdAt).toLocaleDateString([], { month: "short", day: "numeric" })}
+              </Text>
+            </TouchableOpacity>
+          ))}
         </View>
       )}
 
@@ -574,5 +606,30 @@ const createStyles = (Colors: ThemeColors) =>
       color: Colors.textSecondary,
       textAlign: "center",
       lineHeight: 20,
+    },
+    noteCard: {
+      backgroundColor: Colors.surface,
+      borderRadius: 12,
+      padding: 12,
+      marginTop: 6,
+      borderWidth: 1,
+      borderColor: Colors.borderLight,
+    },
+    noteText: {
+      fontSize: 14,
+      color: Colors.text,
+      lineHeight: 20,
+      marginBottom: 4,
+    },
+    noteMeta: {
+      fontSize: 11,
+      color: Colors.textTertiary,
+      fontWeight: "500" as const,
+    },
+    sectionCount: {
+      fontSize: 13,
+      fontWeight: "700" as const,
+      color: Colors.textSecondary,
+      marginLeft: "auto" as const,
     },
   });
