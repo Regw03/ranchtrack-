@@ -164,6 +164,10 @@ function RootLayoutNav() {
         options={{ title: "Ranch Profile" }}
       />
       <Stack.Screen
+        name="ranch-notes"
+        options={{ title: "Ranch Notes" }}
+      />
+      <Stack.Screen
         name="log-calving"
         options={{ presentation: "modal", title: "Log Calving" }}
       />
