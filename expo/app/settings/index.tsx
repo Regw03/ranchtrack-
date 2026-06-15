@@ -28,6 +28,7 @@ import {
   CheckCircle,
   BellOff,
   Mail,
+  UserMinus,
 } from "lucide-react-native";
 import * as Haptics from "expo-haptics";
 import { ThemeColors } from "@/constants/colors";
@@ -47,7 +48,7 @@ const NOTIF_HEALTH_KEY = "ranchtrack_notif_health";
 export default function SettingsScreen() {
   const Colors = useColors();
   const { isDark, toggleTheme } = useTheme();
-  const { ranch, currentUserId, resetApp, refreshRanch, isRefreshingRanch, animals, doctoringEvents } = useRanch();
+  const { ranch, currentUserId, resetApp, refreshRanch, isRefreshingRanch, animals, doctoringEvents, currentUserRole, canInviteTeammates, removeTeammate } = useRanch();
   const { resetOnboarding } = useOnboarding();
   const router = useRouter();
   const styles = useMemo(() => createStyles(Colors), [Colors]);
@@ -184,6 +185,30 @@ export default function SettingsScreen() {
 
   const animalCount = (animals ?? []).filter((a) => a.status === "active").length;
   const doctoringCount = (doctoringEvents ?? []).length;
+
+  const handleRemoveMember = useCallback((userId: string, name: string) => {
+    Alert.alert(
+      "Remove Teammate",
+      `Remove ${name} from the ranch? They will lose access immediately.`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Remove",
+          style: "destructive",
+          onPress: async () => {
+            if (Platform.OS !== "web")
+              void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+            try {
+              await removeTeammate(userId);
+            } catch (e) {
+              Alert.alert("Error", e instanceof Error ? e.message : "Could not remove member.");
+            }
+          },
+        },
+      ],
+    );
+  }, [removeTeammate]);
+
 
   return (
     <ScrollView
@@ -534,6 +559,17 @@ export default function SettingsScreen() {
                   <Text style={[styles.roleText, { color: ROLE_COLORS[member.role] || Colors.textSecondary }]}>{ROLE_LABELS[member.role] || member.role}</Text>
                 </View>
               </View>
+              {/* Show remove button for owner/manager, but not on self or on owner */}
+              {canInviteTeammates && !isCurrentUser && member.role !== "owner" &&
+                !(currentUserRole === "manager" && member.role === "manager") && (
+                  <TouchableOpacity
+                    onPress={() => handleRemoveMember(member.userId, member.name)}
+                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                    style={styles.removeMemberBtn}
+                  >
+                    <UserMinus size={18} color={Colors.error} />
+                  </TouchableOpacity>
+                )}
             </View>
           );
         })}
@@ -598,6 +634,7 @@ const createStyles = (Colors: ThemeColors) => StyleSheet.create({
   inviteCopyText: { fontSize: 15, fontWeight: "700" as const, color: Colors.primary },
   memberCard: { flexDirection: "row" as const, alignItems: "center" as const, backgroundColor: Colors.surface, borderRadius: 14, padding: 16, marginBottom: 8, borderWidth: 1, borderColor: Colors.borderLight, shadowColor: Colors.shadow, shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.06, shadowRadius: 6, elevation: 2 },
   memberAvatar: { width: 46, height: 46, borderRadius: 23, alignItems: "center" as const, justifyContent: "center" as const },
+  removeMemberBtn: { padding: 8 },
   memberAvatarText: { fontSize: 16, fontWeight: "700" as const, color: Colors.textInverse },
   memberInfo: { flex: 1, marginLeft: 14 },
   memberNameRow: { flexDirection: "row" as const, alignItems: "center" as const, gap: 8 },
