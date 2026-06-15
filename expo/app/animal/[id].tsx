@@ -28,11 +28,9 @@ import {
   Camera,
   Skull,
   Undo2,
-  HelpCircle,
   GitMerge,
   Edit3,
   CheckCircle,
-  AlertTriangle,
   Stethoscope,
   CheckCircle2,
 } from "lucide-react-native";
@@ -402,20 +400,9 @@ export default function AnimalDetailScreen() {
           {animal.businessYearId ? (
             <Text style={styles.businessYearLabel}>
               {getBusinessYearName(animal.businessYearId)}
-              {animal.generation != null ? ` · Gen ${animal.generationConfidence === "estimated" ? "~" : "#"}${animal.generation}` : ""}
-              {animal.generationConfidence === "estimated" ? " (Est.)" : ""}
             </Text>
           ) : null}
-          {(animal.identityStatus && animal.identityStatus !== "confirmed") && (
-            <View style={styles.identityBadgeRow}>
-              <View style={[styles.identityBadge, animal.identityStatus === "estimated" ? styles.identityBadgeEstimated : styles.identityBadgeUnknown]}>
-                <HelpCircle size={12} color={animal.identityStatus === "estimated" ? Colors.warning : Colors.textTertiary} />
-                <Text style={[styles.identityBadgeText, animal.identityStatus === "estimated" ? styles.identityBadgeTextEstimated : styles.identityBadgeTextUnknown]}>
-                  {animal.identityStatus === "estimated" ? "Estimated ID" : "Unknown ID"}
-                </Text>
-              </View>
-            </View>
-          )}
+
           <View style={styles.quickStats}>
             <View style={styles.quickStatItem}><Text style={styles.quickStatValue}>{SPECIES_ICONS[animal.species]} {animal.species}</Text><Text style={styles.quickStatLabel}>Species</Text></View>
             <View style={styles.quickStatDivider} />
@@ -474,9 +461,9 @@ export default function AnimalDetailScreen() {
         {animal.mergedFromIds && animal.mergedFromIds.length > 0 && (
           <View style={styles.recordsSection}>
             <SectionHeader title="Merged From" icon={<GitMerge size={18} color={Colors.primary} />} />
-            <View style={styles.identityCard}>
-              <View style={styles.identityRow}>
-                <Text style={styles.identityLabel}>Merged From</Text>
+            <View style={styles.breedingCard}>
+              <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+                <Text style={{ fontSize: 14, fontWeight: "600", color: Colors.textSecondary }}>Merged From</Text>
                 <Text style={styles.mergedCount}>{animal.mergedFromIds.length} animal{animal.mergedFromIds.length > 1 ? "s" : ""}</Text>
               </View>
             </View>
@@ -641,33 +628,7 @@ const createStyles = (Colors: ThemeColors) => StyleSheet.create({
   listChipIcon: { fontSize: 14 },
   listChipName: { fontSize: 13, fontWeight: "600" as const, color: Colors.text },
   listChipRemove: { padding: 6 },
-  identityBadgeRow: { flexDirection: "row" as const, marginTop: 6 },
-  identityBadge: { flexDirection: "row" as const, alignItems: "center" as const, gap: 4, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 },
-  identityBadgeEstimated: { backgroundColor: Colors.warning + "18" },
-  identityBadgeUnknown: { backgroundColor: Colors.textTertiary + "18" },
-  identityBadgeText: { fontSize: 11, fontWeight: "600" as const },
-  identityBadgeTextEstimated: { color: Colors.warning },
-  identityBadgeTextUnknown: { color: Colors.textTertiary },
-  identityCard: { backgroundColor: Colors.surface, borderRadius: 16, padding: 16, shadowColor: Colors.shadow, shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 8, elevation: 1 },
-  identityRow: { flexDirection: "row" as const, alignItems: "center" as const, justifyContent: "space-between" as const },
-  identityLabel: { fontSize: 14, fontWeight: "600" as const, color: Colors.textSecondary },
-  identityChips: { flexDirection: "row" as const, gap: 6 },
-  identityChip: { flexDirection: "row" as const, alignItems: "center" as const, gap: 4, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 10, backgroundColor: Colors.backgroundDark, borderWidth: 1, borderColor: Colors.border },
-  identityChipActive: { backgroundColor: Colors.primary, borderColor: Colors.primary },
-  identityChipText: { fontSize: 11, fontWeight: "600" as const, color: Colors.textSecondary },
-  identityChipTextActive: { color: Colors.textInverse },
-  identityDivider: { height: 1, backgroundColor: Colors.border, marginVertical: 12 },
-  generationEditRow: { flex: 1, alignItems: "flex-end" as const },
-  generationDisplay: { flexDirection: "row" as const, alignItems: "center" as const, gap: 6, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 10, backgroundColor: Colors.backgroundDark },
-  generationDisplayText: { fontSize: 14, fontWeight: "700" as const, color: Colors.text },
-  generationEditGroup: { flexDirection: "row" as const, alignItems: "center" as const, gap: 8 },
-  generationEditInput: { backgroundColor: Colors.backgroundDark, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 8, fontSize: 14, color: Colors.text, minWidth: 60, textAlign: "center" as const, borderWidth: 1, borderColor: Colors.border },
-  estChipSmall: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, backgroundColor: Colors.backgroundDark, borderWidth: 1, borderColor: Colors.border },
-  estChipSmallActive: { backgroundColor: Colors.warning, borderColor: Colors.warning },
-  estChipSmallText: { fontSize: 12, fontWeight: "600" as const, color: Colors.textTertiary },
-  estChipSmallTextActive: { color: Colors.textInverse },
-  generationDoneBtn: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, backgroundColor: Colors.primary },
-  generationDoneBtnText: { fontSize: 12, fontWeight: "700" as const, color: Colors.textInverse },
+
   mergedCount: { fontSize: 13, fontWeight: "600" as const, color: Colors.textTertiary },
   mergeButton: { flexDirection: "row" as const, alignItems: "center" as const, justifyContent: "center" as const, paddingVertical: 14, borderRadius: 14, backgroundColor: Colors.surface, gap: 8, borderWidth: 1, borderColor: Colors.primary + "30" },
   mergeButtonText: { fontSize: 15, fontWeight: "600" as const, color: Colors.primary },
