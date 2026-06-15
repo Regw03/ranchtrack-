@@ -15,9 +15,9 @@ import * as Haptics from "expo-haptics";
 import { ThemeColors } from "@/constants/colors";
 import { useColors } from "@/providers/ThemeProvider";
 import { useRanch } from "@/providers/RanchProvider";
-import { Species, IdentityStatus, GenerationConfidence } from "@/types";
+import { Species } from "@/types";
 import { SPECIES_OPTIONS, getGenderOptions } from "@/mocks/animals";
-import { AlertCircle, HelpCircle } from "lucide-react-native";
+import { AlertCircle } from "lucide-react-native";
 
 export default function AddAnimalScreen() {
   const Colors = useColors();
@@ -32,9 +32,6 @@ export default function AddAnimalScreen() {
   const [birthDate, setBirthDate] = useState("");
   const [sex, setSex] = useState<string>("female");
   const [notes, setNotes] = useState("");
-  const [generation, setGeneration] = useState("");
-  const [generationConfidence, setGenerationConfidence] = useState<GenerationConfidence>("confirmed");
-  const [identityStatus, setIdentityStatus] = useState<IdentityStatus>("confirmed");
   const [duplicateWarningDismissed, setDuplicateWarningDismissed] = useState(false);
 
   const genderOptions = getGenderOptions(species);
@@ -54,12 +51,9 @@ export default function AddAnimalScreen() {
       status: "active",
       markedForSale: false,
       businessYearId: activeBusinessYearId,
-      generation: generation.trim() ? parseInt(generation.trim(), 10) : undefined,
-      generationConfidence,
-      identityStatus,
     });
     router.back();
-  }, [name, tagId, species, breed, birthDate, sex, notes, generation, generationConfidence, identityStatus, addAnimal, router, activeBusinessYearId]);
+  }, [name, tagId, species, breed, birthDate, sex, notes, addAnimal, router, activeBusinessYearId]);
 
   const handleSave = useCallback(async () => {
     if (isTagRequired && !tagId.trim()) { Alert.alert("Missing Info", "Please enter a tag ID."); return; }
@@ -112,33 +106,6 @@ export default function AddAnimalScreen() {
           {genderOptions.map((opt) => (
             <TouchableOpacity key={opt.value} style={[styles.chip, sex === opt.value && styles.chipActive]} onPress={() => setSex(opt.value)}>
               <Text style={[styles.chipText, sex === opt.value && styles.chipTextActive]}>{opt.icon} {opt.label}</Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-      </View>
-      <View style={styles.formGroup}>
-        <Text style={styles.label}>Generation (optional)</Text>
-        <View style={styles.generationRow}>
-          <TextInput style={[styles.input, styles.generationInput]} placeholder="e.g. 3" placeholderTextColor={Colors.textTertiary} value={generation} onChangeText={setGeneration} keyboardType="numeric" />
-          <TouchableOpacity
-            style={[styles.estToggle, generationConfidence === "estimated" && styles.estToggleActive]}
-            onPress={() => setGenerationConfidence((c) => c === "confirmed" ? "estimated" : "confirmed")}
-            activeOpacity={0.7}
-          >
-            <HelpCircle size={14} color={generationConfidence === "estimated" ? Colors.textInverse : Colors.textTertiary} />
-            <Text style={[styles.estToggleText, generationConfidence === "estimated" && styles.estToggleTextActive]}>Est.</Text>
-          </TouchableOpacity>
-        </View>
-        {generationConfidence === "estimated" && generation.trim() !== "" && (
-          <Text style={styles.estHint}>Generation will show as ~{generation.trim()}</Text>
-        )}
-      </View>
-      <View style={styles.formGroup}>
-        <Text style={styles.label}>Identity Confidence</Text>
-        <View style={styles.chipRow}>
-          {(["confirmed", "estimated", "unknown"] as IdentityStatus[]).map((s) => (
-            <TouchableOpacity key={s} style={[styles.chip, identityStatus === s && styles.chipActive]} onPress={() => setIdentityStatus(s)}>
-              <Text style={[styles.chipText, identityStatus === s && styles.chipTextActive]}>{s === "confirmed" ? "Confirmed" : s === "estimated" ? "Estimated" : "Unknown"}</Text>
             </TouchableOpacity>
           ))}
         </View>
