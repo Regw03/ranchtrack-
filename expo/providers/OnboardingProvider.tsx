@@ -186,7 +186,6 @@ export function importRecordToAnimal(
     status: "active",
     markedForSale: false,
     businessYearId,
-    identityStatus: "unknown",
   };
 }
 

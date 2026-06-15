@@ -27,9 +27,6 @@ export type Species = "cattle" | "horse";
 
 export type HerdGroup = "cows" | "heifers" | "calves" | "bulls" | "steers" | "other";
 
-export type IdentityStatus = "confirmed" | "estimated" | "unknown";
-export type GenerationConfidence = "confirmed" | "estimated";
-
 export interface Animal {
   id: string;
   ranchId: string;
@@ -47,9 +44,6 @@ export interface Animal {
   motherId?: string;
   sireId?: string;
   businessYearId?: string;
-  generation?: number;
-  generationConfidence?: GenerationConfidence;
-  identityStatus?: IdentityStatus;
   mergedFromIds?: string[];
   createdAt: string;
   updatedAt: string;

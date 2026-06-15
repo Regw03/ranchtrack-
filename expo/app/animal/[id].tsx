@@ -402,20 +402,10 @@ export default function AnimalDetailScreen() {
           {animal.businessYearId ? (
             <Text style={styles.businessYearLabel}>
               {getBusinessYearName(animal.businessYearId)}
-              {animal.generation != null ? ` · Gen ${animal.generationConfidence === "estimated" ? "~" : "#"}${animal.generation}` : ""}
-              {animal.generationConfidence === "estimated" ? " (Est.)" : ""}
+
             </Text>
           ) : null}
-          {(animal.identityStatus && animal.identityStatus !== "confirmed") && (
-            <View style={styles.identityBadgeRow}>
-              <View style={[styles.identityBadge, animal.identityStatus === "estimated" ? styles.identityBadgeEstimated : styles.identityBadgeUnknown]}>
-                <HelpCircle size={12} color={animal.identityStatus === "estimated" ? Colors.warning : Colors.textTertiary} />
-                <Text style={[styles.identityBadgeText, animal.identityStatus === "estimated" ? styles.identityBadgeTextEstimated : styles.identityBadgeTextUnknown]}>
-                  {animal.identityStatus === "estimated" ? "Estimated ID" : "Unknown ID"}
-                </Text>
-              </View>
-            </View>
-          )}
+
           <View style={styles.quickStats}>
             <View style={styles.quickStatItem}><Text style={styles.quickStatValue}>{SPECIES_ICONS[animal.species]} {animal.species}</Text><Text style={styles.quickStatLabel}>Species</Text></View>
             <View style={styles.quickStatDivider} />

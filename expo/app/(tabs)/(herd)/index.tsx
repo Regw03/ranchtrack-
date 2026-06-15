@@ -149,16 +149,7 @@ function AnimalRow({ animal, yearLabel, showYear }: { animal: Animal; yearLabel:
         <View style={styles.animalInfo}>
           <View style={styles.animalTagRow}>
             <Text style={styles.animalTag}>{animal.tagId}</Text>
-            {animal.generation != null && (
-              <View style={[styles.genBadge, animal.generationConfidence === "estimated" && styles.genBadgeEst]}>
-                <Text style={[styles.genBadgeText, animal.generationConfidence === "estimated" && styles.genBadgeTextEst]}>
-                  {animal.generationConfidence === "estimated" ? "~" : "#"}{animal.generation}
-                </Text>
-              </View>
-            )}
-            {(animal.identityStatus === "estimated" || animal.identityStatus === "unknown") && (
-              <HelpCircle size={13} color={animal.identityStatus === "estimated" ? "#D4943A" : "#8B8B8B"} />
-            )}
+
           </View>
           {animal.name ? <Text style={styles.animalName} numberOfLines={1}>{animal.name}</Text> : null}
           {showYear && yearLabel ? (

@@ -68,8 +68,6 @@ import {
   CalvingGroup,
   BreedingGroup,
   HerdGroup,
-  IdentityStatus,
-  GenerationConfidence,
   DoctoringEvent,
   RanchNote,
 } from "@/types";
@@ -1798,9 +1796,6 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
         photoUrl: keepAnimal.photoUrl || removeAnimal.photoUrl,
         motherId: keepAnimal.motherId || removeAnimal.motherId,
         sireId: keepAnimal.sireId || removeAnimal.sireId,
-        generation: keepAnimal.generation ?? removeAnimal.generation,
-        generationConfidence: keepAnimal.generationConfidence === "confirmed" ? "confirmed" : removeAnimal.generationConfidence ?? keepAnimal.generationConfidence,
-        identityStatus: "confirmed",
         mergedFromIds,
         updatedAt: new Date().toISOString(),
       };
