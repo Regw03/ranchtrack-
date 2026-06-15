@@ -383,7 +383,19 @@ export default function AnimalDetailScreen() {
 
   return (
     <>
-      <Stack.Screen options={{ title: getAnimalDisplayName(animal) }} />
+      <Stack.Screen
+        options={{
+          title: getAnimalDisplayName(animal),
+          headerRight: () => (
+            <TouchableOpacity
+              onPress={() => router.push({ pathname: "/edit-animal" as never, params: { id: animal.id } })}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            >
+              <Edit3 size={20} color={Colors.primary} />
+            </TouchableOpacity>
+          ),
+        }}
+      />
       <Animated.ScrollView style={[styles.container, { opacity: fadeAnim }]} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         <View style={styles.heroSection}>
           <TouchableOpacity activeOpacity={0.8} onPress={handlePickPhoto}>
