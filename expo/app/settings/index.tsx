@@ -35,6 +35,7 @@ import { ThemeColors } from "@/constants/colors";
 import { useColors } from "@/providers/ThemeProvider";
 import { useTheme } from "@/providers/ThemeProvider";
 import { useRanch } from "@/providers/RanchProvider";
+import { scheduleAllNotifications, cancelBreedingNotifications, cancelDoctoringNotifications } from "@/lib/notifications";
 import { useProcessingSessions } from "@/providers/ProcessingSessionProvider";
 import { useOnboarding } from "@/providers/OnboardingProvider";
 import { getInitials } from "@/utils/helpers";
@@ -49,7 +50,7 @@ const NOTIF_HEALTH_KEY = "ranchtrack_notif_health";
 export default function SettingsScreen() {
   const Colors = useColors();
   const { isDark, toggleTheme } = useTheme();
-  const { ranch, currentUserId, resetApp, refreshRanch, isRefreshingRanch, animals, doctoringEvents, currentUserRole, canInviteTeammates, removeTeammate, syncBusinessYears, syncCalvingData, syncDoctoringEvents, syncBreedingData, syncWeightHealth, syncCustomLists, syncRanchNotes, isSyncingBusinessYears, isSyncingCalvingData, isSyncingDoctoringEvents, isSyncingBreedingData, isSyncingWeightHealth, isSyncingCustomLists, isSyncingRanchNotes } = useRanch();
+  const { ranch, currentUserId, resetApp, refreshRanch, isRefreshingRanch, animals, doctoringEvents, breedingRecords, currentUserRole, canInviteTeammates, removeTeammate, syncBusinessYears, syncCalvingData, syncDoctoringEvents, syncBreedingData, syncWeightHealth, syncCustomLists, syncRanchNotes, isSyncingBusinessYears, isSyncingCalvingData, isSyncingDoctoringEvents, isSyncingBreedingData, isSyncingWeightHealth, isSyncingCustomLists, isSyncingRanchNotes } = useRanch();
   const { syncSessions } = useProcessingSessions();
   const { resetOnboarding } = useOnboarding();
   const router = useRouter();
@@ -102,13 +103,23 @@ export default function SettingsScreen() {
     setNotifBreeding(val);
     void saveNotifPref(NOTIF_BREEDING_KEY, val);
     if (Platform.OS !== "web") void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-  }, [saveNotifPref]);
+    if (val) {
+      void scheduleAllNotifications({ breedingEnabled: true, doctoringEnabled: notifHealth, breedingRecords, doctoringEvents, animals });
+    } else {
+      void cancelBreedingNotifications();
+    }
+  }, [saveNotifPref, notifHealth, breedingRecords, doctoringEvents, animals]);
 
   const handleToggleHealth = useCallback((val: boolean) => {
     setNotifHealth(val);
     void saveNotifPref(NOTIF_HEALTH_KEY, val);
     if (Platform.OS !== "web") void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-  }, [saveNotifPref]);
+    if (val) {
+      void scheduleAllNotifications({ breedingEnabled: notifBreeding, doctoringEnabled: true, breedingRecords, doctoringEvents, animals });
+    } else {
+      void cancelDoctoringNotifications();
+    }
+  }, [saveNotifPref, notifBreeding, breedingRecords, doctoringEvents, animals]);
 
   const handleRefresh = useCallback(async () => {
     setIsManualRefreshing(true);
@@ -280,7 +291,7 @@ export default function SettingsScreen() {
                 </View>
               </>
             )}
-            <Text style={styles.modalFootnote}>Full push notification support is coming in a future update. Your preferences are saved now.</Text>
+            <Text style={styles.modalFootnote}>Breeding reminders fire at 7 AM the day before an expected due date. Follow-up reminders fire at 8 AM for animals that need checking.</Text>
           </ScrollView>
         </View>
       </Modal>
