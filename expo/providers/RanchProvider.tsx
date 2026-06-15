@@ -44,6 +44,10 @@ import {
   deleteCustomListInCloud,
   fetchCustomLists,
   type RemoteCustomListRow,
+  pushRanchNoteToCloud,
+  deleteRanchNoteInCloud,
+  fetchRanchNotes,
+  type RemoteRanchNoteRow,
 } from "@/lib/supabase";
 // eslint-disable-next-line rork/general-context-optimization
 import {
@@ -2434,6 +2438,7 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
     syncBreedingDataMutation.mutate();
     syncWeightHealthMutation.mutate();
     syncCustomListsMutation.mutate();
+    syncRanchNotesMutation.mutate();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ranch.id]);
 
@@ -2455,6 +2460,7 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
           syncBreedingDataMutation.mutate();
           syncWeightHealthMutation.mutate();
           syncCustomListsMutation.mutate();
+          syncRanchNotesMutation.mutate();
         }
       }
     });
@@ -2800,6 +2806,49 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
     onError: (e) => console.log("[syncWeightHealth] error", e),
   });
 
+  // ─── Ranch Notes sync mutation ───────────────────────────────────────────
+  const syncRanchNotesMutation = useMutation({
+    mutationFn: async () => {
+      const currentRanch = queryClient.getQueryData<Ranch>(["ranch"]) ?? ranch;
+      if (!currentRanch.id || currentRanch.id === MOCK_RANCH.id) return;
+
+      const { notes: remoteNotes, error } = await fetchRanchNotes(currentRanch.id);
+      if (error) {
+        const local = queryClient.getQueryData<RanchNote[]>(["ranchNotes"]) ?? [];
+        for (const n of local) void pushRanchNoteToCloud(n, currentUserRole);
+        return;
+      }
+
+      const local = queryClient.getQueryData<RanchNote[]>(["ranchNotes"]) ?? [];
+      const localIds = new Set(local.map((n) => n.id));
+      const remoteIds = new Set(remoteNotes.map((n: RemoteRanchNoteRow) => n.id));
+
+      const newFromRemote: RanchNote[] = remoteNotes
+        .filter((r: RemoteRanchNoteRow) => !localIds.has(r.id))
+        .map((r: RemoteRanchNoteRow) => ({
+          id: r.id,
+          ranchId: currentRanch.id,
+          text: r.text,
+          createdBy: r.created_by,
+          createdAt: r.created_at,
+          updatedAt: r.updated_at,
+        }));
+
+      if (newFromRemote.length > 0) {
+        const merged = [...local, ...newFromRemote].sort(
+          (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+        );
+        await saveToStorage(STORAGE_KEYS.ranchNotes, merged);
+        queryClient.setQueryData(["ranchNotes"], merged);
+        console.log(`[syncRanchNotes] added ${newFromRemote.length} notes from server`);
+      }
+
+      const localOnly = local.filter((n) => !remoteIds.has(n.id));
+      for (const n of localOnly) void pushRanchNoteToCloud(n, currentUserRole);
+    },
+    onError: (e) => console.log("[syncRanchNotes] error", e),
+  });
+
   const refreshRanchMutation = useMutation({
     mutationFn: async () => {
       const current = queryClient.getQueryData<Ranch>(["ranch"]) ?? ranch;
@@ -2901,6 +2950,7 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
       const current = queryClient.getQueryData<RanchNote[]>(["ranchNotes"]) ?? [];
       const updated = [newNote, ...current];
       await saveToStorage(STORAGE_KEYS.ranchNotes, updated);
+      void pushRanchNoteToCloud(newNote, currentUserRole);
       return updated;
     },
     onSuccess: (updated) => {
@@ -2916,6 +2966,8 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
         n.id === id ? { ...n, text: trimmed, updatedAt: new Date().toISOString() } : n,
       );
       await saveToStorage(STORAGE_KEYS.ranchNotes, updated);
+      const updatedNote = updated.find((n) => n.id === id);
+      if (updatedNote) void pushRanchNoteToCloud(updatedNote, currentUserRole);
       return updated;
     },
     onSuccess: (updated) => {
@@ -2928,6 +2980,7 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
       const current = queryClient.getQueryData<RanchNote[]>(["ranchNotes"]) ?? [];
       const updated = current.filter((n) => n.id !== id);
       await saveToStorage(STORAGE_KEYS.ranchNotes, updated);
+      void deleteRanchNoteInCloud(id);
       return updated;
     },
     onSuccess: (updated) => {
@@ -3141,5 +3194,7 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
     isSyncingWeightHealth: syncWeightHealthMutation.isPending,
     syncCustomLists: syncCustomListsMutation.mutateAsync,
     isSyncingCustomLists: syncCustomListsMutation.isPending,
+    syncRanchNotes: syncRanchNotesMutation.mutateAsync,
+    isSyncingRanchNotes: syncRanchNotesMutation.isPending,
   };
 });
