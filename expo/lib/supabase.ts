@@ -1106,3 +1106,96 @@ export async function fetchCustomLists(ranchId: string): Promise<CustomListSyncR
     return { lists: [], error: msg };
   }
 }
+
+// ─── Ranch Notes sync ─────────────────────────────────────────────────────────
+
+export interface RemoteRanchNoteRow {
+  id: string;
+  ranch_id: string;
+  text: string;
+  created_by: string;
+  deleted: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+/** Push a ranch note. All roles can add and edit notes. */
+export async function pushRanchNoteToCloud(
+  note: import("@/types").RanchNote,
+  userRole: UserRole,
+): Promise<void> {
+  if (!isRemoteRanch(note.ranchId)) return;
+  try {
+    const row: RemoteRanchNoteRow = {
+      id: note.id,
+      ranch_id: note.ranchId,
+      text: note.text,
+      created_by: note.createdBy,
+      deleted: false,
+      created_at: note.createdAt,
+      updated_at: note.updatedAt,
+    };
+    if (canOverwrite(userRole)) {
+      const { error } = await supabase
+        .from("ranch_notes")
+        .upsert(row, { onConflict: "id" });
+      if (error) console.log("[sync] pushRanchNote upsert error", error.message);
+    } else {
+      // Member — insert new, update own
+      const { data: existing } = await supabase
+        .from("ranch_notes")
+        .select("id, created_by")
+        .eq("id", note.id)
+        .maybeSingle();
+      if (!existing) {
+        const { error } = await supabase.from("ranch_notes").insert(row);
+        if (error && error.code !== "23505")
+          console.log("[sync] pushRanchNote insert error", error.message);
+      } else if (existing.created_by === note.createdBy) {
+        const { error } = await supabase
+          .from("ranch_notes")
+          .update({ text: row.text, updated_at: row.updated_at })
+          .eq("id", note.id);
+        if (error) console.log("[sync] pushRanchNote update error", error.message);
+      }
+    }
+  } catch (e) { console.log("[sync] pushRanchNote exception", e); }
+}
+
+/** Soft-delete a ranch note. */
+export async function deleteRanchNoteInCloud(noteId: string): Promise<void> {
+  try {
+    const { error } = await supabase
+      .from("ranch_notes")
+      .update({ deleted: true, updated_at: new Date().toISOString() })
+      .eq("id", noteId);
+    if (error) console.log("[sync] deleteRanchNote error", error.message);
+  } catch (e) { console.log("[sync] deleteRanchNote exception", e); }
+}
+
+export interface RanchNoteSyncResult {
+  notes: RemoteRanchNoteRow[];
+  error?: string;
+}
+
+/** Fetch all ranch notes for a ranch. */
+export async function fetchRanchNotes(ranchId: string): Promise<RanchNoteSyncResult> {
+  if (!isRemoteRanch(ranchId)) return { notes: [] };
+  try {
+    const { data, error } = await supabase
+      .from("ranch_notes")
+      .select("*")
+      .eq("ranch_id", ranchId)
+      .eq("deleted", false)
+      .order("created_at", { ascending: false });
+    if (error) {
+      console.log("[sync] fetchRanchNotes error", error.message);
+      return { notes: [], error: error.message };
+    }
+    return { notes: (data ?? []) as RemoteRanchNoteRow[] };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "Unknown error";
+    console.log("[sync] fetchRanchNotes exception", msg);
+    return { notes: [], error: msg };
+  }
+}
