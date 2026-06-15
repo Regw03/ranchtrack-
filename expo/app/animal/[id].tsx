@@ -28,7 +28,6 @@ import {
   Camera,
   Skull,
   Undo2,
-  HelpCircle,
   GitMerge,
   Edit3,
   CheckCircle,
@@ -407,13 +406,13 @@ export default function AnimalDetailScreen() {
           ) : null}
 
           <View style={styles.quickStats}>
-            <View style={styles.quickStatItem}><Text style={styles.quickStatValue}>{SPECIES_ICONS[animal.species]} {animal.species}</Text><Text style={styles.quickStatLabel}>Species</Text></View>
+            <View style={styles.quickStatItem}><Text style={styles.quickStatValue} numberOfLines={1}>{SPECIES_ICONS[animal.species]} {animal.species}</Text><Text style={styles.quickStatLabel}>Species</Text></View>
             <View style={styles.quickStatDivider} />
-            <View style={styles.quickStatItem}><Text style={styles.quickStatValue}>{getAnimalAge(animal.birthDate)}</Text><Text style={styles.quickStatLabel}>Age</Text></View>
+            <View style={styles.quickStatItem}><Text style={styles.quickStatValue} numberOfLines={1}>{getAnimalAge(animal.birthDate)}</Text><Text style={styles.quickStatLabel}>Age</Text></View>
             <View style={styles.quickStatDivider} />
-            <View style={styles.quickStatItem}><Text style={styles.quickStatValue}>{["male", "steer"].includes(animal.sex) ? "♂" : "♀"} {getGenderTitle(animal.species, animal.sex)}</Text><Text style={styles.quickStatLabel}>Sex</Text></View>
+            <View style={styles.quickStatItem}><Text style={styles.quickStatValue} numberOfLines={1}>{["male", "steer"].includes(animal.sex) ? "♂" : "♀"} {getGenderTitle(animal.species, animal.sex)}</Text><Text style={styles.quickStatLabel}>Sex</Text></View>
             <View style={styles.quickStatDivider} />
-            <View style={styles.quickStatItem}><Text style={styles.quickStatValue}>{latestWeight ? `${latestWeight.weight}` : "—"}</Text><Text style={styles.quickStatLabel}>{latestWeight ? latestWeight.unit : "Weight"}</Text></View>
+            <View style={styles.quickStatItem}><Text style={styles.quickStatValue} numberOfLines={1}>{latestWeight ? `${latestWeight.weight}` : "—"}</Text><Text style={styles.quickStatLabel}>{latestWeight ? latestWeight.unit : "Weight"}</Text></View>
           </View>
           {animal.notes ? (<View style={styles.notesCard}><Text style={styles.notesText}>{animal.notes}</Text></View>) : null}
         </View>
@@ -567,10 +566,10 @@ const createStyles = (Colors: ThemeColors) => StyleSheet.create({
   animalName: { fontSize: 28, fontWeight: "800" as const, color: Colors.text },
   animalBreed: { fontSize: 16, color: Colors.textSecondary, marginTop: 2 },
   businessYearLabel: { fontSize: 13, fontWeight: "500" as const, color: Colors.primary, marginTop: 4 },
-  quickStats: { flexDirection: "row", backgroundColor: Colors.surface, borderRadius: 16, padding: 16, marginTop: 20, shadowColor: Colors.shadow, shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.06, shadowRadius: 8, elevation: 2 },
-  quickStatItem: { flex: 1, alignItems: "center" },
-  quickStatValue: { fontSize: 14, fontWeight: "700" as const, color: Colors.text, textTransform: "capitalize" as const },
-  quickStatLabel: { fontSize: 11, color: Colors.textTertiary, marginTop: 3 },
+  quickStats: { flexDirection: "row" as const, backgroundColor: Colors.surface, borderRadius: 16, paddingVertical: 14, paddingHorizontal: 8, marginTop: 20, shadowColor: Colors.shadow, shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.06, shadowRadius: 8, elevation: 2 },
+  quickStatItem: { flex: 1, alignItems: "center" as const, paddingHorizontal: 2 },
+  quickStatValue: { fontSize: 12, fontWeight: "700" as const, color: Colors.text, textTransform: "capitalize" as const, textAlign: "center" as const },
+  quickStatLabel: { fontSize: 10, color: Colors.textTertiary, marginTop: 3, textAlign: "center" as const },
   quickStatDivider: { width: 1, backgroundColor: Colors.border, marginVertical: 4 },
   notesCard: { backgroundColor: Colors.surfaceElevated, borderRadius: 12, padding: 14, marginTop: 16, borderLeftWidth: 3, borderLeftColor: Colors.secondary },
   notesText: { fontSize: 14, color: Colors.textSecondary, lineHeight: 20 },
@@ -631,33 +630,9 @@ const createStyles = (Colors: ThemeColors) => StyleSheet.create({
   listChipIcon: { fontSize: 14 },
   listChipName: { fontSize: 13, fontWeight: "600" as const, color: Colors.text },
   listChipRemove: { padding: 6 },
-  identityBadgeRow: { flexDirection: "row" as const, marginTop: 6 },
-  identityBadge: { flexDirection: "row" as const, alignItems: "center" as const, gap: 4, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 },
-  identityBadgeEstimated: { backgroundColor: Colors.warning + "18" },
-  identityBadgeUnknown: { backgroundColor: Colors.textTertiary + "18" },
-  identityBadgeText: { fontSize: 11, fontWeight: "600" as const },
-  identityBadgeTextEstimated: { color: Colors.warning },
-  identityBadgeTextUnknown: { color: Colors.textTertiary },
   identityCard: { backgroundColor: Colors.surface, borderRadius: 16, padding: 16, shadowColor: Colors.shadow, shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 8, elevation: 1 },
   identityRow: { flexDirection: "row" as const, alignItems: "center" as const, justifyContent: "space-between" as const },
   identityLabel: { fontSize: 14, fontWeight: "600" as const, color: Colors.textSecondary },
-  identityChips: { flexDirection: "row" as const, gap: 6 },
-  identityChip: { flexDirection: "row" as const, alignItems: "center" as const, gap: 4, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 10, backgroundColor: Colors.backgroundDark, borderWidth: 1, borderColor: Colors.border },
-  identityChipActive: { backgroundColor: Colors.primary, borderColor: Colors.primary },
-  identityChipText: { fontSize: 11, fontWeight: "600" as const, color: Colors.textSecondary },
-  identityChipTextActive: { color: Colors.textInverse },
-  identityDivider: { height: 1, backgroundColor: Colors.border, marginVertical: 12 },
-  generationEditRow: { flex: 1, alignItems: "flex-end" as const },
-  generationDisplay: { flexDirection: "row" as const, alignItems: "center" as const, gap: 6, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 10, backgroundColor: Colors.backgroundDark },
-  generationDisplayText: { fontSize: 14, fontWeight: "700" as const, color: Colors.text },
-  generationEditGroup: { flexDirection: "row" as const, alignItems: "center" as const, gap: 8 },
-  generationEditInput: { backgroundColor: Colors.backgroundDark, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 8, fontSize: 14, color: Colors.text, minWidth: 60, textAlign: "center" as const, borderWidth: 1, borderColor: Colors.border },
-  estChipSmall: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, backgroundColor: Colors.backgroundDark, borderWidth: 1, borderColor: Colors.border },
-  estChipSmallActive: { backgroundColor: Colors.warning, borderColor: Colors.warning },
-  estChipSmallText: { fontSize: 12, fontWeight: "600" as const, color: Colors.textTertiary },
-  estChipSmallTextActive: { color: Colors.textInverse },
-  generationDoneBtn: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, backgroundColor: Colors.primary },
-  generationDoneBtnText: { fontSize: 12, fontWeight: "700" as const, color: Colors.textInverse },
   mergedCount: { fontSize: 13, fontWeight: "600" as const, color: Colors.textTertiary },
   mergeButton: { flexDirection: "row" as const, alignItems: "center" as const, justifyContent: "center" as const, paddingVertical: 14, borderRadius: 14, backgroundColor: Colors.surface, gap: 8, borderWidth: 1, borderColor: Colors.primary + "30" },
   mergeButtonText: { fontSize: 15, fontWeight: "600" as const, color: Colors.primary },
