@@ -49,6 +49,7 @@ import {
   fetchRanchNotes,
   type RemoteRanchNoteRow,
 } from "@/lib/supabase";
+import { scheduleAllNotifications } from "@/lib/notifications";
 // eslint-disable-next-line rork/general-context-optimization
 import {
   Animal,
@@ -2439,6 +2440,30 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
     syncWeightHealthMutation.mutate();
     syncCustomListsMutation.mutate();
     syncRanchNotesMutation.mutate();
+
+    // Schedule push notifications based on saved preferences
+    void (async () => {
+      try {
+        const [breedingPref, healthPref] = await Promise.all([
+          AsyncStorage.getItem("ranchtrack_notif_breeding"),
+          AsyncStorage.getItem("ranchtrack_notif_health"),
+        ]);
+        const breedingEnabled = breedingPref !== "false";
+        const doctoringEnabled = healthPref !== "false";
+        const currentAnimals = queryClient.getQueryData<Animal[]>(["animals"]) ?? [];
+        const currentBreeding = queryClient.getQueryData<BreedingRecord[]>(["breedingRecords"]) ?? [];
+        const currentDoctoring = queryClient.getQueryData<DoctoringEvent[]>(["doctoringEvents"]) ?? [];
+        await scheduleAllNotifications({
+          breedingEnabled,
+          doctoringEnabled,
+          breedingRecords: currentBreeding,
+          doctoringEvents: currentDoctoring,
+          animals: currentAnimals,
+        });
+      } catch (e) {
+        console.log("[notifications] launch scheduling failed", e);
+      }
+    })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ranch.id]);
 
