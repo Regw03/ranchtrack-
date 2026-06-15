@@ -72,6 +72,9 @@ function RootLayoutNav() {
         options={{ title: "Animal Details" }}
       />
       <Stack.Screen
+        name="edit-animal"
+      />
+      <Stack.Screen
         name="add-animal"
         options={{ presentation: "modal", title: "Add Animal" }}
       />
