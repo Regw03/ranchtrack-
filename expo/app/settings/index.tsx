@@ -118,19 +118,29 @@ export default function SettingsScreen() {
   const handleSyncNow = useCallback(async () => {
     setIsSyncing(true);
     try {
-      await refreshRanch();
+      await Promise.all([
+        refreshRanch(),
+        syncBusinessYears(),
+        syncCalvingData(),
+        syncDoctoringEvents(),
+        syncBreedingData(),
+        syncWeightHealth(),
+        syncCustomLists(),
+        syncRanchNotes(),
+        syncSessions(),
+      ]);
       const now = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
       setLastSyncTime(now);
       await AsyncStorage.setItem("ranchtrack_last_sync", now);
       if (Platform.OS !== "web") void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      Alert.alert("Sync Complete", "Your ranch data is up to date.");
+      Alert.alert("Sync Complete", "All ranch data is up to date across all devices.");
     } catch (e) {
       console.log("[settings] sync failed", e);
-      Alert.alert("Sync Failed", "Could not reach the server. Your data is saved locally.");
+      Alert.alert("Sync Failed", "Could not reach the server. Your data is saved locally and will sync automatically.");
     } finally {
       setIsSyncing(false);
     }
-  }, [refreshRanch]);
+  }, [refreshRanch, syncBusinessYears, syncCalvingData, syncDoctoringEvents, syncBreedingData, syncWeightHealth, syncCustomLists, syncRanchNotes, syncSessions]);
 
   const handleClearData = useCallback(() => {
     Alert.alert(
@@ -325,17 +335,23 @@ export default function SettingsScreen() {
               </View>
             </View>
             {[
-              { label: "Animals", value: "Synced to cloud ✓" },
-              { label: "Ranch & Members", value: "Synced to cloud ✓" },
-              { label: "Calving Lists & Records", value: "Synced to cloud ✓" },
-              { label: "Breeding Records & Groups", value: "Synced to cloud ✓" },
-              { label: "Doctoring Events", value: "Synced to cloud ✓" },
-              { label: "Weight & Health Records", value: "Synced to cloud ✓" },
-              { label: "Processing Sessions", value: "Synced to cloud ✓" },
+              { label: "Animals", syncing: false },
+              { label: "Ranch & Members", syncing: false },
+              { label: "Business Years", syncing: isSyncingBusinessYears },
+              { label: "Calving Lists & Records", syncing: isSyncingCalvingData },
+              { label: "Breeding Records & Groups", syncing: isSyncingBreedingData },
+              { label: "Doctoring Events", syncing: isSyncingDoctoringEvents },
+              { label: "Weight & Health Records", syncing: isSyncingWeightHealth },
+              { label: "Processing Sessions", syncing: false },
+              { label: "Custom Lists", syncing: isSyncingCustomLists },
+              { label: "Ranch Notes", syncing: isSyncingRanchNotes },
             ].map((item) => (
               <View key={item.label} style={styles.syncInfoRow}>
                 <Text style={styles.syncInfoLabel}>{item.label}</Text>
-                <Text style={styles.syncInfoValue}>{item.value}</Text>
+                {item.syncing
+                  ? <ActivityIndicator size="small" color={Colors.primary} />
+                  : <Text style={styles.syncInfoValue}>Synced ✓</Text>
+                }
               </View>
             ))}
             <View style={styles.modalDivider} />
