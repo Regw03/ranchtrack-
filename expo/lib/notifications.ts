@@ -89,3 +89,34 @@ export async function scheduleAllNotifications(params: ScheduleParams): Promise<
     `[notifications] scheduled ${scheduled.length} notifications (breeding: ${breedingEnabled}, doctoring: ${doctoringEnabled})`,
   );
 }
+
+/** Cancel only breeding-related scheduled notifications. */
+export async function cancelBreedingNotifications(): Promise<void> {
+  const scheduled = await Notifications.getAllScheduledNotificationsAsync();
+  for (const n of scheduled) {
+    if ((n.content.data as Record<string, unknown>)?.type === "breeding") {
+      await Notifications.cancelScheduledNotificationAsync(n.identifier);
+    }
+  }
+}
+
+/** Cancel only doctoring-related scheduled notifications. */
+export async function cancelDoctoringNotifications(): Promise<void> {
+  const scheduled = await Notifications.getAllScheduledNotificationsAsync();
+  for (const n of scheduled) {
+    if ((n.content.data as Record<string, unknown>)?.type === "doctoring") {
+      await Notifications.cancelScheduledNotificationAsync(n.identifier);
+    }
+  }
+}
+
+/** Request notification permissions from the OS. */
+export async function requestNotificationPermissions(): Promise<boolean> {
+  try {
+    const result = await Notifications.requestPermissionsAsync();
+    return (result as unknown as { granted?: boolean; status?: string }).granted === true ||
+      (result as unknown as { granted?: boolean; status?: string }).status === "granted";
+  } catch {
+    return false;
+  }
+}
