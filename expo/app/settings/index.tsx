@@ -35,6 +35,7 @@ import { ThemeColors } from "@/constants/colors";
 import { useColors } from "@/providers/ThemeProvider";
 import { useTheme } from "@/providers/ThemeProvider";
 import { useRanch } from "@/providers/RanchProvider";
+import { useProcessingSessions } from "@/providers/ProcessingSessionProvider";
 import { useOnboarding } from "@/providers/OnboardingProvider";
 import { getInitials } from "@/utils/helpers";
 import { signOut } from "@/lib/supabase";
@@ -48,7 +49,8 @@ const NOTIF_HEALTH_KEY = "ranchtrack_notif_health";
 export default function SettingsScreen() {
   const Colors = useColors();
   const { isDark, toggleTheme } = useTheme();
-  const { ranch, currentUserId, resetApp, refreshRanch, isRefreshingRanch, animals, doctoringEvents, currentUserRole, canInviteTeammates, removeTeammate } = useRanch();
+  const { ranch, currentUserId, resetApp, refreshRanch, isRefreshingRanch, animals, doctoringEvents, currentUserRole, canInviteTeammates, removeTeammate, syncBusinessYears, syncCalvingData, syncDoctoringEvents, syncBreedingData, syncWeightHealth, syncCustomLists, syncRanchNotes, isSyncingBusinessYears, isSyncingCalvingData, isSyncingDoctoringEvents, isSyncingBreedingData, isSyncingWeightHealth, isSyncingCustomLists, isSyncingRanchNotes } = useRanch();
+  const { syncSessions } = useProcessingSessions();
   const { resetOnboarding } = useOnboarding();
   const router = useRouter();
   const styles = useMemo(() => createStyles(Colors), [Colors]);
@@ -60,6 +62,16 @@ export default function SettingsScreen() {
   const [activeModal, setActiveModal] = useState<"notifications" | "data" | "sync" | "help" | null>(null);
   const [lastSyncTime, setLastSyncTime] = useState<string | null>(null);
   const [isSyncing, setIsSyncing] = useState<boolean>(false);
+
+  const isAnySyncing =
+    isSyncing ||
+    isSyncingBusinessYears ||
+    isSyncingCalvingData ||
+    isSyncingDoctoringEvents ||
+    isSyncingBreedingData ||
+    isSyncingWeightHealth ||
+    isSyncingCustomLists ||
+    isSyncingRanchNotes;
 
   const ROLE_LABELS: Record<string, string> = { owner: "Owner", manager: "Manager", worker: "Worker" };
   const ROLE_COLORS: Record<string, string> = { owner: Colors.accent, manager: Colors.primary, worker: Colors.textSecondary };
@@ -580,7 +592,7 @@ export default function SettingsScreen() {
         {[
           { icon: Bell, label: "Notifications", subtitle: notifBreeding && notifHealth ? "All alerts on" : "Some alerts off", modal: "notifications" as const },
           { icon: Database, label: "Data & Storage", subtitle: `${animalCount} animals on this device`, modal: "data" as const },
-          { icon: Smartphone, label: "Sync Settings", subtitle: lastSyncTime ? `Last synced ${lastSyncTime}` : "Tap to sync now", modal: "sync" as const },
+          { icon: Smartphone, label: "Sync Settings", subtitle: isAnySyncing ? "Syncing..." : lastSyncTime ? `Last synced ${lastSyncTime}` : "Tap to sync now", modal: "sync" as const },
           { icon: HelpCircle, label: "Help & Support", subtitle: "FAQs and contact", modal: "help" as const },
         ].map((item) => (
           <TouchableOpacity
