@@ -2935,6 +2935,50 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
     },
   });
 
+  const removeTeammateMutation = useMutation({
+    mutationFn: async (userId: string) => {
+      const currentRanch = queryClient.getQueryData<Ranch>(["ranch"]) ?? ranch;
+      const remover = currentRanch.members.find((m) => m.userId === currentUserId);
+      const removerRole = remover?.role;
+      const target = currentRanch.members.find((m) => m.userId === userId);
+
+      // Permission checks
+      if (removerRole !== "owner" && removerRole !== "manager") {
+        throw new Error("Only owners or managers can remove teammates.");
+      }
+      if (!target) throw new Error("Member not found.");
+      if (target.role === "owner") {
+        throw new Error("The ranch owner cannot be removed.");
+      }
+      if (removerRole === "manager" && target.role === "manager") {
+        throw new Error("Managers cannot remove other managers. Only the owner can do that.");
+      }
+      if (userId === currentUserId) {
+        throw new Error("You cannot remove yourself.");
+      }
+
+      // Remove from Supabase
+      if (currentRanch.id && currentRanch.id !== MOCK_RANCH.id) {
+        const { error } = await supabase
+          .from("ranch_members")
+          .delete()
+          .eq("ranch_id", currentRanch.id)
+          .eq("user_id", userId);
+        if (error) throw new Error(error.message);
+      }
+
+      // Update local ranch
+      const updatedMembers = currentRanch.members.filter((m) => m.userId !== userId);
+      const updatedRanch = { ...currentRanch, members: updatedMembers };
+      await saveToStorage(STORAGE_KEYS.ranch, updatedRanch);
+      await logActivity(`Removed team member: ${target.name}`);
+      return updatedRanch;
+    },
+    onSuccess: (updatedRanch) => {
+      queryClient.setQueryData(["ranch"], updatedRanch);
+    },
+  });
+
   const needsAttentionAnimals = useMemo(() => {
     const animalIdsNeedingAttention = new Set<string>();
     doctoringEvents.forEach((e) => {
@@ -2961,6 +3005,8 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
     canInviteTeammates,
     inviteTeammate: inviteTeammateMutation.mutateAsync,
     isInvitingTeammate: inviteTeammateMutation.isPending,
+    removeTeammate: removeTeammateMutation.mutateAsync,
+    isRemovingTeammate: removeTeammateMutation.isPending,
     setRanchName: setRanchNameMutation.mutateAsync,
     isSettingRanchName: setRanchNameMutation.isPending,
     ranchNotes,
