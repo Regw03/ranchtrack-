@@ -69,71 +69,8 @@ export interface HealthRecord {
   administeredBy?: string;
 }
 
-// ─── Processing (unified breeding + work system) ────────────────────────────
-
-export type ProcessingEventType = "vaccination" | "preg_check" | "blood_test" | "custom";
-
-/**
- * Processing result for a single animal within an event.
- * Preg Check events use "bred" | "open". All other event types use "done" | "not_done".
- */
-export type ProcessingResult = "bred" | "open" | "done" | "not_done";
-
-/**
- * A user-defined group of specific animals (e.g. "Yearling Heifers", "1st Calf Cows").
- * Tied to a business year. Used as the target when creating a processing event.
- */
-export interface ProcessingGroup {
-  id: string;
-  ranchId: string;
-  name: string;
-  color: string;
-  animalIds: string[];
-  businessYearId: string;
-  createdAt: string;
-  updatedAt: string;
-}
-
-/**
- * A work event applied to a ProcessingGroup on a specific date.
- * Examples: Vaccination day, Preg Check, Blood Test, or a custom procedure.
- */
-export interface ProcessingEvent {
-  id: string;
-  ranchId: string;
-  processingGroupId: string;
-  date: string;
-  type: ProcessingEventType;
-  customTypeName?: string;
-  notes: string;
-  createdBy?: string;
-  createdByName?: string;
-  createdAt: string;
-  updatedAt: string;
-}
-
-/**
- * One animal's individual result within a ProcessingEvent.
- * For Preg Check events, result is "bred" or "open".
- * For all other event types, result is "done" or "not_done".
- */
-export interface ProcessingRecord {
-  id: string;
-  processingEventId: string;
-  animalId: string;
-  result: ProcessingResult;
-  notes?: string;
-  createdAt: string;
-  updatedAt: string;
-}
-
 // ─── Calving ──────────────────────────────────────────────────────────────────
 
-/**
- * A calving list is a named group for organizing calving events.
- * Completely optional naming — user names them however they want.
- * Tied to a business year. At least one list must exist before logging.
- */
 export interface CalvingList {
   id: string;
   ranchId: string;
@@ -144,66 +81,105 @@ export interface CalvingList {
   updatedAt: string;
 }
 
-/**
- * One calving event — a cow/calf pair record.
- *
- * Required at log time:
- * cowTag, calfTag, birthMonth, birthDay, assisted
- *
- * Year is derived from the active business year — not entered by the user.
- * All other fields are optional and fully editable at any time.
- */
 export interface CalvingRecord {
   id: string;
   calvingListId: string;
   businessYearId: string;
-
-  // Date — only month and day entered by user
-  // year is derived from business year and stored in full ISO date for sorting
-  birthMonth: number; // 1–12
-  birthDay: number; // 1–31
-  date: string; // full ISO date built from month + day + business year
-
-  // Required
+  birthMonth: number;
+  birthDay: number;
+  date: string;
   cowTag: string;
   calfTag: string;
   assisted: boolean;
-
-  // Optional — all editable after the fact
   calfType?: "heifer" | "steer" | "bull";
   sireTag?: string;
   birthWeight?: number;
   birthWeightUnit?: "lbs" | "kg";
   notes?: string;
-  photoUrl?: string; // hero image on pair profile
-
-  // Auto-linked animal IDs when tags match existing animals
+  photoUrl?: string;
   cowId?: string;
   calfId?: string;
-
-  // Attribution
   createdBy?: string;
   createdByName?: string;
   createdAt: string;
   updatedAt: string;
 }
 
-// Keep the old CalvingGroup type temporarily so existing data doesn't break
-// during migration. Will be fully removed in a future cleanup.
-/** @deprecated Use CalvingList instead */
-export interface CalvingGroup {
+// ─── Processing ───────────────────────────────────────────────────────────────
+
+/**
+ * A user-defined group of animals for processing purposes.
+ * Completely user-named — Yearling Heifers, 1st Calf Cows, Bulls, etc.
+ * Reusable across events. Tied to a business year.
+ */
+export interface ProcessingGroup {
   id: string;
   ranchId: string;
   name: string;
   color: string;
-  cowIds: string[];
-  calfIds: string[];
+  animalIds: string[];
   businessYearId: string;
+  createdBy?: string;
   createdAt: string;
   updatedAt: string;
 }
 
-// ─── Everything else (unchanged) ─────────────────────────────────────────────
+/**
+ * Processing event types.
+ * Treatment is excluded — that falls under Doctoring.
+ */
+export type ProcessingEventType =
+  | "vaccination"
+  | "preg_check"
+  | "blood_test"
+  | "custom";
+
+/**
+ * A work event applied to a processing group on a specific date.
+ * Examples: Spring Preg Check, Fall Vaccination, Trich Testing
+ */
+export interface ProcessingEvent {
+  id: string;
+  ranchId: string;
+  name: string;
+  type: ProcessingEventType;
+  customTypeName?: string;
+  date: string;
+  groupId: string;
+  businessYearId: string;
+  status: "not_started" | "in_progress" | "completed";
+  notes?: string;
+  createdBy?: string;
+  createdByName?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/**
+ * One animal's individual result within a processing event.
+ *
+ * For Preg Check: result is "bred" or "open"
+ * For all other types: result is "done" or "not_done"
+ */
+export type ProcessingResult =
+  | "done"
+  | "not_done"
+  | "bred"
+  | "open";
+
+export interface ProcessingRecord {
+  id: string;
+  eventId: string;
+  animalId: string;
+  result: ProcessingResult;
+  notes?: string;
+  recordedBy?: string;
+  recordedByName?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// ─── Business Year ────────────────────────────────────────────────────────────
 
 export interface BusinessYear {
   id: string;
@@ -214,13 +190,15 @@ export interface BusinessYear {
   createdAt: string;
 }
 
+// ─── Supporting types ─────────────────────────────────────────────────────────
+
 export interface ActivityLogEntry {
   id: string;
   ranchId: string;
   userId: string;
   userName: string;
   action: string;
-  entityType?: "animal" | "health" | "weight" | "breeding" | "message" | "member" | "calving";
+  entityType?: "animal" | "health" | "weight" | "processing" | "message" | "member" | "calving";
   entityId?: string;
   timestamp: string;
 }
@@ -234,7 +212,7 @@ export interface Message {
   timestamp: string;
 }
 
-export type ListType = "vaccinations" | "breeding" | "to_be_sold" | "birthing" | "custom";
+export type ListType = "vaccinations" | "to_be_sold" | "birthing" | "custom";
 
 export interface CustomList {
   id: string;
@@ -278,5 +256,3 @@ export interface RanchNote {
   createdAt: string;
   updatedAt: string;
 }
-
-
