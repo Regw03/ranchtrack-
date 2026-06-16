@@ -196,39 +196,24 @@ const DEFAULT_BUSINESS_YEAR: BusinessYear = {
 };
 
 export function getHerdGroup(animal: Animal): HerdGroup {
+  // Sex-based groups take priority — a bull is always a bull, never a calf
   if (animal.sex === "heifer") return "heifers";
   if (animal.sex === "steer") return "steers";
-
-  if (animal.motherId) {
-    const birthDate = animal.birthDate ? parseBirthDate(animal.birthDate) : null;
-    const now = new Date();
-    if (birthDate) {
-      const ageInMonths = (now.getFullYear() - birthDate.getFullYear()) * 12 + (now.getMonth() - birthDate.getMonth());
-      if (ageInMonths < 12) {
-        return "calves";
-      }
-    } else {
-      return "calves";
+  if (animal.sex === "male") return "bulls";
+  if (animal.sex === "female") {
+    // Female cattle/horses are calves only if under 12 months AND came from a calving event
+    // Otherwise treat as a cow
+    if (animal.motherId && animal.birthDate) {
+      const birthDate = parseBirthDate(animal.birthDate);
+      const now = new Date();
+      const ageInMonths =
+        (now.getFullYear() - birthDate.getFullYear()) * 12 +
+        (now.getMonth() - birthDate.getMonth());
+      if (ageInMonths < 12) return "calves";
     }
+    return "cows";
   }
-
-  if (animal.birthDate) {
-    const birthDate = parseBirthDate(animal.birthDate);
-    const now = new Date();
-    const ageInMonths = (now.getFullYear() - birthDate.getFullYear()) * 12 + (now.getMonth() - birthDate.getMonth());
-    if (ageInMonths < 12) {
-      return "calves";
-    }
-  }
-
-  switch (animal.sex) {
-    case "female":
-      return "cows";
-    case "male":
-      return "bulls";
-    default:
-      return "other";
-  }
+  return "other";
 }
 
 export const HERD_GROUP_CONFIG: Record<HerdGroup, { label: string; emoji: string; color: string }> = {
