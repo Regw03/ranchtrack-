@@ -69,15 +69,62 @@ export interface HealthRecord {
   administeredBy?: string;
 }
 
-export interface BreedingRecord {
+// ─── Processing (unified breeding + work system) ────────────────────────────
+
+export type ProcessingEventType = "vaccination" | "preg_check" | "blood_test" | "custom";
+
+/**
+ * Processing result for a single animal within an event.
+ * Preg Check events use "bred" | "open". All other event types use "done" | "not_done".
+ */
+export type ProcessingResult = "bred" | "open" | "done" | "not_done";
+
+/**
+ * A user-defined group of specific animals (e.g. "Yearling Heifers", "1st Calf Cows").
+ * Tied to a business year. Used as the target when creating a processing event.
+ */
+export interface ProcessingGroup {
   id: string;
-  animalId: string;
-  sireId?: string;
-  lastBredDate: string;
-  expectedDueDate: string;
-  status: "bred" | "confirmed" | "delivered" | "open";
-  businessYearId?: string;
+  ranchId: string;
+  name: string;
+  color: string;
+  animalIds: string[];
+  businessYearId: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/**
+ * A work event applied to a ProcessingGroup on a specific date.
+ * Examples: Vaccination day, Preg Check, Blood Test, or a custom procedure.
+ */
+export interface ProcessingEvent {
+  id: string;
+  ranchId: string;
+  processingGroupId: string;
+  date: string;
+  type: ProcessingEventType;
+  customTypeName?: string;
   notes: string;
+  createdBy?: string;
+  createdByName?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/**
+ * One animal's individual result within a ProcessingEvent.
+ * For Preg Check events, result is "bred" or "open".
+ * For all other event types, result is "done" or "not_done".
+ */
+export interface ProcessingRecord {
+  id: string;
+  processingEventId: string;
+  animalId: string;
+  result: ProcessingResult;
+  notes?: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
 // ─── Calving ──────────────────────────────────────────────────────────────────
@@ -204,56 +251,6 @@ export interface CustomList {
   updatedAt: string;
 }
 
-export interface BreedingGroup {
-  id: string;
-  ranchId: string;
-  name: string;
-  color: string;
-  animalIds: string[];
-  businessYearId: string;
-  createdAt: string;
-  updatedAt: string;
-}
-
-export type HealthEventType = "vaccination" | "blood_test" | "treatment" | "inspection" | "custom";
-export type HealthEventStatus = "upcoming" | "completed" | "overdue";
-
-export type HealthEventTargetType = "herd" | "calving_group" | "breeding_group" | "custom_group";
-
-export interface HealthEventTarget {
-  type: HealthEventTargetType;
-  id: string;
-  name: string;
-}
-
-export interface HealthEvent {
-  id: string;
-  ranchId: string;
-  templateId?: string;
-  type: HealthEventType;
-  customTypeName?: string;
-  name: string;
-  dueDate: string;
-  completedDate?: string;
-  status: HealthEventStatus;
-  target: HealthEventTarget;
-  exceptionAnimalIds: string[];
-  notes: string;
-  createdAt: string;
-  updatedAt: string;
-}
-
-export interface HealthEventTemplate {
-  id: string;
-  ranchId: string;
-  name: string;
-  type: HealthEventType;
-  customTypeName?: string;
-  suggestedIntervalDays?: number;
-  notes: string;
-  createdAt: string;
-}
-
 export type DoctoringEventType = "injury" | "illness" | "lameness" | "infection" | "custom";
 
 export interface DoctoringEvent {
@@ -282,36 +279,4 @@ export interface RanchNote {
   updatedAt: string;
 }
 
-export type SessionGroupStatus = "not_started" | "in_progress" | "completed";
 
-export interface SessionGroup {
-  id: string;
-  type: "calving_group" | "breeding_group" | "custom";
-  groupId?: string;
-  name: string;
-  status: SessionGroupStatus;
-}
-
-export interface SessionEvent {
-  id: string;
-  sessionId: string;
-  type: HealthEventType;
-  customTypeName?: string;
-  name: string;
-  groupId: string;
-  completedDate: string;
-  notes: string;
-  createdAt: string;
-}
-
-export interface ProcessingSession {
-  id: string;
-  ranchId: string;
-  name: string;
-  businessYearId: string;
-  groups: SessionGroup[];
-  events: SessionEvent[];
-  notes: string;
-  createdAt: string;
-  updatedAt: string;
-}
