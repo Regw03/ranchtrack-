@@ -222,7 +222,7 @@ export const HERD_GROUP_CONFIG: Record<HerdGroup, { label: string; emoji: string
   calves: { label: "Calves", emoji: "🐮", color: "#2D7A9C" },
   bulls: { label: "Bulls", emoji: "🐃", color: "#C4622D" },
   steers: { label: "Steers", emoji: "🐄", color: "#7B5EA7" },
-  other: { label: "Other", emoji: "🐾", color: "#6B6B6B" },
+  other: { label: "Horses & Other", emoji: "🐎", color: "#6B6B6B" },
 };
 
 // eslint-disable-next-line rork/general-context-optimization
