@@ -21,13 +21,15 @@ import {
   CircleDot,
   CheckCircle2,
   Clock,
+  Calendar,
+  Heart,
 } from "lucide-react-native";
 import * as Haptics from "expo-haptics";
 import { ThemeColors } from "@/constants/colors";
 import { useColors } from "@/providers/ThemeProvider";
 import { useRanch } from "@/providers/RanchProvider";
 import { useProcessingSessions } from "@/providers/ProcessingSessionProvider";
-import { Animal, DoctoringEvent, ProcessingSession } from "@/types";
+import { Animal, DoctoringEvent, ProcessingSession, BreedingRecord } from "@/types";
 
 function QuickActionButton({
   label,
@@ -168,6 +170,10 @@ export default function DashboardScreen() {
     doctoringEvents,
     activeBusinessYear,
     ranchNotes,
+    breedingRecordsForYear,
+    bredAnimals,
+    openAnimals,
+    animals,
   } = useRanch();
 
   const { sessions, getSessionProgress } = useProcessingSessions();
@@ -202,6 +208,27 @@ export default function DashboardScreen() {
 
   const hasAttention = attentionItems.length > 0;
   const hasProcessing = activeSessions.length > 0;
+
+  const dueSoonItems = useMemo(() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const thirtyDaysOut = new Date(today);
+    thirtyDaysOut.setDate(thirtyDaysOut.getDate() + 30);
+
+    return breedingRecordsForYear
+      .filter((r) => r.status === "bred" || r.status === "confirmed")
+      .map((r) => {
+        const dueDate = new Date(r.expectedDueDate);
+        const daysUntil = Math.ceil((dueDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+        const animal = animals.find((a) => a.id === r.animalId);
+        return { record: r, animal, daysUntil };
+      })
+      .filter((item) => item.animal && item.animal.status === "active")
+      .sort((a, b) => a.daysUntil - b.daysUntil)
+      .slice(0, 6);
+  }, [breedingRecordsForYear, animals]);
+
+  const hasBreeding = dueSoonItems.length > 0 || bredAnimals.length > 0 || openAnimals.length > 0;
 
   const handleQuickAction = useCallback((route: string) => {
     router.push(route as never);
@@ -244,6 +271,87 @@ export default function DashboardScreen() {
           onPress={() => handleQuickAction("/log-doctoring-event")}
         />
       </View>
+
+      {hasBreeding && (
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <View style={styles.sectionTitleRow}>
+              <View style={[styles.sectionIconWrap, { backgroundColor: "#E87D9E" + "18" }]}>
+                <Heart size={16} color="#E87D9E" />
+              </View>
+              <Text style={styles.sectionTitle}>Breeding</Text>
+            </View>
+          </View>
+
+          <View style={styles.sectionBody}>
+            <View style={styles.breedingStats}>
+              <View style={styles.breedingStat}>
+                <Text style={styles.breedingStatValue}>{bredAnimals.length}</Text>
+                <Text style={styles.breedingStatLabel}>Bred</Text>
+              </View>
+              <View style={styles.breedingStatDivider} />
+              <View style={styles.breedingStat}>
+                <Text style={[styles.breedingStatValue, { color: "#E87D9E" }]}>{openAnimals.length}</Text>
+                <Text style={styles.breedingStatLabel}>Open</Text>
+              </View>
+              <View style={styles.breedingStatDivider} />
+              <View style={styles.breedingStat}>
+                <Text style={[styles.breedingStatValue, { color: dueSoonItems.length > 0 ? "#D4943A" : Colors.textSecondary }]}>{dueSoonItems.length}</Text>
+                <Text style={styles.breedingStatLabel}>Due Soon</Text>
+              </View>
+            </View>
+
+            {dueSoonItems.length > 0 && (
+              <View style={styles.dueSoonSection}>
+                <Text style={styles.dueSoonTitle}>Upcoming Due Dates</Text>
+                {dueSoonItems.map((item) => {
+                  const isOverdue = item.daysUntil < 0;
+                  const isUrgent = item.daysUntil >= 0 && item.daysUntil <= 5;
+                  const urgencyColor = isOverdue ? "#C44D3D" : isUrgent ? "#D4943A" : Colors.textSecondary;
+                  const daysLabel = isOverdue
+                    ? `${Math.abs(item.daysUntil)}d overdue`
+                    : item.daysUntil === 0
+                      ? "Due today"
+                      : `${item.daysUntil}d`;
+
+                  return (
+                    <TouchableOpacity
+                      key={item.record.id}
+                      style={styles.dueSoonItem}
+                      onPress={() => {
+                        if (Platform.OS !== "web")
+                          void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                        router.push(`/animal/${item.animal!.id}`);
+                      }}
+                      activeOpacity={0.7}
+                    >
+                      <View style={[styles.dueSoonDot, { backgroundColor: urgencyColor }]} />
+                      <View style={styles.dueSoonContent}>
+                        <Text style={styles.dueSoonTag}>{item.animal!.tagId}</Text>
+                        {item.animal!.name ? (
+                          <Text style={styles.dueSoonName}>{item.animal!.name}</Text>
+                        ) : null}
+                      </View>
+                      <View style={styles.dueSoonDateCol}>
+                        <View style={styles.dueSoonDateRow}>
+                          <Calendar size={11} color={Colors.textTertiary} />
+                          <Text style={styles.dueSoonDate}>
+                            {new Date(item.record.expectedDueDate).toLocaleDateString("en-US", {
+                              month: "short",
+                              day: "numeric",
+                            })}
+                          </Text>
+                        </View>
+                        <Text style={[styles.dueSoonDays, { color: urgencyColor }]}>{daysLabel}</Text>
+                      </View>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            )}
+          </View>
+        </View>
+      )}
 
       {hasAttention && (
         <View style={styles.section}>
@@ -351,7 +459,7 @@ export default function DashboardScreen() {
         </View>
       )}
 
-      {!hasAttention && !hasProcessing && (
+      {!hasAttention && !hasProcessing && !hasBreeding && (
         <View style={styles.emptyState}>
           <View style={styles.emptyIconWrap}>
             <CircleDot size={36} color={Colors.textTertiary} />
@@ -631,5 +739,91 @@ const createStyles = (Colors: ThemeColors) =>
       fontWeight: "700" as const,
       color: Colors.textSecondary,
       marginLeft: "auto" as const,
+    },
+    breedingStats: {
+      flexDirection: "row",
+      backgroundColor: Colors.background,
+      borderRadius: 14,
+      paddingVertical: 14,
+      paddingHorizontal: 8,
+      marginBottom: 14,
+    },
+    breedingStat: {
+      flex: 1,
+      alignItems: "center",
+    },
+    breedingStatValue: {
+      fontSize: 22,
+      fontWeight: "800" as const,
+      color: Colors.text,
+    },
+    breedingStatLabel: {
+      fontSize: 11,
+      fontWeight: "600" as const,
+      color: Colors.textTertiary,
+      marginTop: 2,
+      textTransform: "uppercase" as const,
+      letterSpacing: 0.5,
+    },
+    breedingStatDivider: {
+      width: 1,
+      backgroundColor: Colors.border,
+      marginVertical: 2,
+    },
+    dueSoonSection: {
+      marginTop: 2,
+    },
+    dueSoonTitle: {
+      fontSize: 12,
+      fontWeight: "700" as const,
+      color: Colors.textTertiary,
+      textTransform: "uppercase" as const,
+      letterSpacing: 0.8,
+      marginBottom: 8,
+    },
+    dueSoonItem: {
+      flexDirection: "row",
+      alignItems: "center",
+      backgroundColor: Colors.background,
+      borderRadius: 12,
+      padding: 12,
+      marginBottom: 6,
+    },
+    dueSoonDot: {
+      width: 8,
+      height: 8,
+      borderRadius: 4,
+      marginRight: 10,
+    },
+    dueSoonContent: {
+      flex: 1,
+    },
+    dueSoonTag: {
+      fontSize: 14,
+      fontWeight: "700" as const,
+      color: Colors.text,
+    },
+    dueSoonName: {
+      fontSize: 12,
+      color: Colors.textSecondary,
+      marginTop: 1,
+    },
+    dueSoonDateCol: {
+      alignItems: "flex-end",
+      gap: 3,
+    },
+    dueSoonDateRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 4,
+    },
+    dueSoonDate: {
+      fontSize: 12,
+      color: Colors.textSecondary,
+      fontWeight: "500" as const,
+    },
+    dueSoonDays: {
+      fontSize: 12,
+      fontWeight: "700" as const,
     },
   });
