@@ -11,7 +11,7 @@ import {
   Platform,
 } from "react-native";
 import { useRouter } from "expo-router";
-import { Search, ChevronRight, Plus, Skull, HelpCircle, Stethoscope } from "lucide-react-native";
+import { Search, ChevronRight, Plus, Skull, Stethoscope } from "lucide-react-native";
 import * as Haptics from "expo-haptics";
 import { ThemeColors } from "@/constants/colors";
 import { useColors } from "@/providers/ThemeProvider";
@@ -177,7 +177,7 @@ export default function HerdScreen() {
   const [searchQuery, setSearchQuery] = useState("");
   const styles = useMemo(() => createStyles(Colors), [Colors]);
 
-  const groupOrder: HerdGroup[] = ["cows", "heifers", "calves", "bulls", "steers"];
+  const groupOrder: HerdGroup[] = ["cows", "heifers", "calves", "bulls", "steers", "other"];
 
   const visibleGroups = useMemo(
     () => groupOrder.filter((g) => animalsByHerdGroup[g].length > 0),
