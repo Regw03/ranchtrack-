@@ -11,16 +11,12 @@ import {
 } from "react-native";
 import { useRouter } from "expo-router";
 import {
-  Heart,
   ClipboardList,
   Stethoscope,
   DollarSign,
   ChevronRight,
   Plus,
   AlertTriangle,
-  CheckCircle2,
-  Clock,
-  Activity,
   FolderOpen,
   Baby,
   Search,
@@ -30,7 +26,7 @@ import * as Haptics from "expo-haptics";
 import { ThemeColors } from "@/constants/colors";
 import { useColors } from "@/providers/ThemeProvider";
 import { useRanch } from "@/providers/RanchProvider";
-import { useProcessingSessions } from "@/providers/ProcessingSessionProvider";
+import { useProcessing } from "@/providers/ProcessingProvider";
 import BusinessYearPicker from "@/components/BusinessYearPicker";
 
 interface WorkSectionProps {
@@ -121,28 +117,28 @@ export default function WorkScreen() {
   const {
     calvingLists,
     calvingRecords,
-    breedingGroups,
-    bredAnimals,
-    openAnimals,
     forSaleAnimals,
     soldAnimals,
     needsAttentionAnimals,
     activeBusinessYear,
   } = useRanch();
 
-  const { sessions, getSessionProgress } = useProcessingSessions();
+  const {
+    processingGroups,
+    processingEvents,
+    getEventProgress,
+  } = useProcessing();
 
-  const activeSessions = useMemo(() => {
-    return sessions
-      .filter((s) => s.businessYearId === activeBusinessYear.id)
-      .map((s) => {
-        const progress = getSessionProgress(s);
-        let statusColor = Colors.textTertiary;
-        if (progress.label === "Completed") statusColor = Colors.success;
-        else if (progress.label === "In Progress") statusColor = Colors.warning;
-        return { session: s, ...progress, statusColor };
-      });
-  }, [sessions, activeBusinessYear.id, getSessionProgress, Colors]);
+  const activeGroups = useMemo(() => {
+    return processingGroups.filter((g) => g.businessYearId === activeBusinessYear?.id);
+  }, [processingGroups, activeBusinessYear?.id]);
+
+  const recentEvents = useMemo(() => {
+    return processingEvents
+      .filter((e) => e.businessYearId === activeBusinessYear?.id)
+      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+      .slice(0, 3);
+  }, [processingEvents, activeBusinessYear?.id]);
 
   const calvingStats = useMemo(() => {
     const yearRecords = calvingRecords.filter(
@@ -318,72 +314,56 @@ export default function WorkScreen() {
       </WorkSection>
 
       <WorkSection
-        title="Breeding"
-        subtitle={`${bredAnimals.length} bred · ${openAnimals.length} open`}
-        icon={<Heart size={18} color={Colors.accent} />}
-        iconBg={Colors.accent}
+        title="Processing"
+        subtitle={
+          activeGroups.length > 0
+            ? `${activeGroups.length} group${activeGroups.length !== 1 ? "s" : ""} · ${recentEvents.length > 0 ? `${recentEvents.length} recent event${recentEvents.length !== 1 ? "s" : ""}` : "no events yet"}`
+            : "No groups yet — create one to start"
+        }
+        icon={<ClipboardList size={18} color="#D4943A" />}
+        iconBg="#D4943A"
+        onPress={() => nav("/processing-groups")}
       >
         <View style={styles.chipGrid}>
           <ActionChip
-            label="Add Record"
-            icon={<Plus size={16} color={Colors.accent} />}
-            color={Colors.accent}
-            onPress={() => nav("/add-breeding-record")}
-          />
-          <ActionChip
-            label="New Group"
-            icon={<FolderOpen size={16} color={Colors.accent} />}
-            color={Colors.accent}
-            onPress={() => nav("/create-breeding-group")}
+            label="Groups"
+            icon={<FolderOpen size={16} color="#D4943A" />}
+            color="#D4943A"
+            onPress={() => nav("/processing-groups")}
           />
         </View>
-        {breedingGroups.length > 0 && breedingGroups.slice(0, 3).map((group) => (
-          <TouchableOpacity
-            key={group.id}
-            style={[styles.miniCard, { borderLeftWidth: 3, borderLeftColor: group.color }]}
-            onPress={() => nav(`/breeding-group/${group.id}`)}
-            activeOpacity={0.7}
-          >
-            <Text style={styles.miniName} numberOfLines={1}>{group.name}</Text>
-            <Text style={styles.miniStat}>{group.animalIds.length} head</Text>
-            <ChevronRight size={14} color={Colors.textTertiary} />
-          </TouchableOpacity>
-        ))}
-      </WorkSection>
-
-      <WorkSection
-        title="Processing Sessions"
-        subtitle={`${activeSessions.length} active session${activeSessions.length !== 1 ? "s" : ""}`}
-        icon={<ClipboardList size={18} color="#D4943A" />}
-        iconBg="#D4943A"
-        onPress={() => nav("/processing-sessions")}
-      >
-        {activeSessions.length > 0 ? (
-          activeSessions.slice(0, 3).map((s) => {
-            const StatusIcon = s.label === "Completed" ? CheckCircle2 : s.label === "In Progress" ? Activity : Clock;
-            return (
-              <TouchableOpacity
-                key={s.session.id}
-                style={styles.sessionRow}
-                onPress={() => nav(`/processing-session/${s.session.id}`)}
-                activeOpacity={0.7}
-              >
-                <View style={[styles.sessionDot, { backgroundColor: s.statusColor + "18" }]}>
-                  <StatusIcon size={14} color={s.statusColor} />
-                </View>
-                <Text style={styles.sessionName} numberOfLines={1}>{s.session.name}</Text>
-                <Text style={[styles.sessionStatus, { color: s.statusColor }]}>{s.label}</Text>
-              </TouchableOpacity>
-            );
-          })
-        ) : (
+        {activeGroups.slice(0, 3).map((group) => {
+          const groupEvents = processingEvents.filter((e) => e.groupId === group.id);
+          const latestEvent = groupEvents.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0];
+          const progress = latestEvent ? getEventProgress(latestEvent.id, group.id) : null;
+          return (
+            <TouchableOpacity
+              key={group.id}
+              style={[styles.miniCard, { borderLeftWidth: 3, borderLeftColor: group.color }]}
+              onPress={() => nav(`/processing-group/${group.id}`)}
+              activeOpacity={0.7}
+            >
+              <View style={{ flex: 1 }}>
+                <Text style={styles.miniName} numberOfLines={1}>{group.name}</Text>
+                <Text style={styles.miniStat}>{group.animalIds.length} head</Text>
+              </View>
+              {latestEvent && progress && (
+                <Text style={styles.miniStat}>
+                  {latestEvent.status === "completed" ? "✓ Done" : `${progress.done}/${progress.total}`}
+                </Text>
+              )}
+              <ChevronRight size={14} color={Colors.textTertiary} />
+            </TouchableOpacity>
+          );
+        })}
+        {activeGroups.length === 0 && (
           <TouchableOpacity
             style={styles.createBtn}
-            onPress={() => nav("/create-processing-session")}
+            onPress={() => nav("/processing-groups")}
             activeOpacity={0.85}
           >
             <Plus size={16} color={Colors.textInverse} />
-            <Text style={styles.createBtnText}>New Session</Text>
+            <Text style={styles.createBtnText}>Create First Group</Text>
           </TouchableOpacity>
         )}
       </WorkSection>
