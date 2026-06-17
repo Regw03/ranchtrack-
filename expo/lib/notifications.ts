@@ -1,5 +1,12 @@
 import * as Notifications from "expo-notifications";
-import type { Animal, BreedingRecord, DoctoringEvent } from "@/types";
+import type { Animal, DoctoringEvent } from "@/types";
+
+// BreedingRecord was replaced by ProcessingRecord — keeping local type for notifications
+interface BreedingRecord {
+  animalId: string;
+  expectedDueDate: string;
+  status: string;
+}
 
 interface ScheduleParams {
   breedingEnabled: boolean;
