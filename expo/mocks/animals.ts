@@ -1,4 +1,4 @@
-import { Animal, WeightRecord, HealthRecord, BreedingRecord, ActivityLogEntry, Message, Ranch } from "@/types";
+import { Animal, WeightRecord, HealthRecord, ActivityLogEntry, Message, Ranch } from "@/types";
 
 export const MOCK_RANCH: Ranch = {
   id: "",
@@ -14,8 +14,6 @@ export const MOCK_ANIMALS: Animal[] = [];
 export const MOCK_WEIGHT_RECORDS: WeightRecord[] = [];
 
 export const MOCK_HEALTH_RECORDS: HealthRecord[] = [];
-
-export const MOCK_BREEDING_RECORDS: BreedingRecord[] = [];
 
 export const MOCK_ACTIVITY: ActivityLogEntry[] = [];
 
