@@ -28,13 +28,6 @@ import {
   deleteDoctoringEventInCloud,
   fetchDoctoringEvents,
   type RemoteDoctoringEventRow,
-  pushBreedingRecordToCloud,
-  deleteBreedingRecordInCloud,
-  pushBreedingGroupToCloud,
-  deleteBreedingGroupInCloud,
-  fetchBreedingData,
-  type RemoteBreedingRecordRow,
-  type RemoteBreedingGroupRow,
   pushWeightRecordToCloud,
   pushHealthRecordToCloud,
   fetchWeightHealthData,
@@ -55,7 +48,6 @@ import {
   Animal,
   WeightRecord,
   HealthRecord,
-  BreedingRecord,
   CalvingRecord,
   BusinessYear,
   ActivityLogEntry,
@@ -65,8 +57,6 @@ import {
   User,
   CustomList,
   CalvingList,
-  CalvingGroup,
-  BreedingGroup,
   HerdGroup,
   DoctoringEvent,
   RanchNote,
@@ -75,7 +65,6 @@ import {
   MOCK_ANIMALS,
   MOCK_WEIGHT_RECORDS,
   MOCK_HEALTH_RECORDS,
-  MOCK_BREEDING_RECORDS,
   MOCK_ACTIVITY,
   MOCK_MESSAGES,
   MOCK_RANCH,
@@ -88,9 +77,9 @@ interface SoldSnapshot {
   markedForSale: boolean;
   saleNote?: string;
   listIds: string[];
-  calvingGroupCowIds: string[];
-  calvingGroupCalfIds: string[];
-  breedingGroupIds: string[];
+  calvingGroupCowIds?: string[];
+  calvingGroupCalfIds?: string[];
+  breedingGroupIds?: string[];
 }
 
 interface DeceasedSnapshot {
@@ -99,9 +88,9 @@ interface DeceasedSnapshot {
   saleNote?: string;
   previousStatus: "active" | "sold";
   listIds: string[];
-  calvingGroupCowIds: string[];
-  calvingGroupCalfIds: string[];
-  breedingGroupIds: string[];
+  calvingGroupCowIds?: string[];
+  calvingGroupCalfIds?: string[];
+  breedingGroupIds?: string[];
 }
 
 const STORAGE_KEYS = {
@@ -109,7 +98,6 @@ const STORAGE_KEYS = {
   soldSnapshots: "ranchtrack_sold_snapshots",
   weightRecords: "ranchtrack_weight_records",
   healthRecords: "ranchtrack_health_records",
-  breedingRecords: "ranchtrack_breeding_records",
   calvingRecords: "ranchtrack_calving_records",
   businessYears: "ranchtrack_business_years",
   activeBusinessYearId: "ranchtrack_active_business_year_id",
@@ -119,8 +107,6 @@ const STORAGE_KEYS = {
   currentUserId: "ranchtrack_current_user",
   customLists: "ranchtrack_custom_lists",
   calvingLists: "ranchtrack_calving_lists",
-  calvingGroups: "ranchtrack_calving_groups",
-  breedingGroups: "ranchtrack_breeding_groups",
   deceasedSnapshots: "ranchtrack_deceased_snapshots",
   doctoringEvents: "ranchtrack_doctoring_events",
   ranchNotes: "ranchtrack_ranch_notes",
@@ -267,10 +253,6 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
     queryFn: () => loadFromStorage<HealthRecord[]>(STORAGE_KEYS.healthRecords, MOCK_HEALTH_RECORDS),
   });
 
-  const breedingRecordsQuery = useQuery({
-    queryKey: ["breedingRecords"],
-    queryFn: () => loadFromStorage<BreedingRecord[]>(STORAGE_KEYS.breedingRecords, MOCK_BREEDING_RECORDS),
-  });
 
   const calvingRecordsQuery = useQuery({
     queryKey: ["calvingRecords"],
@@ -307,15 +289,7 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
     queryFn: () => loadFromStorage<CalvingList[]>(STORAGE_KEYS.calvingLists, []),
   });
 
-  const calvingGroupsQuery = useQuery({
-    queryKey: ["calvingGroups"],
-    queryFn: () => loadFromStorage<CalvingGroup[]>(STORAGE_KEYS.calvingGroups, []),
-  });
 
-  const breedingGroupsQuery = useQuery({
-    queryKey: ["breedingGroups"],
-    queryFn: () => loadFromStorage<BreedingGroup[]>(STORAGE_KEYS.breedingGroups, []),
-  });
 
   const soldSnapshotsQuery = useQuery({
     queryKey: ["soldSnapshots"],
@@ -345,7 +319,6 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
   const animals = animalsQuery.data ?? [];
   const weightRecords = weightRecordsQuery.data ?? [];
   const healthRecords = healthRecordsQuery.data ?? [];
-  const breedingRecords = breedingRecordsQuery.data ?? [];
   const calvingRecords = calvingRecordsQuery.data ?? [];
   const businessYears = businessYearsQuery.data ?? [DEFAULT_BUSINESS_YEAR];
   const activeBusinessYearId = activeBusinessYearIdQuery.data ?? DEFAULT_BUSINESS_YEAR.id;
@@ -353,8 +326,6 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
   const messages = messagesQuery.data ?? [];
   const customLists = customListsQuery.data ?? [];
   const allCalvingLists = calvingListsQuery.data ?? [];
-  const allCalvingGroups = calvingGroupsQuery.data ?? [];
-  const allBreedingGroups = breedingGroupsQuery.data ?? [];
 
   const calvingLists = useMemo(
     () => allCalvingLists.filter((l) => l.businessYearId === activeBusinessYearId),
@@ -362,17 +333,7 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
     [allCalvingLists.length, activeBusinessYearId],
   );
 
-  const calvingGroups = useMemo(
-    () => allCalvingGroups.filter((g) => g.businessYearId === activeBusinessYearId),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [allCalvingGroups.length, activeBusinessYearId],
-  );
 
-  const breedingGroups = useMemo(
-    () => allBreedingGroups.filter((g) => g.businessYearId === activeBusinessYearId),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [allBreedingGroups.length, activeBusinessYearId],
-  );
 
   const isLoading = animalsQuery.isLoading || ranchQuery.isLoading || businessYearsQuery.isLoading;
 
@@ -469,31 +430,6 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
     return groups;
   }, [activeAnimals]);
 
-  const bredAnimals = useMemo(
-    () => {
-      const bredAnimalIds = new Set<string>();
-      breedingRecords
-        .filter((r) => (r.status === "bred" || r.status === "confirmed") && (!r.businessYearId || r.businessYearId === activeBusinessYearId))
-        .forEach((r) => bredAnimalIds.add(r.animalId));
-      return activeAnimals.filter((a) => bredAnimalIds.has(a.id));
-    },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [activeAnimals, breedingRecords.length, activeBusinessYearId],
-  );
-
-  const openAnimals = useMemo(
-    () => {
-      const bredAnimalIds = new Set<string>();
-      breedingRecords
-        .filter((r) => (r.status === "bred" || r.status === "confirmed") && (!r.businessYearId || r.businessYearId === activeBusinessYearId))
-        .forEach((r) => bredAnimalIds.add(r.animalId));
-      return activeAnimals.filter(
-        (a) => (a.sex === "female" || a.sex === "heifer") && !bredAnimalIds.has(a.id),
-      );
-    },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [activeAnimals, breedingRecords.length, activeBusinessYearId],
-  );
 
   const forSaleAnimals = useMemo(
     () => animals.filter((a) => a.markedForSale && a.status === "active"),
@@ -642,79 +578,6 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
     },
   });
 
-  const addBreedingRecordMutation = useMutation({
-    mutationFn: async (record: Omit<BreedingRecord, "id">) => {
-      const newRecord: BreedingRecord = {
-        ...record,
-        id: generateId(),
-        businessYearId: record.businessYearId ?? activeBusinessYearId,
-      };
-      const current = queryClient.getQueryData<BreedingRecord[]>(["breedingRecords"]) ?? [];
-      const updated = [...current, newRecord];
-      await saveToStorage(STORAGE_KEYS.breedingRecords, updated);
-      const animal = animals.find((a) => a.id === record.animalId);
-      if (animal) {
-        await logActivity(`Added breeding record for ${getAnimalDisplayName(animal)}`, "breeding", animal.id);
-      }
-      void pushBreedingRecordToCloud(newRecord, ranch.id, currentUserRole);
-      return updated;
-    },
-    onSuccess: (updated) => {
-      queryClient.setQueryData(["breedingRecords"], updated);
-    },
-  });
-
-  const deleteBreedingRecordMutation = useMutation({
-    mutationFn: async (recordId: string) => {
-      const current = queryClient.getQueryData<BreedingRecord[]>(["breedingRecords"]) ?? [];
-      const updated = current.filter((r) => r.id !== recordId);
-      await saveToStorage(STORAGE_KEYS.breedingRecords, updated);
-      void deleteBreedingRecordInCloud(recordId);
-      return updated;
-    },
-    onSuccess: (updated) => {
-      queryClient.setQueryData(["breedingRecords"], updated);
-    },
-  });
-
-  const quickSetBreedingStatus = useMutation({
-    mutationFn: async ({ animalId, status, dueDate }: { animalId: string; status: "bred" | "open"; dueDate?: string }) => {
-      const current = queryClient.getQueryData<BreedingRecord[]>(["breedingRecords"]) ?? [];
-      const existingIdx = current.findIndex(
-        (r) => r.animalId === animalId && (r.businessYearId === activeBusinessYearId || !r.businessYearId),
-      );
-
-      let updated: BreedingRecord[];
-      if (existingIdx >= 0) {
-        updated = current.map((r, i) =>
-          i === existingIdx ? { ...r, status, expectedDueDate: dueDate ?? r.expectedDueDate } : r,
-        );
-      } else {
-        const newRecord: BreedingRecord = {
-          id: generateId(),
-          animalId,
-          lastBredDate: new Date().toISOString().split("T")[0],
-          expectedDueDate: dueDate ?? "",
-          status,
-          businessYearId: activeBusinessYearId,
-          notes: "",
-        };
-        updated = [...current, newRecord];
-      }
-
-      await saveToStorage(STORAGE_KEYS.breedingRecords, updated);
-      const changedRecord = updated.find((r) => r.animalId === animalId && r.businessYearId === activeBusinessYearId);
-      if (changedRecord) void pushBreedingRecordToCloud(changedRecord, ranch.id, currentUserRole);
-      const animal = animals.find((a) => a.id === animalId);
-      if (animal) {
-        await logActivity(`Set ${getAnimalDisplayName(animal)} as ${status}`, "breeding", animalId);
-      }
-      return updated;
-    },
-    onSuccess: (updated) => {
-      queryClient.setQueryData(["breedingRecords"], updated);
-    },
-  });
 
   const createBusinessYearMutation = useMutation({
     mutationFn: async (year: Omit<BusinessYear, "id" | "createdAt">) => {
@@ -818,12 +681,6 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
     [healthRecords.length],
   );
 
-  const getBreedingRecordsForAnimal = useCallback(
-    (animalId: string) =>
-      breedingRecords.filter((r) => r.animalId === animalId).sort((a, b) => new Date(b.lastBredDate).getTime() - new Date(a.lastBredDate).getTime()),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [breedingRecords.length],
-  );
 
   const animalStats = useMemo(() => {
     const allActive = animals.filter((a) => a.status === "active");
@@ -844,16 +701,6 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [animals.length]);
 
-  const getAnimalBreedingStatus = useCallback(
-    (animalId: string): "bred" | "confirmed" | "delivered" | "open" | "none" => {
-      const records = breedingRecords.filter((r) => r.animalId === animalId);
-      if (records.length === 0) return "none";
-      const latest = records.sort((a, b) => new Date(b.lastBredDate).getTime() - new Date(a.lastBredDate).getTime())[0];
-      return latest.status;
-    },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [breedingRecords.length],
-  );
 
   const getAnimalVaccinationStatus = useCallback(
     (animalId: string): "vaccinated" | "needs_vaccination" | "no_records" => {
@@ -994,18 +841,13 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
       const animal = currentAnimals.find((a) => a.id === animalId);
 
       const currentLists = queryClient.getQueryData<CustomList[]>(["customLists"]) ?? [];
-      const currentGroups = queryClient.getQueryData<CalvingGroup[]>(["calvingGroups"]) ?? [];
 
-      const currentBreedingGroups = queryClient.getQueryData<BreedingGroup[]>(["breedingGroups"]) ?? [];
 
       const snapshot: SoldSnapshot = {
         animalId,
         markedForSale: animal?.markedForSale ?? false,
         saleNote: animal?.saleNote,
         listIds: currentLists.filter((l) => l.animalIds.includes(animalId)).map((l) => l.id),
-        calvingGroupCowIds: currentGroups.filter((g) => g.cowIds.includes(animalId)).map((g) => g.id),
-        calvingGroupCalfIds: currentGroups.filter((g) => g.calfIds.includes(animalId)).map((g) => g.id),
-        breedingGroupIds: currentBreedingGroups.filter((g) => g.animalIds.includes(animalId)).map((g) => g.id),
       };
       const currentSnapshots = queryClient.getQueryData<SoldSnapshot[]>(["soldSnapshots"]) ?? [];
       const updatedSnapshots = [...currentSnapshots.filter((s) => s.animalId !== animalId), snapshot];
@@ -1028,40 +870,15 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
       });
       await saveToStorage(STORAGE_KEYS.customLists, updatedLists);
 
-      const updatedGroups = currentGroups.map((g) => {
-        const hasCow = g.cowIds.includes(animalId);
-        const hasCalf = g.calfIds.includes(animalId);
-        if (hasCow || hasCalf) {
-          return {
-            ...g,
-            cowIds: hasCow ? g.cowIds.filter((id) => id !== animalId) : g.cowIds,
-            calfIds: hasCalf ? g.calfIds.filter((id) => id !== animalId) : g.calfIds,
-            updatedAt: new Date().toISOString(),
-          };
-        }
-        return g;
-      });
-      await saveToStorage(STORAGE_KEYS.calvingGroups, updatedGroups);
-
-      const updatedBreedingGroups = currentBreedingGroups.map((g) => {
-        if (g.animalIds.includes(animalId)) {
-          return { ...g, animalIds: g.animalIds.filter((id) => id !== animalId), updatedAt: new Date().toISOString() };
-        }
-        return g;
-      });
-      await saveToStorage(STORAGE_KEYS.breedingGroups, updatedBreedingGroups);
-
       if (animal) {
         await logActivity(`Marked ${getAnimalDisplayName(animal)} as sold`, "animal", animalId);
       }
-      return { updatedAnimals, updatedLists, updatedGroups, updatedSnapshots, updatedBreedingGroups };
+      return { updatedAnimals, updatedLists, updatedSnapshots };
     },
-    onSuccess: ({ updatedAnimals, updatedLists, updatedGroups, updatedSnapshots, updatedBreedingGroups }) => {
+    onSuccess: ({ updatedAnimals, updatedLists, updatedSnapshots }) => {
       queryClient.setQueryData(["animals"], updatedAnimals);
       queryClient.setQueryData(["customLists"], updatedLists);
-      queryClient.setQueryData(["calvingGroups"], updatedGroups);
       queryClient.setQueryData(["soldSnapshots"], updatedSnapshots);
-      queryClient.setQueryData(["breedingGroups"], updatedBreedingGroups);
     },
   });
 
@@ -1071,9 +888,7 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
       const animal = currentAnimals.find((a) => a.id === animalId);
 
       const currentLists = queryClient.getQueryData<CustomList[]>(["customLists"]) ?? [];
-      const currentGroups = queryClient.getQueryData<CalvingGroup[]>(["calvingGroups"]) ?? [];
 
-      const currentBreedingGroups = queryClient.getQueryData<BreedingGroup[]>(["breedingGroups"]) ?? [];
 
       const snapshot: DeceasedSnapshot = {
         animalId,
@@ -1081,9 +896,6 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
         saleNote: animal?.saleNote,
         previousStatus: (animal?.status === "sold" ? "sold" : "active") as "active" | "sold",
         listIds: currentLists.filter((l) => l.animalIds.includes(animalId)).map((l) => l.id),
-        calvingGroupCowIds: currentGroups.filter((g) => g.cowIds.includes(animalId)).map((g) => g.id),
-        calvingGroupCalfIds: currentGroups.filter((g) => g.calfIds.includes(animalId)).map((g) => g.id),
-        breedingGroupIds: currentBreedingGroups.filter((g) => g.animalIds.includes(animalId)).map((g) => g.id),
       };
       const currentSnapshots = queryClient.getQueryData<DeceasedSnapshot[]>(["deceasedSnapshots"]) ?? [];
       const updatedSnapshots = [...currentSnapshots.filter((s) => s.animalId !== animalId), snapshot];
@@ -1106,40 +918,15 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
       });
       await saveToStorage(STORAGE_KEYS.customLists, updatedLists);
 
-      const updatedGroups = currentGroups.map((g) => {
-        const hasCow = g.cowIds.includes(animalId);
-        const hasCalf = g.calfIds.includes(animalId);
-        if (hasCow || hasCalf) {
-          return {
-            ...g,
-            cowIds: hasCow ? g.cowIds.filter((id) => id !== animalId) : g.cowIds,
-            calfIds: hasCalf ? g.calfIds.filter((id) => id !== animalId) : g.calfIds,
-            updatedAt: new Date().toISOString(),
-          };
-        }
-        return g;
-      });
-      await saveToStorage(STORAGE_KEYS.calvingGroups, updatedGroups);
-
-      const updatedBreedingGroups = currentBreedingGroups.map((g) => {
-        if (g.animalIds.includes(animalId)) {
-          return { ...g, animalIds: g.animalIds.filter((id) => id !== animalId), updatedAt: new Date().toISOString() };
-        }
-        return g;
-      });
-      await saveToStorage(STORAGE_KEYS.breedingGroups, updatedBreedingGroups);
-
       if (animal) {
         await logActivity(`Marked ${getAnimalDisplayName(animal)} as deceased`, "animal", animalId);
       }
-      return { updatedAnimals, updatedLists, updatedGroups, updatedSnapshots, updatedBreedingGroups };
+      return { updatedAnimals, updatedLists, updatedSnapshots };
     },
-    onSuccess: ({ updatedAnimals, updatedLists, updatedGroups, updatedSnapshots, updatedBreedingGroups }) => {
+    onSuccess: ({ updatedAnimals, updatedLists, updatedSnapshots }) => {
       queryClient.setQueryData(["animals"], updatedAnimals);
       queryClient.setQueryData(["customLists"], updatedLists);
-      queryClient.setQueryData(["calvingGroups"], updatedGroups);
       queryClient.setQueryData(["deceasedSnapshots"], updatedSnapshots);
-      queryClient.setQueryData(["breedingGroups"], updatedBreedingGroups);
     },
   });
 
@@ -1176,37 +963,6 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
         await saveToStorage(STORAGE_KEYS.customLists, updatedLists);
       }
 
-      const currentGroups = queryClient.getQueryData<CalvingGroup[]>(["calvingGroups"]) ?? [];
-      let updatedGroups = currentGroups;
-      if (snapshot && (snapshot.calvingGroupCowIds.length > 0 || snapshot.calvingGroupCalfIds.length > 0)) {
-        updatedGroups = currentGroups.map((g) => {
-          const shouldAddCow = snapshot.calvingGroupCowIds.includes(g.id) && !g.cowIds.includes(animalId);
-          const shouldAddCalf = snapshot.calvingGroupCalfIds.includes(g.id) && !g.calfIds.includes(animalId);
-          if (shouldAddCow || shouldAddCalf) {
-            return {
-              ...g,
-              cowIds: shouldAddCow ? [...g.cowIds, animalId] : g.cowIds,
-              calfIds: shouldAddCalf ? [...g.calfIds, animalId] : g.calfIds,
-              updatedAt: new Date().toISOString(),
-            };
-          }
-          return g;
-        });
-        await saveToStorage(STORAGE_KEYS.calvingGroups, updatedGroups);
-      }
-
-      const currentBreedingGroups = queryClient.getQueryData<BreedingGroup[]>(["breedingGroups"]) ?? [];
-      let updatedBreedingGroups = currentBreedingGroups;
-      if (snapshot && (snapshot.breedingGroupIds?.length ?? 0) > 0) {
-        updatedBreedingGroups = currentBreedingGroups.map((g) => {
-          if (snapshot.breedingGroupIds?.includes(g.id) && !g.animalIds.includes(animalId)) {
-            return { ...g, animalIds: [...g.animalIds, animalId], updatedAt: new Date().toISOString() };
-          }
-          return g;
-        });
-        await saveToStorage(STORAGE_KEYS.breedingGroups, updatedBreedingGroups);
-      }
-
       const updatedSnapshots = currentSnapshots.filter((s) => s.animalId !== animalId);
       await saveToStorage(STORAGE_KEYS.deceasedSnapshots, updatedSnapshots);
 
@@ -1214,14 +970,12 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
       if (animal) {
         await logActivity(`Undid deceased status for ${getAnimalDisplayName(animal)} — restored to previous state`, "animal", animalId);
       }
-      return { updatedAnimals, updatedLists, updatedGroups, updatedSnapshots, updatedBreedingGroups };
+      return { updatedAnimals, updatedLists, updatedSnapshots };
     },
-    onSuccess: ({ updatedAnimals, updatedLists, updatedGroups, updatedSnapshots, updatedBreedingGroups }) => {
+    onSuccess: ({ updatedAnimals, updatedLists, updatedSnapshots }) => {
       queryClient.setQueryData(["animals"], updatedAnimals);
       queryClient.setQueryData(["customLists"], updatedLists);
-      queryClient.setQueryData(["calvingGroups"], updatedGroups);
       queryClient.setQueryData(["deceasedSnapshots"], updatedSnapshots);
-      queryClient.setQueryData(["breedingGroups"], updatedBreedingGroups);
     },
   });
 
@@ -1258,37 +1012,6 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
         await saveToStorage(STORAGE_KEYS.customLists, updatedLists);
       }
 
-      const currentGroups = queryClient.getQueryData<CalvingGroup[]>(["calvingGroups"]) ?? [];
-      let updatedGroups = currentGroups;
-      if (snapshot && (snapshot.calvingGroupCowIds.length > 0 || snapshot.calvingGroupCalfIds.length > 0)) {
-        updatedGroups = currentGroups.map((g) => {
-          const shouldAddCow = snapshot.calvingGroupCowIds.includes(g.id) && !g.cowIds.includes(animalId);
-          const shouldAddCalf = snapshot.calvingGroupCalfIds.includes(g.id) && !g.calfIds.includes(animalId);
-          if (shouldAddCow || shouldAddCalf) {
-            return {
-              ...g,
-              cowIds: shouldAddCow ? [...g.cowIds, animalId] : g.cowIds,
-              calfIds: shouldAddCalf ? [...g.calfIds, animalId] : g.calfIds,
-              updatedAt: new Date().toISOString(),
-            };
-          }
-          return g;
-        });
-        await saveToStorage(STORAGE_KEYS.calvingGroups, updatedGroups);
-      }
-
-      const currentBreedingGroups = queryClient.getQueryData<BreedingGroup[]>(["breedingGroups"]) ?? [];
-      let updatedBreedingGroups = currentBreedingGroups;
-      if (snapshot && (snapshot.breedingGroupIds?.length ?? 0) > 0) {
-        updatedBreedingGroups = currentBreedingGroups.map((g) => {
-          if (snapshot.breedingGroupIds?.includes(g.id) && !g.animalIds.includes(animalId)) {
-            return { ...g, animalIds: [...g.animalIds, animalId], updatedAt: new Date().toISOString() };
-          }
-          return g;
-        });
-        await saveToStorage(STORAGE_KEYS.breedingGroups, updatedBreedingGroups);
-      }
-
       const updatedSnapshots = currentSnapshots.filter((s) => s.animalId !== animalId);
       await saveToStorage(STORAGE_KEYS.soldSnapshots, updatedSnapshots);
 
@@ -1296,14 +1019,12 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
       if (animal) {
         await logActivity(`Undid sold status for ${getAnimalDisplayName(animal)} — restored to previous state`, "animal", animalId);
       }
-      return { updatedAnimals, updatedLists, updatedGroups, updatedSnapshots, updatedBreedingGroups };
+      return { updatedAnimals, updatedLists, updatedSnapshots };
     },
-    onSuccess: ({ updatedAnimals, updatedLists, updatedGroups, updatedSnapshots, updatedBreedingGroups }) => {
+    onSuccess: ({ updatedAnimals, updatedLists, updatedSnapshots }) => {
       queryClient.setQueryData(["animals"], updatedAnimals);
       queryClient.setQueryData(["customLists"], updatedLists);
-      queryClient.setQueryData(["calvingGroups"], updatedGroups);
       queryClient.setQueryData(["soldSnapshots"], updatedSnapshots);
-      queryClient.setQueryData(["breedingGroups"], updatedBreedingGroups);
     },
   });
 
@@ -1547,7 +1268,6 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
       };
       const current = queryClient.getQueryData<CalvingGroup[]>(["calvingGroups"]) ?? [];
       const updated = [...current, newGroup];
-      await saveToStorage(STORAGE_KEYS.calvingGroups, updated);
       await logActivity(`Created calving group "${newGroup.name}"`);
       return { updated, newGroup };
     },
@@ -1562,7 +1282,6 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
       const updated = current.map((g) =>
         g.id === group.id ? { ...group, updatedAt: new Date().toISOString() } : g,
       );
-      await saveToStorage(STORAGE_KEYS.calvingGroups, updated);
       return updated;
     },
     onSuccess: (updated) => {
@@ -1575,7 +1294,6 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
       const current = queryClient.getQueryData<CalvingGroup[]>(["calvingGroups"]) ?? [];
       const group = current.find((g) => g.id === groupId);
       const updated = current.filter((g) => g.id !== groupId);
-      await saveToStorage(STORAGE_KEYS.calvingGroups, updated);
       if (group) {
         await logActivity(`Deleted calving group "${group.name}"`);
       }
@@ -1595,7 +1313,6 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
         }
         return g;
       });
-      await saveToStorage(STORAGE_KEYS.calvingGroups, updated);
       return updated;
     },
     onSuccess: (updated) => {
@@ -1612,7 +1329,6 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
         }
         return g;
       });
-      await saveToStorage(STORAGE_KEYS.calvingGroups, updated);
       return updated;
     },
     onSuccess: (updated) => {
@@ -1629,7 +1345,6 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
         }
         return g;
       });
-      await saveToStorage(STORAGE_KEYS.calvingGroups, updated);
       return updated;
     },
     onSuccess: (updated) => {
@@ -1649,117 +1364,8 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
     [allCalvingGroups.length, allCalvingGroups],
   );
 
-  const createBreedingGroupMutation = useMutation({
-    mutationFn: async (group: Omit<BreedingGroup, "id" | "ranchId" | "businessYearId" | "createdAt" | "updatedAt">) => {
-      const newGroup: BreedingGroup = {
-        ...group,
-        id: generateId(),
-        ranchId: ranch.id,
-        businessYearId: activeBusinessYearId,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      };
-      const current = queryClient.getQueryData<BreedingGroup[]>(["breedingGroups"]) ?? [];
-      const updated = [...current, newGroup];
-      await saveToStorage(STORAGE_KEYS.breedingGroups, updated);
-      await logActivity(`Created breeding group "${newGroup.name}"`);
-      void pushBreedingGroupToCloud(newGroup, currentUserRole);
-      return { updated, newGroup };
-    },
-    onSuccess: ({ updated }) => {
-      queryClient.setQueryData(["breedingGroups"], updated);
-    },
-  });
 
-  const updateBreedingGroupMutation = useMutation({
-    mutationFn: async (group: BreedingGroup) => {
-      const current = queryClient.getQueryData<BreedingGroup[]>(["breedingGroups"]) ?? [];
-      const updated = current.map((g) =>
-        g.id === group.id ? { ...group, updatedAt: new Date().toISOString() } : g,
-      );
-      await saveToStorage(STORAGE_KEYS.breedingGroups, updated);
-      const updatedGroup = updated.find((g) => g.id === group.id);
-      if (updatedGroup) void pushBreedingGroupToCloud(updatedGroup, currentUserRole);
-      return updated;
-    },
-    onSuccess: (updated) => {
-      queryClient.setQueryData(["breedingGroups"], updated);
-    },
-  });
 
-  const deleteBreedingGroupMutation = useMutation({
-    mutationFn: async (groupId: string) => {
-      const current = queryClient.getQueryData<BreedingGroup[]>(["breedingGroups"]) ?? [];
-      const group = current.find((g) => g.id === groupId);
-      const updated = current.filter((g) => g.id !== groupId);
-      await saveToStorage(STORAGE_KEYS.breedingGroups, updated);
-      if (group) {
-        await logActivity(`Deleted breeding group "${group.name}"`);
-        void deleteBreedingGroupInCloud(groupId, currentUserRole);
-      }
-      return updated;
-    },
-    onSuccess: (updated) => {
-      queryClient.setQueryData(["breedingGroups"], updated);
-    },
-  });
-
-  const addAnimalToBreedingGroupMutation = useMutation({
-    mutationFn: async ({ groupId, animalId }: { groupId: string; animalId: string }) => {
-      const current = queryClient.getQueryData<BreedingGroup[]>(["breedingGroups"]) ?? [];
-      const updated = current.map((g) => {
-        if (g.id === groupId && !g.animalIds.includes(animalId)) {
-          return { ...g, animalIds: [...g.animalIds, animalId], updatedAt: new Date().toISOString() };
-        }
-        return g;
-      });
-      await saveToStorage(STORAGE_KEYS.breedingGroups, updated);
-      const updatedGroup = updated.find((g) => g.id === groupId);
-      if (updatedGroup) void pushBreedingGroupToCloud(updatedGroup, currentUserRole);
-      return updated;
-    },
-    onSuccess: (updated) => {
-      queryClient.setQueryData(["breedingGroups"], updated);
-    },
-  });
-
-  const removeAnimalFromBreedingGroupMutation = useMutation({
-    mutationFn: async ({ groupId, animalId }: { groupId: string; animalId: string }) => {
-      const current = queryClient.getQueryData<BreedingGroup[]>(["breedingGroups"]) ?? [];
-      const updated = current.map((g) => {
-        if (g.id === groupId) {
-          return { ...g, animalIds: g.animalIds.filter((id) => id !== animalId), updatedAt: new Date().toISOString() };
-        }
-        return g;
-      });
-      await saveToStorage(STORAGE_KEYS.breedingGroups, updated);
-      const updatedGroup = updated.find((g) => g.id === groupId);
-      if (updatedGroup) void pushBreedingGroupToCloud(updatedGroup, currentUserRole);
-      return updated;
-    },
-    onSuccess: (updated) => {
-      queryClient.setQueryData(["breedingGroups"], updated);
-    },
-  });
-
-  const getBreedingGroupById = useCallback(
-    (id: string) => allBreedingGroups.find((g) => g.id === id),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [allBreedingGroups.length, allBreedingGroups],
-  );
-
-  const getBreedingGroupsForAnimal = useCallback(
-    (animalId: string) => allBreedingGroups.filter((g) => g.animalIds.includes(animalId)),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [allBreedingGroups.length, allBreedingGroups],
-  );
-
-  const breedingRecordsForYear = useMemo(
-    () => breedingRecords.filter((r) => !r.businessYearId || r.businessYearId === activeBusinessYearId)
-      .sort((a, b) => new Date(b.lastBredDate).getTime() - new Date(a.lastBredDate).getTime()),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [breedingRecords.length, activeBusinessYearId],
-  );
 
   const mergeAnimalsMutation = useMutation({
     mutationFn: async ({ keepId, removeId }: { keepId: string; removeId: string }) => {
@@ -1800,14 +1406,12 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
       const updatedHR = currentHR.map((r) => r.animalId === removeId ? { ...r, animalId: keepId } : r);
       await saveToStorage(STORAGE_KEYS.healthRecords, updatedHR);
 
-      const currentBR = queryClient.getQueryData<BreedingRecord[]>(["breedingRecords"]) ?? [];
       const updatedBR = currentBR.map((r) => {
         let updated = r;
         if (r.animalId === removeId) updated = { ...updated, animalId: keepId };
         if (r.sireId === removeId) updated = { ...updated, sireId: keepId };
         return updated;
       });
-      await saveToStorage(STORAGE_KEYS.breedingRecords, updatedBR);
 
       const currentLists = queryClient.getQueryData<CustomList[]>(["customLists"]) ?? [];
       const updatedLists = currentLists.map((l) => {
@@ -1834,7 +1438,6 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
         }
         return { ...g, cowIds, calfIds, updatedAt: new Date().toISOString() };
       });
-      await saveToStorage(STORAGE_KEYS.calvingGroups, updatedCG);
 
       const currentBG = queryClient.getQueryData<BreedingGroup[]>(["breedingGroups"]) ?? [];
       const updatedBG = currentBG.map((g) => {
@@ -1845,7 +1448,6 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
         }
         return g;
       });
-      await saveToStorage(STORAGE_KEYS.breedingGroups, updatedBG);
 
       await logActivity(
         `Merged ${getAnimalDisplayName(removeAnimal)} into ${getAnimalDisplayName(mergedAnimal)}`,
@@ -1859,7 +1461,6 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
       queryClient.setQueryData(["animals"], updatedAnimals);
       queryClient.setQueryData(["weightRecords"], updatedWR);
       queryClient.setQueryData(["healthRecords"], updatedHR);
-      queryClient.setQueryData(["breedingRecords"], updatedBR);
       queryClient.setQueryData(["customLists"], updatedLists);
       queryClient.setQueryData(["calvingGroups"], updatedCG);
       queryClient.setQueryData(["breedingGroups"], updatedBG);
@@ -2154,8 +1755,8 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
             (memberErr as { code?: string }).code === "23505"
               ? "This teammate is already in the ranch."
               : (memberErr as { code?: string }).code === "42501"
-              ? "You don't have permission to invite teammates. Check Supabase RLS policies for ranch_members."
-              : memberErr.message || "Failed to invite teammate";
+                ? "You don't have permission to invite teammates. Check Supabase RLS policies for ranch_members."
+                : memberErr.message || "Failed to invite teammate";
           throw new Error(friendly);
         }
       } else if (currentRanch.id && !isUuid(currentRanch.id)) {
@@ -2416,7 +2017,6 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
     syncBusinessYearsMutation.mutate();
     syncCalvingDataMutation.mutate();
     syncDoctoringEventsMutation.mutate();
-    syncBreedingDataMutation.mutate();
     syncWeightHealthMutation.mutate();
     syncCustomListsMutation.mutate();
     syncRanchNotesMutation.mutate();
@@ -2431,12 +2031,10 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
         const breedingEnabled = breedingPref !== "false";
         const doctoringEnabled = healthPref !== "false";
         const currentAnimals = queryClient.getQueryData<Animal[]>(["animals"]) ?? [];
-        const currentBreeding = queryClient.getQueryData<BreedingRecord[]>(["breedingRecords"]) ?? [];
         const currentDoctoring = queryClient.getQueryData<DoctoringEvent[]>(["doctoringEvents"]) ?? [];
         await scheduleAllNotifications({
           breedingEnabled,
           doctoringEnabled,
-          breedingRecords: currentBreeding,
           doctoringEvents: currentDoctoring,
           animals: currentAnimals,
         });
@@ -2462,7 +2060,6 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
           syncBusinessYearsMutation.mutate();
           syncCalvingDataMutation.mutate();
           syncDoctoringEventsMutation.mutate();
-          syncBreedingDataMutation.mutate();
           syncWeightHealthMutation.mutate();
           syncCustomListsMutation.mutate();
           syncRanchNotesMutation.mutate();
@@ -2669,76 +2266,6 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
   });
 
   // ─── Breeding sync mutation ───────────────────────────────────────────────
-  const syncBreedingDataMutation = useMutation({
-    mutationFn: async () => {
-      const currentRanch = queryClient.getQueryData<Ranch>(["ranch"]) ?? ranch;
-      if (!currentRanch.id || currentRanch.id === MOCK_RANCH.id) return;
-
-      const { records: remoteRecords, groups: remoteGroups, error } = await fetchBreedingData(currentRanch.id);
-      if (error) {
-        const localRecords = queryClient.getQueryData<BreedingRecord[]>(["breedingRecords"]) ?? [];
-        const localGroups = queryClient.getQueryData<BreedingGroup[]>(["breedingGroups"]) ?? [];
-        for (const r of localRecords) void pushBreedingRecordToCloud(r, currentRanch.id, currentUserRole);
-        for (const g of localGroups) void pushBreedingGroupToCloud(g, currentUserRole);
-        return;
-      }
-
-      // ── Merge records ────────────────────────────────────────────────────
-      const localRecords = queryClient.getQueryData<BreedingRecord[]>(["breedingRecords"]) ?? [];
-      const localRecordIds = new Set(localRecords.map((r) => r.id));
-      const remoteRecordIds = new Set(remoteRecords.map((r: RemoteBreedingRecordRow) => r.id));
-
-      const newRecords: BreedingRecord[] = remoteRecords
-        .filter((r: RemoteBreedingRecordRow) => !localRecordIds.has(r.id))
-        .map((r: RemoteBreedingRecordRow) => ({
-          id: r.id,
-          animalId: r.animal_id,
-          sireId: r.sire_id ?? undefined,
-          lastBredDate: r.last_bred_date,
-          expectedDueDate: r.expected_due_date,
-          status: r.status as BreedingRecord["status"],
-          businessYearId: r.business_year_id ?? undefined,
-          notes: r.notes,
-        }));
-
-      if (newRecords.length > 0) {
-        const merged = [...localRecords, ...newRecords];
-        await saveToStorage(STORAGE_KEYS.breedingRecords, merged);
-        queryClient.setQueryData(["breedingRecords"], merged);
-        console.log(`[syncBreeding] added ${newRecords.length} records from server`);
-      }
-      const localOnlyRecords = localRecords.filter((r) => !remoteRecordIds.has(r.id));
-      for (const r of localOnlyRecords) void pushBreedingRecordToCloud(r, currentRanch.id, currentUserRole);
-
-      // ── Merge groups ─────────────────────────────────────────────────────
-      const localGroups = queryClient.getQueryData<BreedingGroup[]>(["breedingGroups"]) ?? [];
-      const localGroupIds = new Set(localGroups.map((g) => g.id));
-      const remoteGroupIds = new Set(remoteGroups.map((g: RemoteBreedingGroupRow) => g.id));
-
-      const newGroups: BreedingGroup[] = remoteGroups
-        .filter((g: RemoteBreedingGroupRow) => !localGroupIds.has(g.id))
-        .map((g: RemoteBreedingGroupRow) => ({
-          id: g.id,
-          ranchId: currentRanch.id,
-          name: g.name,
-          color: g.color,
-          animalIds: g.animal_ids,
-          businessYearId: g.business_year_id,
-          createdAt: g.created_at,
-          updatedAt: g.updated_at,
-        }));
-
-      if (newGroups.length > 0) {
-        const merged = [...localGroups, ...newGroups];
-        await saveToStorage(STORAGE_KEYS.breedingGroups, merged);
-        queryClient.setQueryData(["breedingGroups"], merged);
-        console.log(`[syncBreeding] added ${newGroups.length} groups from server`);
-      }
-      const localOnlyGroups = localGroups.filter((g) => !remoteGroupIds.has(g.id));
-      for (const g of localOnlyGroups) void pushBreedingGroupToCloud(g, currentUserRole);
-    },
-    onError: (e) => console.log("[syncBreeding] error", e),
-  });
 
   // ─── Weight + Health Records sync mutation ───────────────────────────────
   const syncWeightHealthMutation = useMutation({
@@ -2923,7 +2450,6 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
       queryClient.setQueryData(["animals"], []);
       queryClient.setQueryData(["weightRecords"], []);
       queryClient.setQueryData(["healthRecords"], []);
-      queryClient.setQueryData(["breedingRecords"], []);
       queryClient.setQueryData(["calvingRecords"], []);
       queryClient.setQueryData(["activityLog"], []);
       queryClient.setQueryData(["messages"], []);
@@ -3091,10 +2617,8 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
     calvingLists,
     allCalvingLists,
     calvingGroups,
-    breedingGroups,
     weightRecords,
     healthRecords,
-    breedingRecords,
     calvingRecords,
     businessYears,
     activeBusinessYear,
@@ -3107,30 +2631,23 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
     currentUserName,
     animalStats,
     animalsByHerdGroup,
-    bredAnimals,
-    openAnimals,
     forSaleAnimals,
     soldAnimals,
     deceasedAnimals,
     calvingRecordsForYear,
-    breedingRecordsForYear,
     addAnimal: addAnimalMutation.mutateAsync,
     updateAnimal: updateAnimalMutation.mutateAsync,
     deleteAnimal: deleteAnimalMutation.mutateAsync,
     addWeightRecord: addWeightRecordMutation.mutateAsync,
     addHealthRecord: addHealthRecordMutation.mutateAsync,
-    addBreedingRecord: addBreedingRecordMutation.mutateAsync,
     deleteWeightRecord: deleteWeightRecordMutation.mutateAsync,
     deleteHealthRecord: deleteHealthRecordMutation.mutateAsync,
-    deleteBreedingRecord: deleteBreedingRecordMutation.mutateAsync,
-    quickSetBreedingStatus: quickSetBreedingStatus.mutateAsync,
     createBusinessYear: createBusinessYearMutation.mutateAsync,
     setActiveBusinessYear: setActiveBusinessYearMutation.mutateAsync,
     sendMessage: sendMessageMutation.mutateAsync,
     getAnimalById,
     getWeightRecordsForAnimal,
     getHealthRecordsForAnimal,
-    getBreedingRecordsForAnimal,
     isAddingAnimal: addAnimalMutation.isPending,
     getAnimalBreedingStatus,
     getAnimalVaccinationStatus,
@@ -3168,12 +2685,6 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
     addCalfToCalvingGroup: addCalfToCalvingGroupMutation.mutateAsync,
     getCalvingGroupById,
     getCalvingGroupsForCow,
-    createBreedingGroup: createBreedingGroupMutation.mutateAsync,
-    updateBreedingGroup: updateBreedingGroupMutation.mutateAsync,
-    deleteBreedingGroup: deleteBreedingGroupMutation.mutateAsync,
-    addAnimalToBreedingGroup: addAnimalToBreedingGroupMutation.mutateAsync,
-    removeAnimalFromBreedingGroup: removeAnimalFromBreedingGroupMutation.mutateAsync,
-    getBreedingGroupById,
     getBreedingGroupsForAnimal,
     mergeAnimals: mergeAnimalsMutation.mutateAsync,
     isMergingAnimals: mergeAnimalsMutation.isPending,
@@ -3193,8 +2704,6 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
     isSyncingCalvingData: syncCalvingDataMutation.isPending,
     syncDoctoringEvents: syncDoctoringEventsMutation.mutateAsync,
     isSyncingDoctoringEvents: syncDoctoringEventsMutation.isPending,
-    syncBreedingData: syncBreedingDataMutation.mutateAsync,
-    isSyncingBreedingData: syncBreedingDataMutation.isPending,
     syncWeightHealth: syncWeightHealthMutation.mutateAsync,
     isSyncingWeightHealth: syncWeightHealthMutation.isPending,
     syncCustomLists: syncCustomListsMutation.mutateAsync,
