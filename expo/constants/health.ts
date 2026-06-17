@@ -1,4 +1,4 @@
-import { HealthEventType } from "@/types";
+type HealthEventType = "vaccination" | "blood_test" | "treatment" | "inspection" | "custom";
 
 export const HEALTH_EVENT_TYPE_CONFIG: Record<
   HealthEventType,
