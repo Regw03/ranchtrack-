@@ -22,14 +22,12 @@ import {
   CheckCircle2,
   Clock,
   Calendar,
-  Heart,
 } from "lucide-react-native";
 import * as Haptics from "expo-haptics";
 import { ThemeColors } from "@/constants/colors";
 import { useColors } from "@/providers/ThemeProvider";
 import { useRanch } from "@/providers/RanchProvider";
-import { useProcessingSessions } from "@/providers/ProcessingSessionProvider";
-import { Animal, DoctoringEvent, ProcessingSession, BreedingRecord } from "@/types";
+import { Animal, DoctoringEvent } from "@/types";
 
 function QuickActionButton({
   label,
@@ -111,54 +109,6 @@ function AttentionItem({
   );
 }
 
-function SessionCard({
-  session,
-  statusLabel,
-  statusColor,
-  onPress,
-}: {
-  session: ProcessingSession;
-  statusLabel: string;
-  statusColor: string;
-  onPress: () => void;
-}) {
-  const Colors = useColors();
-  const styles = useMemo(() => createStyles(Colors), [Colors]);
-
-  const StatusIcon = statusLabel === "Completed"
-    ? CheckCircle2
-    : statusLabel === "In Progress"
-      ? Activity
-      : Clock;
-
-  return (
-    <TouchableOpacity
-      style={styles.sessionCard}
-      onPress={() => {
-        if (Platform.OS !== "web") void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-        onPress();
-      }}
-      activeOpacity={0.7}
-    >
-      <View style={styles.sessionCardTop}>
-        <View style={[styles.sessionStatusIcon, { backgroundColor: statusColor + "18" }]}>
-          <StatusIcon size={16} color={statusColor} />
-        </View>
-        <View style={styles.sessionInfo}>
-          <Text style={styles.sessionName} numberOfLines={2}>{session.name}</Text>
-          <Text style={styles.sessionMeta}>
-            {session.groups.length} group{session.groups.length !== 1 ? "s" : ""}
-          </Text>
-        </View>
-        <ChevronRight size={16} color={Colors.textTertiary} />
-      </View>
-      <View style={styles.sessionBadge}>
-        <View style={[styles.sessionBadgeDot, { backgroundColor: statusColor }]} />
-        <Text style={[styles.sessionBadgeText, { color: statusColor }]}>{statusLabel}</Text>
-      </View>
-    </TouchableOpacity>
-  );
-}
 
 export default function DashboardScreen() {
   const Colors = useColors();
@@ -170,13 +120,9 @@ export default function DashboardScreen() {
     doctoringEvents,
     activeBusinessYear,
     ranchNotes,
-    breedingRecordsForYear,
-    bredAnimals,
-    openAnimals,
     animals,
   } = useRanch();
 
-  const { sessions, getSessionProgress } = useProcessingSessions();
 
   const attentionItems = useMemo(() => {
     const items: { animal: Animal; event: DoctoringEvent }[] = [];
@@ -194,41 +140,10 @@ export default function DashboardScreen() {
     return items;
   }, [needsAttentionAnimals, doctoringEvents]);
 
-  const activeSessions = useMemo(() => {
-    return sessions
-      .filter((s) => s.businessYearId === activeBusinessYear.id)
-      .map((s) => {
-        const progress = getSessionProgress(s);
-        let statusColor = Colors.textTertiary;
-        if (progress.label === "Completed") statusColor = Colors.success;
-        else if (progress.label === "In Progress") statusColor = Colors.warning;
-        return { session: s, ...progress, statusColor };
-      });
-  }, [sessions, activeBusinessYear.id, getSessionProgress, Colors]);
+
 
   const hasAttention = attentionItems.length > 0;
-  const hasProcessing = activeSessions.length > 0;
 
-  const dueSoonItems = useMemo(() => {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const thirtyDaysOut = new Date(today);
-    thirtyDaysOut.setDate(thirtyDaysOut.getDate() + 30);
-
-    return breedingRecordsForYear
-      .filter((r) => r.status === "bred" || r.status === "confirmed")
-      .map((r) => {
-        const dueDate = new Date(r.expectedDueDate);
-        const daysUntil = Math.ceil((dueDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
-        const animal = animals.find((a) => a.id === r.animalId);
-        return { record: r, animal, daysUntil };
-      })
-      .filter((item) => item.animal && item.animal.status === "active")
-      .sort((a, b) => a.daysUntil - b.daysUntil)
-      .slice(0, 6);
-  }, [breedingRecordsForYear, animals]);
-
-  const hasBreeding = dueSoonItems.length > 0 || bredAnimals.length > 0 || openAnimals.length > 0;
 
   const handleQuickAction = useCallback((route: string) => {
     router.push(route as never);
@@ -272,131 +187,6 @@ export default function DashboardScreen() {
         />
       </View>
 
-      {hasBreeding && (
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <View style={styles.sectionTitleRow}>
-              <View style={[styles.sectionIconWrap, { backgroundColor: "#E87D9E" + "18" }]}>
-                <Heart size={16} color="#E87D9E" />
-              </View>
-              <Text style={styles.sectionTitle}>Breeding</Text>
-            </View>
-          </View>
-
-          <View style={styles.sectionBody}>
-            <View style={styles.breedingStats}>
-              <View style={styles.breedingStat}>
-                <Text style={styles.breedingStatValue}>{bredAnimals.length}</Text>
-                <Text style={styles.breedingStatLabel}>Bred</Text>
-              </View>
-              <View style={styles.breedingStatDivider} />
-              <View style={styles.breedingStat}>
-                <Text style={[styles.breedingStatValue, { color: "#E87D9E" }]}>{openAnimals.length}</Text>
-                <Text style={styles.breedingStatLabel}>Open</Text>
-              </View>
-              <View style={styles.breedingStatDivider} />
-              <View style={styles.breedingStat}>
-                <Text style={[styles.breedingStatValue, { color: dueSoonItems.length > 0 ? "#D4943A" : Colors.textSecondary }]}>{dueSoonItems.length}</Text>
-                <Text style={styles.breedingStatLabel}>Due Soon</Text>
-              </View>
-            </View>
-
-            {dueSoonItems.length > 0 && (
-              <View style={styles.dueSoonSection}>
-                <Text style={styles.dueSoonTitle}>Upcoming Due Dates</Text>
-                {dueSoonItems.map((item) => {
-                  const isOverdue = item.daysUntil < 0;
-                  const isUrgent = item.daysUntil >= 0 && item.daysUntil <= 5;
-                  const urgencyColor = isOverdue ? "#C44D3D" : isUrgent ? "#D4943A" : Colors.textSecondary;
-                  const daysLabel = isOverdue
-                    ? `${Math.abs(item.daysUntil)}d overdue`
-                    : item.daysUntil === 0
-                      ? "Due today"
-                      : `${item.daysUntil}d`;
-
-                  return (
-                    <TouchableOpacity
-                      key={item.record.id}
-                      style={styles.dueSoonItem}
-                      onPress={() => {
-                        if (Platform.OS !== "web")
-                          void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                        router.push(`/animal/${item.animal!.id}`);
-                      }}
-                      activeOpacity={0.7}
-                    >
-                      <View style={[styles.dueSoonDot, { backgroundColor: urgencyColor }]} />
-                      <View style={styles.dueSoonContent}>
-                        <Text style={styles.dueSoonTag}>{item.animal!.tagId}</Text>
-                        {item.animal!.name ? (
-                          <Text style={styles.dueSoonName}>{item.animal!.name}</Text>
-                        ) : null}
-                      </View>
-                      <View style={styles.dueSoonDateCol}>
-                        <View style={styles.dueSoonDateRow}>
-                          <Calendar size={11} color={Colors.textTertiary} />
-                          <Text style={styles.dueSoonDate}>
-                            {new Date(item.record.expectedDueDate).toLocaleDateString("en-US", {
-                              month: "short",
-                              day: "numeric",
-                            })}
-                          </Text>
-                        </View>
-                        <Text style={[styles.dueSoonDays, { color: urgencyColor }]}>{daysLabel}</Text>
-                      </View>
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
-            )}
-          </View>
-        </View>
-      )}
-
-      {hasAttention && (
-        <View style={styles.section}>
-          <TouchableOpacity
-            style={styles.sectionHeader}
-            onPress={() => {
-              if (Platform.OS !== "web") void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-              router.push("/needs-attention");
-            }}
-            activeOpacity={0.7}
-          >
-            <View style={styles.sectionTitleRow}>
-              <View style={styles.sectionIconWrap}>
-                <AlertTriangle size={16} color="#C44D3D" />
-              </View>
-              <Text style={styles.sectionTitle}>Needs Attention</Text>
-              <View style={styles.countBadge}>
-                <Text style={styles.countBadgeText}>{attentionItems.length}</Text>
-              </View>
-            </View>
-            <ChevronRight size={18} color={Colors.textTertiary} />
-          </TouchableOpacity>
-          <View style={styles.sectionBody}>
-            {attentionItems.slice(0, 5).map((item) => (
-              <AttentionItem
-                key={item.animal.id}
-                animal={item.animal}
-                event={item.event}
-                onPress={() => router.push(`/animal/${item.animal.id}`)}
-              />
-            ))}
-            {attentionItems.length > 5 && (
-              <TouchableOpacity
-                style={styles.seeAllBtn}
-                onPress={() => router.push("/needs-attention")}
-              >
-                <Text style={styles.seeAllText}>
-                  See all {attentionItems.length} animals
-                </Text>
-              </TouchableOpacity>
-            )}
-          </View>
-        </View>
-      )}
-
       {ranchNotes.length > 0 && (
         <View style={styles.section}>
           <TouchableOpacity
@@ -427,39 +217,7 @@ export default function DashboardScreen() {
         </View>
       )}
 
-      {hasProcessing && (
-        <View style={styles.section}>
-          <TouchableOpacity
-            style={styles.sectionHeader}
-            onPress={() => {
-              if (Platform.OS !== "web") void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-              router.push("/processing-sessions");
-            }}
-            activeOpacity={0.7}
-          >
-            <View style={styles.sectionTitleRow}>
-              <View style={[styles.sectionIconWrap, { backgroundColor: "#D4943A" + "18" }]}>
-                <ClipboardList size={16} color="#D4943A" />
-              </View>
-              <Text style={styles.sectionTitle}>Processing Sessions</Text>
-            </View>
-            <ChevronRight size={18} color={Colors.textTertiary} />
-          </TouchableOpacity>
-          <View style={styles.sectionBody}>
-            {activeSessions.map((s) => (
-              <SessionCard
-                key={s.session.id}
-                session={s.session}
-                statusLabel={s.label}
-                statusColor={s.statusColor}
-                onPress={() => router.push(`/processing-session/${s.session.id}`)}
-              />
-            ))}
-          </View>
-        </View>
-      )}
-
-      {!hasAttention && !hasProcessing && !hasBreeding && (
+      {!hasAttention && (
         <View style={styles.emptyState}>
           <View style={styles.emptyIconWrap}>
             <CircleDot size={36} color={Colors.textTertiary} />
