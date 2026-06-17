@@ -7,7 +7,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { Platform } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { RanchProvider } from "@/providers/RanchProvider";
-import { ProcessingSessionProvider } from "@/providers/ProcessingSessionProvider";
+import { ProcessingProvider } from "@/providers/ProcessingProvider";
 import { ThemeProvider, useColors } from "@/providers/ThemeProvider";
 import { OnboardingProvider, useOnboarding } from "@/providers/OnboardingProvider";
 import { useRanch } from "@/providers/RanchProvider";
@@ -86,10 +86,7 @@ function RootLayoutNav() {
         name="add-weight-record"
         options={{ presentation: "modal", title: "Add Weight Record" }}
       />
-      <Stack.Screen
-        name="add-breeding-record"
-        options={{ presentation: "modal", title: "Add Breeding Record" }}
-      />
+
       <Stack.Screen
         name="list/[id]"
         options={{ title: "List" }}
@@ -111,40 +108,16 @@ function RootLayoutNav() {
         options={{ presentation: "modal", title: "New Animal Profile" }}
       />
       <Stack.Screen
-        name="breeding-group/[id]"
-        options={{ title: "Breeding Group" }}
+        name="processing-groups"
       />
       <Stack.Screen
-        name="create-breeding-group"
-        options={{ presentation: "modal", title: "New Breeding Group" }}
+        name="processing-group/[id]"
       />
       <Stack.Screen
-        name="edit-breeding-group"
-        options={{ presentation: "modal", title: "Edit Group" }}
+        name="create-processing-event"
       />
       <Stack.Screen
-        name="add-animals-to-breeding-group"
-        options={{ presentation: "modal", title: "Add Animals" }}
-      />
-      <Stack.Screen
-        name="processing-sessions"
-        options={{ title: "Processing Sessions" }}
-      />
-      <Stack.Screen
-        name="processing-session/[id]"
-        options={{ title: "Session Details" }}
-      />
-      <Stack.Screen
-        name="create-processing-session"
-        options={{ presentation: "modal", title: "New Processing Session" }}
-      />
-      <Stack.Screen
-        name="log-session-event"
-        options={{ presentation: "modal", title: "Log Event" }}
-      />
-      <Stack.Screen
-        name="add-group-to-session"
-        options={{ presentation: "modal", title: "Add Group" }}
+        name="processing-event/[id]"
       />
       <Stack.Screen
         name="log-doctoring-event"
@@ -269,11 +242,11 @@ export default function RootLayout() {
         <ThemeProvider>
           <OnboardingProvider>
             <RanchProvider>
-              <ProcessingSessionProvider>
+              <ProcessingProvider>
                 <OnboardingGate />
                 <RootLayoutNav />
                 <UserSwitchToast />
-              </ProcessingSessionProvider>
+              </ProcessingProvider>
             </RanchProvider>
           </OnboardingProvider>
         </ThemeProvider>
