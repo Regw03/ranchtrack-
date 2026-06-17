@@ -11,7 +11,7 @@ interface BreedingRecord {
 interface ScheduleParams {
   breedingEnabled: boolean;
   doctoringEnabled: boolean;
-  breedingRecords: BreedingRecord[];
+  breedingRecords?: BreedingRecord[];
   doctoringEvents: DoctoringEvent[];
   animals: Animal[];
 }
@@ -22,7 +22,7 @@ interface ScheduleParams {
  * first to avoid duplicates.
  */
 export async function scheduleAllNotifications(params: ScheduleParams): Promise<void> {
-  const { breedingEnabled, doctoringEnabled, breedingRecords, doctoringEvents, animals } =
+  const { breedingEnabled, doctoringEnabled, breedingRecords = [], doctoringEvents, animals } =
     params;
 
   await Notifications.cancelAllScheduledNotificationsAsync();
