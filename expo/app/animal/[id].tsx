@@ -427,9 +427,6 @@ export default function AnimalDetailScreen() {
  <SectionHeader title="Health Records" icon={<Heart size={18} color={Colors.error} />} onAdd={() => router.push({ pathname: "/add-health-record", params: { animalId: animal.id } })} />
  <HealthTimeline records={healthRecords} onDelete={handleDeleteHealthRecord} />
  </View>
- <View style={styles.recordsSection}>
- <SectionHeader title="Breeding" icon={<Baby size={18} color={Colors.success} />} onAdd={() => router.push({ pathname: "/add-breeding-record", params: { animalId: animal.id } })} />
- </View>
  {customLists.length > 0 && (
  <View style={styles.recordsSection}>
  <SectionHeader title="Lists" icon={<List size={18} color={Colors.primary} />} onAdd={() => router.push({ pathname: "/add-to-list", params: { listId: "" } })} />

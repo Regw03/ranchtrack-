@@ -321,10 +321,10 @@ export default function ProcessingGroupDetailScreen() {
  ) : (
  <SectionList
  sections={[
- { title: "Events", data: events },
- { title: "Animals", data: groupAnimals },
+ { title: "Events", data: events as unknown[] },
+ { title: "Animals", data: groupAnimals as unknown[] },
  ]}
- keyExtractor={(item) => item.id}
+ keyExtractor={(item) => (item as ProcessingEvent | Animal).id}
  contentContainerStyle={styles.listContent}
  showsVerticalScrollIndicator={false}
  stickySectionHeadersEnabled={false}
@@ -370,7 +370,7 @@ export default function ProcessingGroupDetailScreen() {
  )}
  renderItem={({ item, section }) => {
  if (section.title === "Events") {
- const event = item as ProcessingEvent;
+ const event = item as unknown as ProcessingEvent;
  return (
  <EventCard
  event={event}
@@ -384,7 +384,7 @@ export default function ProcessingGroupDetailScreen() {
  />
  );
  }
- const animal = item as Animal;
+ const animal = item as unknown as Animal;
  return (
  <AnimalRow
  animal={animal}

@@ -36,7 +36,7 @@ import { useColors } from "@/providers/ThemeProvider";
 import { useTheme } from "@/providers/ThemeProvider";
 import { useRanch } from "@/providers/RanchProvider";
 import { scheduleAllNotifications, cancelBreedingNotifications, cancelDoctoringNotifications } from "@/lib/notifications";
-import { useProcessingSessions } from "@/providers/ProcessingSessionProvider";
+import { useProcessing } from "@/providers/ProcessingProvider";
 import { useOnboarding } from "@/providers/OnboardingProvider";
 import { getInitials } from "@/utils/helpers";
 import { signOut } from "@/lib/supabase";
@@ -50,8 +50,8 @@ const NOTIF_HEALTH_KEY = "ranchtrack_notif_health";
 export default function SettingsScreen() {
   const Colors = useColors();
   const { isDark, toggleTheme } = useTheme();
-  const { ranch, currentUserId, resetApp, refreshRanch, isRefreshingRanch, animals, doctoringEvents, breedingRecords, currentUserRole, canInviteTeammates, removeTeammate, syncBusinessYears, syncCalvingData, syncDoctoringEvents, syncBreedingData, syncWeightHealth, syncCustomLists, syncRanchNotes, isSyncingBusinessYears, isSyncingCalvingData, isSyncingDoctoringEvents, isSyncingBreedingData, isSyncingWeightHealth, isSyncingCustomLists, isSyncingRanchNotes } = useRanch();
-  const { syncSessions } = useProcessingSessions();
+  const { ranch, currentUserId, resetApp, refreshRanch, isRefreshingRanch, animals, doctoringEvents, currentUserRole, canInviteTeammates, removeTeammate, syncBusinessYears, syncCalvingData, syncDoctoringEvents, syncWeightHealth, syncCustomLists, syncRanchNotes, isSyncingBusinessYears, isSyncingCalvingData, isSyncingDoctoringEvents, isSyncingWeightHealth, isSyncingCustomLists, isSyncingRanchNotes } = useRanch();
+  const processing = useProcessing();
   const { resetOnboarding } = useOnboarding();
   const router = useRouter();
   const styles = useMemo(() => createStyles(Colors), [Colors]);
@@ -69,7 +69,7 @@ export default function SettingsScreen() {
     isSyncingBusinessYears ||
     isSyncingCalvingData ||
     isSyncingDoctoringEvents ||
-    isSyncingBreedingData ||
+    
     isSyncingWeightHealth ||
     isSyncingCustomLists ||
     isSyncingRanchNotes;
@@ -104,22 +104,22 @@ export default function SettingsScreen() {
     void saveNotifPref(NOTIF_BREEDING_KEY, val);
     if (Platform.OS !== "web") void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     if (val) {
-      void scheduleAllNotifications({ breedingEnabled: true, doctoringEnabled: notifHealth, breedingRecords, doctoringEvents, animals });
+      void scheduleAllNotifications({ breedingEnabled: true, doctoringEnabled: notifHealth, doctoringEvents, animals });
     } else {
       void cancelBreedingNotifications();
     }
-  }, [saveNotifPref, notifHealth, breedingRecords, doctoringEvents, animals]);
+  }, [saveNotifPref, notifHealth, doctoringEvents, animals]);
 
   const handleToggleHealth = useCallback((val: boolean) => {
     setNotifHealth(val);
     void saveNotifPref(NOTIF_HEALTH_KEY, val);
     if (Platform.OS !== "web") void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     if (val) {
-      void scheduleAllNotifications({ breedingEnabled: notifBreeding, doctoringEnabled: true, breedingRecords, doctoringEvents, animals });
+      void scheduleAllNotifications({ breedingEnabled: notifBreeding, doctoringEnabled: true, doctoringEvents, animals });
     } else {
       void cancelDoctoringNotifications();
     }
-  }, [saveNotifPref, notifBreeding, breedingRecords, doctoringEvents, animals]);
+  }, [saveNotifPref, notifBreeding, doctoringEvents, animals]);
 
   const handleRefresh = useCallback(async () => {
     setIsManualRefreshing(true);
@@ -134,11 +134,9 @@ export default function SettingsScreen() {
         syncBusinessYears(),
         syncCalvingData(),
         syncDoctoringEvents(),
-        syncBreedingData(),
         syncWeightHealth(),
         syncCustomLists(),
         syncRanchNotes(),
-        syncSessions(),
       ]);
       const now = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
       setLastSyncTime(now);
@@ -151,7 +149,7 @@ export default function SettingsScreen() {
     } finally {
       setIsSyncing(false);
     }
-  }, [refreshRanch, syncBusinessYears, syncCalvingData, syncDoctoringEvents, syncBreedingData, syncWeightHealth, syncCustomLists, syncRanchNotes, syncSessions]);
+  }, [refreshRanch, syncBusinessYears, syncCalvingData, syncDoctoringEvents, syncWeightHealth, syncCustomLists, syncRanchNotes]);
 
   const handleClearData = useCallback(() => {
     Alert.alert(
@@ -350,7 +348,7 @@ export default function SettingsScreen() {
               { label: "Ranch & Members", syncing: false },
               { label: "Business Years", syncing: isSyncingBusinessYears },
               { label: "Calving Lists & Records", syncing: isSyncingCalvingData },
-              { label: "Breeding Records & Groups", syncing: isSyncingBreedingData },
+              { label: "Processing Groups & Events", syncing: false },
               { label: "Doctoring Events", syncing: isSyncingDoctoringEvents },
               { label: "Weight & Health Records", syncing: isSyncingWeightHealth },
               { label: "Processing Sessions", syncing: false },

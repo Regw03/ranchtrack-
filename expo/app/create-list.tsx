@@ -33,7 +33,7 @@ export default function CreateListScreen() {
     const birthingTitle = getBirthingTitle(selectedSpecies);
     return [
       { type: "vaccinations" as ListType, label: "Vaccinations", icon: "💉", color: "#2D7A9C", description: "Track vaccination schedules & records" },
-      { type: "breeding" as ListType, label: "Breeding", icon: "🤰", color: "#7B5EA7", description: "Manage breeding pairs & cycles" },
+      { type: "custom" as ListType, label: "Breeding", icon: "🤰", color: "#7B5EA7", description: "Manage breeding pairs & cycles" },
       { type: "to_be_sold" as ListType, label: "To Be Sold", icon: "💰", color: "#C4622D", description: "Animals marked for sale" },
       { type: "birthing" as ListType, label: birthingTitle, icon: "🐣", color: "#3D8B5E", description: `Track ${birthingTitle.toLowerCase()} season & due dates` },
     ];
@@ -110,7 +110,7 @@ function getPlaceholder(listType: ListType | null, species: Species | null): str
   if (!listType || !species) return "e.g., Group A, Spring 2025";
   switch (listType) {
     case "vaccinations": return "e.g., Blackleg Group, Spring Boosters, Annual Round";
-    case "breeding": return "e.g., Spring Pairs, AI Group, Yearling Heifers";
+    case "custom": return "e.g., Spring Pairs, AI Group, Yearling Heifers";
     case "to_be_sold": return "e.g., Fall Sale, Auction Lot, Culls";
     case "birthing": return species === "cattle" ? "e.g., Spring Calving, First Calf Heifers" : species === "horse" ? "e.g., Spring Foaling, Maiden Mares" : "e.g., Spring Birthing Group";
     default: return "e.g., Group A, Spring 2025";
