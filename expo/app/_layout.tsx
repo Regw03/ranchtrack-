@@ -109,15 +109,19 @@ function RootLayoutNav() {
       />
       <Stack.Screen
         name="processing-groups"
+        options={{ title: "Processing Groups" }}
       />
       <Stack.Screen
         name="processing-group/[id]"
+        options={{ title: "Group" }}
       />
       <Stack.Screen
         name="create-processing-event"
+        options={{ title: "New Event" }}
       />
       <Stack.Screen
         name="processing-event/[id]"
+        options={{ title: "Event" }}
       />
       <Stack.Screen
         name="log-doctoring-event"
