@@ -24,7 +24,7 @@ const GROUP_COLORS = [
  "#D4943A", "#C44D3D", "#4A8B7A", "#8B6914",
 ];
 
-// ─── Create group inline card ─────────────────────────────────────────────────
+// ─── Create group inline card ──────────────────────────────────────────────────
 
 function CreateGroupCard({
  onSave,

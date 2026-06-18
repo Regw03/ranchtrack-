@@ -99,7 +99,8 @@ export function useProcessing(): ProcessingContextValue {
 
 export function ProcessingProvider({ children }: { children: React.ReactNode }) {
  const queryClient = useQueryClient();
- const { ranch, currentUserId, currentUserName, activeBusinessYearId } = useRanch();
+ const { ranch, currentUserId, currentUserName, activeBusinessYearId, activeBusinessYear } = useRanch();
+ const safeYearId = activeBusinessYearId ?? activeBusinessYear?.id ?? "";
 
  // ─── Queries ───────────────────────────────────────────────────────────────
 
@@ -124,10 +125,10 @@ export function ProcessingProvider({ children }: { children: React.ReactNode }) 
 
  // Filter to active business year
  const processingGroups = allGroups.filter(
- (g) => g.businessYearId === activeBusinessYearId,
+ (g) => g.businessYearId === safeYearId,
  );
  const processingEvents = allEvents.filter(
- (e) => e.businessYearId === activeBusinessYearId,
+ (e) => e.businessYearId === safeYearId,
  );
  const processingRecords = allRecords;
 
@@ -142,7 +143,7 @@ export function ProcessingProvider({ children }: { children: React.ReactNode }) 
  name: input.name,
  color: input.color,
  animalIds: [],
- businessYearId: activeBusinessYearId,
+ businessYearId: safeYearId,
  createdBy: currentUserId ?? undefined,
  createdAt: now,
  updatedAt: now,
@@ -226,7 +227,7 @@ export function ProcessingProvider({ children }: { children: React.ReactNode }) 
  customTypeName: input.customTypeName,
  date: input.date,
  groupId: input.groupId,
- businessYearId: activeBusinessYearId,
+ businessYearId: safeYearId,
  status: "not_started",
  notes: input.notes,
  createdBy: currentUserId ?? undefined,
