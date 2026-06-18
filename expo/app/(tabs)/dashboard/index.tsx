@@ -171,7 +171,7 @@ export default function DashboardScreen() {
           label="Processing"
           icon={<ClipboardList size={22} color="#D4943A" />}
           color="#D4943A"
-          onPress={() => handleQuickAction("/processing-sessions")}
+          onPress={() => handleQuickAction("/processing-groups")}
         />
         <QuickActionButton
           label="Add Cow"
