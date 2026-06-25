@@ -9,21 +9,21 @@ import Purchases, {
 } from "react-native-purchases";
 
 const API_KEYS = {
-  ios: process.env.EXPO_PUBLIC_REVENUECAT_IOS_API_KEY ?? "",
-  android: process.env.EXPO_PUBLIC_REVENUECAT_ANDROID_API_KEY ?? "",
+  ios: "test_NWwXiCUJBaTPIHpQeBHLJipCIsd",
+  android: "test_NWwXiCUJBaTPIHpQeBHLJipCIsd",
 };
 
 function getApiKey(): string {
   const key = Platform.select(API_KEYS);
   if (key) return key;
   // Fallback to test key in dev / unknown platform
-  return process.env.EXPO_PUBLIC_REVENUECAT_TEST_API_KEY ?? "";
+  return "test_NWwXiCUJBaTPIHpQeBHLJipCIsd";
 }
 
 export type SubscriptionTier = "free" | "pro" | "plus";
 
-const ENTITLEMENT_PRO = "ranch_pro";
-const ENTITLEMENT_PLUS = "ranch_plus";
+const ENTITLEMENT_PRO = "pro";
+const ENTITLEMENT_PLUS = "plus";
 
 let isInitialized = false;
 
@@ -159,8 +159,8 @@ export const [SubscriptionProvider, useSubscription] = createContextHook(() => {
 
   // ─── Offerings helpers ───────────────────────────────────────────────────
 
-  const proOfferings = useMemo(() => offerings?.all["ranch_pro"], [offerings]);
-  const plusOfferings = useMemo(() => offerings?.all["ranch_plus"], [offerings]);
+  const proOfferings = useMemo(() => offerings?.all["pro"] ?? offerings?.current, [offerings]);
+  const plusOfferings = useMemo(() => offerings?.all["plus"] ?? offerings?.current, [offerings]);
 
   return useMemo(
     () => ({
