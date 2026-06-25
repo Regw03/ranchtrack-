@@ -8,6 +8,7 @@ import { Platform } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { RanchProvider } from "@/providers/RanchProvider";
 import { ProcessingProvider } from "@/providers/ProcessingProvider";
+import { SubscriptionProvider } from "@/providers/SubscriptionProvider";
 import { ThemeProvider, useColors } from "@/providers/ThemeProvider";
 import { OnboardingProvider, useOnboarding } from "@/providers/OnboardingProvider";
 import { useRanch } from "@/providers/RanchProvider";
@@ -167,6 +168,10 @@ function RootLayoutNav() {
         options={{ title: "Calving Record" }}
       />
       <Stack.Screen
+        name="paywall"
+        options={{ presentation: "modal", title: "RanchTrack Pro" }}
+      />
+      <Stack.Screen
         name="onboarding"
         options={{ headerShown: false }}
       />
@@ -247,9 +252,11 @@ export default function RootLayout() {
           <OnboardingProvider>
             <RanchProvider>
               <ProcessingProvider>
-                <OnboardingGate />
-                <RootLayoutNav />
-                <UserSwitchToast />
+                <SubscriptionProvider>
+                  <OnboardingGate />
+                  <RootLayoutNav />
+                  <UserSwitchToast />
+                </SubscriptionProvider>
               </ProcessingProvider>
             </RanchProvider>
           </OnboardingProvider>

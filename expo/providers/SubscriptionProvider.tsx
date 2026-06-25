@@ -1,0 +1,199 @@
+import createContextHook from "@nkzw/create-context-hook";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { Platform, Alert } from "react-native";
+import Purchases, {
+  CustomerInfo,
+  PurchasesOfferings,
+  PurchasesPackage,
+  PurchasesError,
+} from "react-native-purchases";
+
+const API_KEYS = {
+  ios: process.env.EXPO_PUBLIC_REVENUECAT_IOS_API_KEY ?? "",
+  android: process.env.EXPO_PUBLIC_REVENUECAT_ANDROID_API_KEY ?? "",
+};
+
+function getApiKey(): string {
+  const key = Platform.select(API_KEYS);
+  if (key) return key;
+  // Fallback to test key in dev / unknown platform
+  return process.env.EXPO_PUBLIC_REVENUECAT_TEST_API_KEY ?? "";
+}
+
+export type SubscriptionTier = "free" | "pro" | "plus";
+
+const ENTITLEMENT_PRO = "ranch_pro";
+const ENTITLEMENT_PLUS = "ranch_plus";
+
+let isInitialized = false;
+
+function initRevenueCatIfNeeded(): void {
+  if (isInitialized) return;
+  isInitialized = true;
+  const apiKey = getApiKey();
+  if (apiKey) {
+    Purchases.configure({ apiKey });
+  }
+}
+
+export const [SubscriptionProvider, useSubscription] = createContextHook(() => {
+  const [customerInfo, setCustomerInfo] = useState<CustomerInfo | null>(null);
+  const [offerings, setOfferings] = useState<PurchasesOfferings | null>(null);
+  const [ready, setReady] = useState<boolean>(false);
+  const [isPurchasing, setIsPurchasing] = useState<boolean>(false);
+  const [isRestoring, setIsRestoring] = useState<boolean>(false);
+
+  // ─── Init & fetch customer info ──────────────────────────────────────────
+
+  useEffect(() => {
+    initRevenueCatIfNeeded();
+
+    let cancelled = false;
+
+    const fetchData = async () => {
+      try {
+        const info = await Purchases.getCustomerInfo();
+        if (!cancelled) setCustomerInfo(info);
+      } catch (e) {
+        console.log("[SubscriptionProvider] getCustomerInfo failed", e);
+      }
+      try {
+        const off = await Purchases.getOfferings();
+        if (!cancelled) setOfferings(off);
+      } catch (e) {
+        console.log("[SubscriptionProvider] getOfferings failed", e);
+      }
+      if (!cancelled) setReady(true);
+    };
+
+    void fetchData();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // ─── Listen for updates ──────────────────────────────────────────────────
+
+  useEffect(() => {
+    const listener = (info: CustomerInfo) => {
+      setCustomerInfo(info);
+    };
+    Purchases.addCustomerInfoUpdateListener(listener);
+    return () => {
+      Purchases.removeCustomerInfoUpdateListener(listener);
+    };
+  }, []);
+
+  // ─── Derived state ───────────────────────────────────────────────────────
+
+  const tier: SubscriptionTier = useMemo(() => {
+    if (!customerInfo) return "free";
+    const entitlements = customerInfo.entitlements.active;
+    if (entitlements[ENTITLEMENT_PLUS]) return "plus";
+    if (entitlements[ENTITLEMENT_PRO]) return "pro";
+    return "free";
+  }, [customerInfo]);
+
+  const isPro = tier === "pro" || tier === "plus";
+  const isPlus = tier === "plus";
+  const isFree = tier === "free";
+
+  // ─── Helpers ─────────────────────────────────────────────────────────────
+
+  const requiresPro = useCallback(
+    (action?: string): boolean => {
+      if (isPro) return true;
+      Alert.alert(
+        "Ranch Pro Required",
+        action
+          ? `${action} requires a Ranch Pro or Plus subscription. Upgrade to unlock this feature.`
+          : "This feature requires a Ranch Pro or Plus subscription.",
+        [
+          { text: "Not Now", style: "cancel" },
+          { text: "View Plans", onPress: () => {} },
+        ],
+      );
+      return false;
+    },
+    [isPro],
+  );
+
+  // ─── Purchase ────────────────────────────────────────────────────────────
+
+  const purchasePackage = useCallback(
+    async (pkg: PurchasesPackage): Promise<CustomerInfo | null> => {
+      setIsPurchasing(true);
+      try {
+        const { customerInfo: info } = await Purchases.purchasePackage(pkg);
+        setCustomerInfo(info);
+        return info;
+      } catch (e: unknown) {
+        const err = e as PurchasesError;
+        if (!err.userCancelled) {
+          console.log("[SubscriptionProvider] purchase failed", err);
+        }
+        return null;
+      } finally {
+        setIsPurchasing(false);
+      }
+    },
+    [],
+  );
+
+  // ─── Restore ─────────────────────────────────────────────────────────────
+
+  const restorePurchases = useCallback(async (): Promise<CustomerInfo | null> => {
+    setIsRestoring(true);
+    try {
+      const info = await Purchases.restorePurchases();
+      setCustomerInfo(info);
+      return info;
+    } catch (e) {
+      console.log("[SubscriptionProvider] restore failed", e);
+      return null;
+    } finally {
+      setIsRestoring(false);
+    }
+  }, []);
+
+  // ─── Offerings helpers ───────────────────────────────────────────────────
+
+  const proOfferings = useMemo(() => offerings?.all["ranch_pro"], [offerings]);
+  const plusOfferings = useMemo(() => offerings?.all["ranch_plus"], [offerings]);
+
+  return useMemo(
+    () => ({
+      tier,
+      isPro,
+      isPlus,
+      isFree,
+      ready,
+      customerInfo,
+      offerings,
+      proOfferings,
+      plusOfferings,
+      requiresPro,
+      purchasePackage,
+      restorePurchases,
+      isPurchasing,
+      isRestoring,
+    }),
+    [
+      tier,
+      isPro,
+      isPlus,
+      isFree,
+      ready,
+      customerInfo,
+      offerings,
+      proOfferings,
+      plusOfferings,
+      requiresPro,
+      purchasePackage,
+      restorePurchases,
+      isPurchasing,
+      isRestoring,
+    ],
+  );
+});
