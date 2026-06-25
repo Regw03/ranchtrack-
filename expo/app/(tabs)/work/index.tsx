@@ -26,6 +26,7 @@ import * as Haptics from "expo-haptics";
 import { ThemeColors } from "@/constants/colors";
 import { useColors } from "@/providers/ThemeProvider";
 import { useRanch } from "@/providers/RanchProvider";
+import { useSubscription } from "@/providers/SubscriptionProvider";
 import { useProcessing } from "@/providers/ProcessingProvider";
 import BusinessYearPicker from "@/components/BusinessYearPicker";
 
@@ -112,6 +113,7 @@ function ActionChip({
 export default function WorkScreen() {
   const Colors = useColors();
   const router = useRouter();
+  const { isPro, isFree } = useSubscription();
   const styles = useMemo(() => createStyles(Colors), [Colors]);
 
   const {
