@@ -27,6 +27,7 @@ import * as Haptics from "expo-haptics";
 import { ThemeColors } from "@/constants/colors";
 import { useColors } from "@/providers/ThemeProvider";
 import { useRanch } from "@/providers/RanchProvider";
+import { useSubscription } from "@/providers/SubscriptionProvider";
 import { Animal, DoctoringEvent } from "@/types";
 
 function QuickActionButton({
@@ -113,6 +114,7 @@ function AttentionItem({
 export default function DashboardScreen() {
   const Colors = useColors();
   const router = useRouter();
+  const { isFree } = useSubscription();
   const styles = useMemo(() => createStyles(Colors), [Colors]);
 
   const {
@@ -145,9 +147,16 @@ export default function DashboardScreen() {
   const hasAttention = attentionItems.length > 0;
 
 
+  const PAID_QUICK_ACTIONS = ["/log-calving", "/processing-groups", "/processing-sessions"];
+
   const handleQuickAction = useCallback((route: string) => {
+    const requiresPro = PAID_QUICK_ACTIONS.some((r) => route.startsWith(r));
+    if (requiresPro && isFree) {
+      router.push("/paywall" as never);
+      return;
+    }
     router.push(route as never);
-  }, [router]);
+  }, [router, isFree]);
 
   return (
     <ScrollView
@@ -191,7 +200,7 @@ export default function DashboardScreen() {
         <View style={styles.section}>
           <TouchableOpacity
             style={styles.sectionHeader}
-            onPress={() => router.push("/ranch-notes" as never)}
+            onPress={() => isFree ? router.push("/paywall" as never) : router.push("/ranch-notes" as never)}
             activeOpacity={0.7}
           >
             <View style={[styles.sectionIconWrap, { backgroundColor: "#D4943A18" }]}>
@@ -205,7 +214,7 @@ export default function DashboardScreen() {
             <TouchableOpacity
               key={note.id}
               style={styles.noteCard}
-              onPress={() => router.push("/ranch-notes" as never)}
+              onPress={() => isFree ? router.push("/paywall" as never) : router.push("/ranch-notes" as never)}
               activeOpacity={0.75}
             >
               <Text style={styles.noteText} numberOfLines={2}>{note.text}</Text>
