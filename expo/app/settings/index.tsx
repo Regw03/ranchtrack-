@@ -35,6 +35,7 @@ import { ThemeColors } from "@/constants/colors";
 import { useColors } from "@/providers/ThemeProvider";
 import { useTheme } from "@/providers/ThemeProvider";
 import { useRanch } from "@/providers/RanchProvider";
+import { useSubscription } from "@/providers/SubscriptionProvider";
 import { scheduleAllNotifications, cancelBreedingNotifications, cancelDoctoringNotifications } from "@/lib/notifications";
 import { useProcessing } from "@/providers/ProcessingProvider";
 import { useOnboarding } from "@/providers/OnboardingProvider";

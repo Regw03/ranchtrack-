@@ -167,9 +167,17 @@ export default function WorkScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [calvingSearch, calvingRecords.length, calvingRecords, activeBusinessYear?.id]);
 
+  const PAID_ROUTES = ["/log-calving", "/create-calving-list", "/calving-list/", "/calving-record/", "/processing-groups", "/processing-group/", "/for-sale", "/ranch-notes"];
+
   const nav = useCallback((route: string) => {
+    const requiresPro = PAID_ROUTES.some((r) => route.startsWith(r));
+    if (requiresPro && isFree) {
+      router.push("/paywall" as never);
+      return;
+    }
+    if (Platform.OS !== "web") void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     router.push(route as never);
-  }, [router]);
+  }, [router, isFree]);
 
   return (
     <ScrollView
