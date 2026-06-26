@@ -16,6 +16,7 @@ import * as Haptics from "expo-haptics";
 import { ThemeColors } from "@/constants/colors";
 import { useColors } from "@/providers/ThemeProvider";
 import { useRanch, HERD_GROUP_CONFIG } from "@/providers/RanchProvider";
+import { useSubscription } from "@/providers/SubscriptionProvider";
 import { Animal, HerdGroup } from "@/types";
 import { SPECIES_ICONS, getGenderTitle } from "@/mocks/animals";
 import { getAnimalAge } from "@/utils/helpers";
@@ -173,6 +174,7 @@ export default function HerdScreen() {
   const Colors = useColors();
   const router = useRouter();
   const { activeAnimals, animalsByHerdGroup, getBusinessYearName, animals, deceasedAnimals, needsAttentionAnimals, animalStats } = useRanch();
+  const { isFree } = useSubscription();
   const [selectedGroup, setSelectedGroup] = useState<HerdGroup | "deceased" | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const styles = useMemo(() => createStyles(Colors), [Colors]);
@@ -242,6 +244,17 @@ export default function HerdScreen() {
       <View style={styles.topBar}>
         <View>
           <Text style={styles.screenTitle}>Herd</Text>
+          {isFree && (
+            <TouchableOpacity
+              style={styles.upgradeBanner}
+              onPress={() => router.push("/paywall" as never)}
+              activeOpacity={0.85}
+            >
+              <Text style={styles.upgradeBannerText}>
+                🔒 Sync, calving & processing require Pro — Tap to upgrade
+              </Text>
+            </TouchableOpacity>
+          )}
           <Text style={styles.headcount}>
             {animalStats.total} head breeding{animalStats.calvesCount > 0 ? ` · ${animalStats.calvesCount} calves` : ""}
           </Text>
@@ -369,6 +382,8 @@ const createStyles = (Colors: ThemeColors) => StyleSheet.create({
     color: Colors.text,
     letterSpacing: -0.5,
   },
+  upgradeBanner: { backgroundColor: "#3D8B5E18", borderRadius: 10, paddingHorizontal: 14, paddingVertical: 10, marginBottom: 12, borderWidth: 1, borderColor: "#3D8B5E40" },
+  upgradeBannerText: { fontSize: 13, color: "#3D8B5E", fontWeight: "600" as const, textAlign: "center" as const },
   headcount: {
     fontSize: 14,
     color: Colors.textSecondary,
