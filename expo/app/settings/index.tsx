@@ -53,6 +53,7 @@ export default function SettingsScreen() {
   const { isDark, toggleTheme } = useTheme();
   const { ranch, currentUserId, resetApp, refreshRanch, isRefreshingRanch, animals, doctoringEvents, currentUserRole, canInviteTeammates, removeTeammate, syncBusinessYears, syncCalvingData, syncDoctoringEvents, syncWeightHealth, syncCustomLists, syncRanchNotes, isSyncingBusinessYears, isSyncingCalvingData, isSyncingDoctoringEvents, isSyncingWeightHealth, isSyncingCustomLists, isSyncingRanchNotes } = useRanch();
   const processing = useProcessing();
+  const { isPro } = useSubscription();
   const { resetOnboarding } = useOnboarding();
   const router = useRouter();
   const styles = useMemo(() => createStyles(Colors), [Colors]);
@@ -598,7 +599,7 @@ export default function SettingsScreen() {
                 </View>
               </View>
               {/* Show remove button for owner/manager, but not on self or on owner */}
-              {canInviteTeammates && !isCurrentUser && member.role !== "owner" &&
+              {canInviteTeammates && isPro && !isCurrentUser && member.role !== "owner" &&
                 !(currentUserRole === "manager" && member.role === "manager") && (
                   <TouchableOpacity
                     onPress={() => handleRemoveMember(member.userId, member.name)}
