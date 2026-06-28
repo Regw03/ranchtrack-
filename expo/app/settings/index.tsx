@@ -51,7 +51,7 @@ const NOTIF_HEALTH_KEY = "ranchtrack_notif_health";
 export default function SettingsScreen() {
   const Colors = useColors();
   const { isDark, toggleTheme } = useTheme();
-  const { ranch, currentUserId, resetApp, refreshRanch, isRefreshingRanch, animals, doctoringEvents, currentUserRole, canInviteTeammates, removeTeammate, syncBusinessYears, syncCalvingData, syncDoctoringEvents, syncWeightHealth, syncCustomLists, syncRanchNotes, isSyncingBusinessYears, isSyncingCalvingData, isSyncingDoctoringEvents, isSyncingWeightHealth, isSyncingCustomLists, isSyncingRanchNotes } = useRanch();
+  const { ranch, currentUserId, resetApp, refreshRanch, isRefreshingRanch, animals, doctoringEvents, currentUserRole, canInviteTeammates, removeTeammate, generateNewInviteCode, isGeneratingInviteCode, syncBusinessYears, syncCalvingData, syncDoctoringEvents, syncWeightHealth, syncCustomLists, syncRanchNotes, isSyncingBusinessYears, isSyncingCalvingData, isSyncingDoctoringEvents, isSyncingWeightHealth, isSyncingCustomLists, isSyncingRanchNotes } = useRanch();
   const processing = useProcessing();
   const { isPro } = useSubscription();
   const { resetOnboarding } = useOnboarding();
@@ -177,6 +177,17 @@ export default function SettingsScreen() {
       ],
     );
   }, [resetApp, resetOnboarding, router]);
+
+  const handleGenerateCode = useCallback(async () => {
+    if (Platform.OS !== "web") void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    try {
+      const { code, expiry } = await generateNewInviteCode();
+      const expiryDate = new Date(expiry).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+      Alert.alert("New Code Generated", `New invite code: ${code}\nExpires: ${expiryDate}\n\nShare this with the person you want to invite.`);
+    } catch (e) {
+      Alert.alert("Error", "Could not generate a new code. Please try again.");
+    }
+  }, [generateNewInviteCode]);
 
   const handleCopyInvite = useCallback(() => {
     if (Platform.OS !== "web") void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -576,9 +587,29 @@ export default function SettingsScreen() {
         <TouchableOpacity style={styles.inviteCard} onPress={handleCopyInvite} activeOpacity={0.7}>
           <View style={styles.inviteCodeContainer}>
             <Text style={styles.inviteCode}>{ranch.inviteCode}</Text>
+            {ranch.inviteExpiry && new Date(ranch.inviteExpiry) > new Date() ? (
+              <Text style={styles.inviteExpiry}>
+                Expires {new Date(ranch.inviteExpiry).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
+              </Text>
+            ) : (
+              <Text style={[styles.inviteExpiry, { color: Colors.error }]}>Expired — generate a new code</Text>
+            )}
           </View>
           <View style={styles.inviteCopyBtn}><Copy size={18} color={Colors.primary} /><Text style={styles.inviteCopyText}>Copy</Text></View>
         </TouchableOpacity>
+        {isPro && canInviteTeammates && (
+          <TouchableOpacity
+            style={styles.generateCodeBtn}
+            onPress={handleGenerateCode}
+            disabled={isGeneratingInviteCode}
+            activeOpacity={0.85}
+          >
+            {isGeneratingInviteCode
+              ? <ActivityIndicator size="small" color={Colors.primary} />
+              : <><RefreshCw size={15} color={Colors.primary} /><Text style={styles.generateCodeText}>Generate New Code (48hr)</Text></>
+            }
+          </TouchableOpacity>
+        )}
       </View>
 
       <View style={styles.section}>
