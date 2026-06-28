@@ -1655,6 +1655,24 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
  },
  });
 
+ const generateInviteCodeMutation = useMutation({
+ mutationFn: async () => {
+ const currentRanch = queryClient.getQueryData<Ranch>(["ranch"]) ?? ranch;
+ if (!currentRanch.id) throw new Error("No ranch found");
+ const newCode = generateInviteCode();
+ const expiry = new Date(Date.now() + 48 * 60 * 60 * 1000).toISOString();
+ const { error } = await supabase
+ .from("ranches")
+ .update({ invite_code: newCode, invite_expiry: expiry })
+ .eq("id", currentRanch.id);
+ if (error) throw new Error(error.message);
+ const updatedRanch = { ...currentRanch, inviteCode: newCode, inviteExpiry: expiry };
+ await saveToStorage(STORAGE_KEYS.ranch, updatedRanch);
+ queryClient.setQueryData(["ranch"], updatedRanch);
+ return { code: newCode, expiry };
+ },
+ });
+
  const joinRanchMutation = useMutation({
  mutationFn: async ({ userName, code }: { userName: string; code: string }) => {
  const trimmedUserName = userName.trim();
@@ -1673,7 +1691,10 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
  throw new Error(ranchErr.message);
  }
  if (!ranchRow) {
- throw new Error("No ranch found with that code");
+ throw new Error("No ranch found with that code. Make sure the code is correct and hasn't expired.");
+ }
+ if (ranchRow.invite_expiry && new Date(ranchRow.invite_expiry) < new Date()) {
+ throw new Error("This invite code has expired. Ask the ranch owner to generate a new one.");
  }
 
  const newUser: User = {
@@ -1726,6 +1747,7 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
  createdAt: ranchRow.created_at,
  };
  await saveToStorage(STORAGE_KEYS.ranch, joinedRanch);
+ void supabase.from("ranches").update({ invite_expiry: new Date(0).toISOString() }).eq("id", ranchRow.id);
 
  console.log("[joinRanch] joined", joinedRanch.name, "as", newUser.name);
  return { newUser, updatedUsers, joinedRanch };
@@ -2456,6 +2478,8 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
  isInvitingTeammate: inviteTeammateMutation.isPending,
  removeTeammate: removeTeammateMutation.mutateAsync,
  isRemovingTeammate: removeTeammateMutation.isPending,
+ generateNewInviteCode: generateInviteCodeMutation.mutateAsync,
+ isGeneratingInviteCode: generateInviteCodeMutation.isPending,
  setRanchName: setRanchNameMutation.mutateAsync,
  isSettingRanchName: setRanchNameMutation.isPending,
  ranchNotes,
