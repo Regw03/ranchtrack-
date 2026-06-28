@@ -20,6 +20,7 @@ export interface Ranch {
   ownerId: string;
   members: RanchMember[];
   inviteCode: string;
+  inviteExpiry?: string;
   createdAt: string;
 }
 
