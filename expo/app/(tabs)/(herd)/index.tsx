@@ -242,27 +242,27 @@ export default function HerdScreen() {
   const renderHeader = useCallback(() => (
     <View>
       <View style={styles.topBar}>
-        <View>
-          <Text style={styles.screenTitle}>Herd</Text>
-          {isFree && (
-            <TouchableOpacity
-              style={styles.upgradeBanner}
-              onPress={() => router.push("/paywall" as never)}
-              activeOpacity={0.85}
-            >
-              <Text style={styles.upgradeBannerText}>
-                🔒 Sync, calving & processing require Pro — Tap to upgrade
-              </Text>
-            </TouchableOpacity>
-          )}
-          <Text style={styles.headcount}>
-            {animalStats.total} head breeding{animalStats.calvesCount > 0 ? ` · ${animalStats.calvesCount} calves` : ""}
-          </Text>
-          {deceasedAnimals.length > 0 && (
-            <Text style={styles.headcount}>{deceasedAnimals.length} deceased</Text>
-          )}
-        </View>
+        <Text style={styles.screenTitle}>Herd</Text>
         <BusinessYearPicker />
+      </View>
+      <View style={styles.topBarSub}>
+        {isFree && (
+          <TouchableOpacity
+            style={styles.upgradeBanner}
+            onPress={() => router.push("/paywall" as never)}
+            activeOpacity={0.85}
+          >
+            <Text style={styles.upgradeBannerText}>
+              🔒 Sync, calving & processing require Pro — Tap to upgrade
+            </Text>
+          </TouchableOpacity>
+        )}
+        <Text style={styles.headcount}>
+          {animalStats.total} head{animalStats.calvesCount > 0 ? ` · ${animalStats.calvesCount} calves` : ""}
+        </Text>
+        {deceasedAnimals.length > 0 && (
+          <Text style={styles.headcount}>{deceasedAnimals.length} deceased</Text>
+        )}
       </View>
 
       <View style={styles.groupGrid}>
@@ -371,10 +371,15 @@ const createStyles = (Colors: ThemeColors) => StyleSheet.create({
   topBar: {
     flexDirection: "row",
     justifyContent: "space-between",
-    alignItems: "flex-start",
+    alignItems: "center",
     paddingHorizontal: 20,
     paddingTop: 16,
+    paddingBottom: 4,
+  },
+  topBarSub: {
+    paddingHorizontal: 20,
     paddingBottom: 8,
+    gap: 2,
   },
   screenTitle: {
     fontSize: 28,
