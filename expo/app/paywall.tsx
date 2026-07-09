@@ -204,6 +204,7 @@ export default function PaywallScreen() {
     plusOfferings,
     purchasePackage,
     refreshCustomerInfo,
+    setHasTestPurchased,
     restorePurchases,
     isPurchasing,
   } = useSubscription();
@@ -236,6 +237,13 @@ export default function PaywallScreen() {
         }
         // Force refresh customer info to pick up new entitlements
         await refreshCustomerInfo();
+        // Determine tier from package identifier for test store compatibility
+        const pkgId = pkg.identifier;
+        if (pkgId.toLowerCase().includes("plus")) {
+          setHasTestPurchased("plus");
+        } else {
+          setHasTestPurchased("pro");
+        }
         Alert.alert(
           "Welcome! 🎉",
           "Your subscription is now active. Enjoy full access to RanchTrack!",
@@ -243,7 +251,7 @@ export default function PaywallScreen() {
         );
       }
     },
-    [purchasePackage, refreshCustomerInfo, router],
+    [purchasePackage, refreshCustomerInfo, router, setHasTestPurchased],
   );
 
   const handleRestore = useCallback(async () => {
