@@ -1,3 +1,4 @@
+declare const __DEV__: boolean;
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   View,
@@ -53,7 +54,7 @@ export default function SettingsScreen() {
   const { isDark, toggleTheme } = useTheme();
   const { ranch, currentUserId, resetApp, refreshRanch, isRefreshingRanch, animals, doctoringEvents, currentUserRole, canInviteTeammates, removeTeammate, generateNewInviteCode, isGeneratingInviteCode, syncBusinessYears, syncCalvingData, syncDoctoringEvents, syncWeightHealth, syncCustomLists, syncRanchNotes, isSyncingBusinessYears, isSyncingCalvingData, isSyncingDoctoringEvents, isSyncingWeightHealth, isSyncingCustomLists, isSyncingRanchNotes } = useRanch();
   const processing = useProcessing();
-  const { isPro } = useSubscription();
+  const { isPro, isFree: _isFree, tier, setDevOverrideTier } = useSubscription();
   const { resetOnboarding } = useOnboarding();
   const router = useRouter();
   const styles = useMemo(() => createStyles(Colors), [Colors]);
@@ -64,6 +65,7 @@ export default function SettingsScreen() {
   const [notifLoaded, setNotifLoaded] = useState<boolean>(false);
   const [activeModal, setActiveModal] = useState<"notifications" | "data" | "sync" | "help" | null>(null);
   const [lastSyncTime, setLastSyncTime] = useState<string | null>(null);
+  const [showDevOverride, setShowDevOverride] = useState(false);
   const [isSyncing, setIsSyncing] = useState<boolean>(false);
 
   const isAnySyncing =
@@ -679,7 +681,35 @@ export default function SettingsScreen() {
         <Text style={styles.signOutText}>Sign Out</Text>
       </TouchableOpacity>
 
-      <Text style={styles.versionText}>RanchTrack v1.0.0</Text>
+      <TouchableOpacity
+        onLongPress={__DEV__ ? () => setShowDevOverride(true) : undefined}
+        activeOpacity={1}
+      >
+        <Text style={styles.versionText}>RanchTrack v1.0.0{__DEV__ ? " (DEV)" : ""}</Text>
+      </TouchableOpacity>
+      {__DEV__ && showDevOverride && (
+        <View style={styles.devOverride}>
+          <Text style={styles.devOverrideTitle}>⚠️ DEV: Override Tier</Text>
+          <Text style={styles.devOverrideSub}>Current: {tier.toUpperCase()} — Auto-disabled in production</Text>
+          <View style={styles.devOverrideRow}>
+            {(["free", "pro", "plus"] as const).map((t) => (
+              <TouchableOpacity
+                key={t}
+                style={[styles.devOverrideBtn, tier === t && styles.devOverrideBtnActive]}
+                onPress={() => { setDevOverrideTier?.(t); setShowDevOverride(false); }}
+                activeOpacity={0.8}
+              >
+                <Text style={[styles.devOverrideBtnText, tier === t && styles.devOverrideBtnTextActive]}>
+                  {t.toUpperCase()}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+          <TouchableOpacity onPress={() => setShowDevOverride(false)}>
+            <Text style={styles.devOverrideClose}>Close</Text>
+          </TouchableOpacity>
+        </View>
+      )}
     </ScrollView>
   );
 }
@@ -726,6 +756,15 @@ const createStyles = (Colors: ThemeColors) => StyleSheet.create({
   settingsChevron: { fontSize: 22, color: Colors.textTertiary, fontWeight: "300" as const, paddingLeft: 4 },
   signOutButton: { flexDirection: "row" as const, alignItems: "center" as const, justifyContent: "center" as const, marginHorizontal: 16, marginTop: 8, paddingVertical: 16, borderRadius: 14, backgroundColor: Colors.surface, gap: 8, borderWidth: 1.5, borderColor: Colors.error },
   signOutText: { fontSize: 16, fontWeight: "700" as const, color: Colors.error },
+  devOverride: { marginTop: 12, backgroundColor: "#FF000015", borderRadius: 12, padding: 14, borderWidth: 1, borderColor: "#FF000030" },
+  devOverrideTitle: { fontSize: 13, fontWeight: "800" as const, color: "#CC0000", marginBottom: 4 },
+  devOverrideSub: { fontSize: 11, color: "#CC0000", marginBottom: 10 },
+  devOverrideRow: { flexDirection: "row" as const, gap: 8, marginBottom: 10 },
+  devOverrideBtn: { flex: 1, paddingVertical: 8, borderRadius: 8, borderWidth: 1.5, borderColor: "#CC0000", alignItems: "center" as const },
+  devOverrideBtnActive: { backgroundColor: "#CC0000" },
+  devOverrideBtnText: { fontSize: 13, fontWeight: "700" as const, color: "#CC0000" },
+  devOverrideBtnTextActive: { color: "#fff" },
+  devOverrideClose: { fontSize: 13, color: "#CC0000", textAlign: "center" as const, fontWeight: "600" as const },
   versionText: { textAlign: "center" as const, fontSize: 13, color: Colors.textTertiary, marginTop: 20, marginBottom: 20, fontWeight: "500" as const },
   modalContainer: { flex: 1, backgroundColor: Colors.background },
   modalHeader: { flexDirection: "row" as const, alignItems: "center" as const, justifyContent: "space-between" as const, paddingHorizontal: 20, paddingTop: 20, paddingBottom: 16, borderBottomWidth: 1, borderBottomColor: Colors.border },
