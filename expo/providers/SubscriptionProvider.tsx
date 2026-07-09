@@ -1,3 +1,4 @@
+declare const __DEV__: boolean;
 import createContextHook from "@nkzw/create-context-hook";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Platform, Alert } from "react-native";
@@ -90,14 +91,19 @@ export const [SubscriptionProvider, useSubscription] = createContextHook(() => {
   // Track if user has made a successful purchase this session (for test store)
   const [hasTestPurchased, setHasTestPurchased] = useState<SubscriptionTier>("free");
 
+  // DEV ONLY: tier override — automatically disabled in production builds
+  const [devOverrideTier, setDevOverrideTier] = useState<SubscriptionTier | null>(null);
+
   const tier: SubscriptionTier = useMemo(() => {
+    // DEV ONLY override — __DEV__ is false in production so this never runs in App Store builds
+    if (__DEV__ && devOverrideTier !== null) return devOverrideTier;
     if (!customerInfo) return hasTestPurchased !== "free" ? hasTestPurchased : "free";
     const entitlements = customerInfo.entitlements.active;
     if (entitlements[ENTITLEMENT_PLUS]) return "plus";
     if (entitlements[ENTITLEMENT_PRO]) return "pro";
     // Fall back to test purchase state (test store doesn't grant real entitlements)
     return hasTestPurchased !== "free" ? hasTestPurchased : "free";
-  }, [customerInfo, hasTestPurchased]);
+  }, [customerInfo, hasTestPurchased, devOverrideTier]);
 
   const isPro = tier === "pro" || tier === "plus";
   const isPlus = tier === "plus";
