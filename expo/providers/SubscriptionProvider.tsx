@@ -141,6 +141,17 @@ export const [SubscriptionProvider, useSubscription] = createContextHook(() => {
     [],
   );
 
+  // ─── Refresh customer info ──────────────────────────────────────────────
+
+  const refreshCustomerInfo = useCallback(async (): Promise<void> => {
+    try {
+      const info = await Purchases.getCustomerInfo();
+      setCustomerInfo(info);
+    } catch (e) {
+      console.log("[SubscriptionProvider] refreshCustomerInfo failed", e);
+    }
+  }, []);
+
   // ─── Restore ─────────────────────────────────────────────────────────────
 
   const restorePurchases = useCallback(async (): Promise<CustomerInfo | null> => {
@@ -230,6 +241,7 @@ export const [SubscriptionProvider, useSubscription] = createContextHook(() => {
       memberAddonPackage,
       requiresPro,
       purchasePackage,
+      refreshCustomerInfo,
       restorePurchases,
       isPurchasing,
       isRestoring,
@@ -247,6 +259,7 @@ export const [SubscriptionProvider, useSubscription] = createContextHook(() => {
       memberAddonPackage,
       requiresPro,
       purchasePackage,
+      refreshCustomerInfo,
       restorePurchases,
       isPurchasing,
       isRestoring,

@@ -6,6 +6,7 @@ import {
   TouchableOpacity,
   ScrollView,
   Platform,
+  Alert,
   ActivityIndicator,
 } from "react-native";
 import { useRouter } from "expo-router";
@@ -168,7 +169,7 @@ function PlanCard({
           style={[styles.purchaseBtn, { backgroundColor: config.color }]}
           onPress={() => {
             if (Platform.OS !== "web") void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-            onPurchase(pkg);
+            if (pkg) onPurchase(pkg);
           }}
           activeOpacity={0.85}
           disabled={isPurchasing}
@@ -202,6 +203,7 @@ export default function PaywallScreen() {
     proOfferings,
     plusOfferings,
     purchasePackage,
+    refreshCustomerInfo,
     restorePurchases,
     isPurchasing,
   } = useSubscription();
@@ -222,15 +224,26 @@ export default function PaywallScreen() {
   const activePlusPkg = billing === "annual" ? plusAnnual : plusMonthly;
 
   const handlePurchase = useCallback(
-    async (pkg: PurchasesPackage) => {
+    async (pkg: PurchasesPackage | null | undefined) => {
+      if (!pkg) {
+        Alert.alert("Not Available", "This plan is not available right now. Please try again later.");
+        return;
+      }
       const info = await purchasePackage(pkg);
       if (info) {
         if (Platform.OS !== "web") {
           void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         }
+        // Force refresh customer info to pick up new entitlements
+        await refreshCustomerInfo();
+        Alert.alert(
+          "Welcome! 🎉",
+          "Your subscription is now active. Enjoy full access to RanchTrack!",
+          [{ text: "Let's Go", onPress: () => router.back() }]
+        );
       }
     },
-    [purchasePackage],
+    [purchasePackage, refreshCustomerInfo, router],
   );
 
   const handleRestore = useCallback(async () => {
