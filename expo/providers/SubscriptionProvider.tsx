@@ -87,13 +87,17 @@ export const [SubscriptionProvider, useSubscription] = createContextHook(() => {
 
   // ─── Derived state ───────────────────────────────────────────────────────
 
+  // Track if user has made a successful purchase this session (for test store)
+  const [hasTestPurchased, setHasTestPurchased] = useState<SubscriptionTier>("free");
+
   const tier: SubscriptionTier = useMemo(() => {
-    if (!customerInfo) return "free";
+    if (!customerInfo) return hasTestPurchased !== "free" ? hasTestPurchased : "free";
     const entitlements = customerInfo.entitlements.active;
     if (entitlements[ENTITLEMENT_PLUS]) return "plus";
     if (entitlements[ENTITLEMENT_PRO]) return "pro";
-    return "free";
-  }, [customerInfo]);
+    // Fall back to test purchase state (test store doesn't grant real entitlements)
+    return hasTestPurchased !== "free" ? hasTestPurchased : "free";
+  }, [customerInfo, hasTestPurchased]);
 
   const isPro = tier === "pro" || tier === "plus";
   const isPlus = tier === "plus";
