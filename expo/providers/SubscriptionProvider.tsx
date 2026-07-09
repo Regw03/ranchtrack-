@@ -159,8 +159,62 @@ export const [SubscriptionProvider, useSubscription] = createContextHook(() => {
 
   // ─── Offerings helpers ───────────────────────────────────────────────────
 
-  const proOfferings = useMemo(() => offerings?.all["pro"] ?? offerings?.current, [offerings]);
-  const plusOfferings = useMemo(() => offerings?.all["plus"] ?? offerings?.current, [offerings]);
+  // Find packages by their exact custom identifiers in RevenueCat
+  const proMonthlyPackage = useMemo(() => {
+    if (!offerings) return null;
+    for (const offering of Object.values(offerings.all) as import("react-native-purchases").PurchasesOffering[]) {
+      const pkg = offering.availablePackages.find((p) => p.identifier === "monthly pro");
+      if (pkg) return pkg;
+    }
+    return offerings.current?.availablePackages.find((p) => p.identifier === "monthly pro") ?? null;
+  }, [offerings]);
+
+  const proAnnualPackage = useMemo(() => {
+    if (!offerings) return null;
+    for (const offering of Object.values(offerings.all) as import("react-native-purchases").PurchasesOffering[]) {
+      const pkg = offering.availablePackages.find((p) => p.identifier === "Yearly pro");
+      if (pkg) return pkg;
+    }
+    return offerings.current?.availablePackages.find((p) => p.identifier === "Yearly pro") ?? null;
+  }, [offerings]);
+
+  const plusMonthlyPackage = useMemo(() => {
+    if (!offerings) return null;
+    for (const offering of Object.values(offerings.all) as import("react-native-purchases").PurchasesOffering[]) {
+      const pkg = offering.availablePackages.find((p) => p.identifier === "monthly plus");
+      if (pkg) return pkg;
+    }
+    return offerings.current?.availablePackages.find((p) => p.identifier === "monthly plus") ?? null;
+  }, [offerings]);
+
+  const plusAnnualPackage = useMemo(() => {
+    if (!offerings) return null;
+    for (const offering of Object.values(offerings.all) as import("react-native-purchases").PurchasesOffering[]) {
+      const pkg = offering.availablePackages.find((p) => p.identifier === "Yearly plus");
+      if (pkg) return pkg;
+    }
+    return offerings.current?.availablePackages.find((p) => p.identifier === "Yearly plus") ?? null;
+  }, [offerings]);
+
+  const memberAddonPackage = useMemo(() => {
+    if (!offerings) return null;
+    for (const offering of Object.values(offerings.all) as import("react-native-purchases").PurchasesOffering[]) {
+      const pkg = offering.availablePackages.find((p) => p.identifier === "$rc_monthly");
+      if (pkg) return pkg;
+    }
+    return null;
+  }, [offerings]);
+
+  // Keep proOfferings/plusOfferings for backward compat but they now point to our packages
+  const proOfferings = useMemo(() => ({
+    monthly: proMonthlyPackage,
+    annual: proAnnualPackage,
+  }), [proMonthlyPackage, proAnnualPackage]);
+
+  const plusOfferings = useMemo(() => ({
+    monthly: plusMonthlyPackage,
+    annual: plusAnnualPackage,
+  }), [plusMonthlyPackage, plusAnnualPackage]);
 
   return useMemo(
     () => ({
@@ -173,6 +227,7 @@ export const [SubscriptionProvider, useSubscription] = createContextHook(() => {
       offerings,
       proOfferings,
       plusOfferings,
+      memberAddonPackage,
       requiresPro,
       purchasePackage,
       restorePurchases,
@@ -189,6 +244,7 @@ export const [SubscriptionProvider, useSubscription] = createContextHook(() => {
       offerings,
       proOfferings,
       plusOfferings,
+      memberAddonPackage,
       requiresPro,
       purchasePackage,
       restorePurchases,
