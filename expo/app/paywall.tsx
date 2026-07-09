@@ -213,10 +213,10 @@ export default function PaywallScreen() {
   const plusMonthly = plusOfferings?.monthly;
   const plusAnnual = plusOfferings?.annual;
 
-  const proMonthlyPrice = proMonthly?.product?.priceString ?? "$9.99";
-  const proAnnualPrice = proAnnual?.product?.priceString ?? "$79.99";
-  const plusMonthlyPrice = plusMonthly?.product?.priceString ?? "$19.99";
-  const plusAnnualPrice = plusAnnual?.product?.priceString ?? "$159.99";
+  const proMonthlyPrice = proMonthly?.product?.priceString ?? "$10.00";
+  const proAnnualPrice = proAnnual?.product?.priceString ?? "$84.00";
+  const plusMonthlyPrice = plusMonthly?.product?.priceString ?? "$22.00";
+  const plusAnnualPrice = plusAnnual?.product?.priceString ?? "$185.00";
 
   const activeProPkg = billing === "annual" ? proAnnual : proMonthly;
   const activePlusPkg = billing === "annual" ? plusAnnual : plusMonthly;
