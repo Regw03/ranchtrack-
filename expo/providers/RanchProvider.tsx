@@ -2406,6 +2406,44 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
  },
  });
 
+ const updateMemberRoleMutation = useMutation({
+ mutationFn: async ({ userId, newRole }: { userId: string; newRole: "manager" | "member" }) => {
+ const currentRanch = queryClient.getQueryData<Ranch>(["ranch"]) ?? ranch;
+ const updater = currentRanch.members.find((m) => m.userId === currentUserId);
+
+ // Only owner can change roles
+ if (updater?.role !== "owner") {
+ throw new Error("Only the ranch owner can change member roles.");
+ }
+ const target = currentRanch.members.find((m) => m.userId === userId);
+ if (!target) throw new Error("Member not found.");
+ if (target.role === "owner") throw new Error("Cannot change the owner role.");
+ if (userId === currentUserId) throw new Error("You cannot change your own role.");
+
+ // Update in Supabase
+ if (currentRanch.id && currentRanch.id !== MOCK_RANCH.id) {
+ const { error } = await supabase
+ .from("ranch_members")
+ .update({ role: newRole })
+ .eq("ranch_id", currentRanch.id)
+ .eq("user_id", userId);
+ if (error) throw new Error(error.message);
+ }
+
+ // Update local
+ const updatedMembers = currentRanch.members.map((m) =>
+ m.userId === userId ? { ...m, role: newRole } : m
+ );
+ const updatedRanch = { ...currentRanch, members: updatedMembers };
+ await saveToStorage(STORAGE_KEYS.ranch, updatedRanch);
+ await logActivity(`Changed ${target.name} role to ${newRole}`);
+ return updatedRanch;
+ },
+ onSuccess: (updatedRanch) => {
+ queryClient.setQueryData(["ranch"], updatedRanch);
+ },
+ });
+
  const removeTeammateMutation = useMutation({
  mutationFn: async (userId: string) => {
  const currentRanch = queryClient.getQueryData<Ranch>(["ranch"]) ?? ranch;
@@ -2478,6 +2516,8 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
  isInvitingTeammate: inviteTeammateMutation.isPending,
  removeTeammate: removeTeammateMutation.mutateAsync,
  isRemovingTeammate: removeTeammateMutation.isPending,
+ updateMemberRole: updateMemberRoleMutation.mutateAsync,
+ isUpdatingMemberRole: updateMemberRoleMutation.isPending,
  generateNewInviteCode: generateInviteCodeMutation.mutateAsync,
  isGeneratingInviteCode: generateInviteCodeMutation.isPending,
  setRanchName: setRanchNameMutation.mutateAsync,
