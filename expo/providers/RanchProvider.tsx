@@ -1806,7 +1806,34 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
  }
  }
 
- const merged = Array.from(localById.values());
+ // Detect duplicate tag IDs within same business year
+ const mergedList = Array.from(localById.values());
+ const tagYearMap = new Map<string, Animal[]>();
+ for (const animal of mergedList) {
+   if (animal.status === "active") {
+     const key = `${animal.tagId?.toLowerCase()}_${animal.businessYearId ?? ""}`;
+     if (!tagYearMap.has(key)) tagYearMap.set(key, []);
+     tagYearMap.get(key)!.push(animal);
+   }
+ }
+ // Flag duplicates — keep newest, mark older ones for review
+ const duplicateIds = new Set<string>();
+ for (const [, dupes] of tagYearMap.entries()) {
+   if (dupes.length > 1) {
+     const sorted = dupes.sort((a, b) =>
+       new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+     );
+     // Keep the newest, flag the rest
+     for (let i = 1; i < sorted.length; i++) {
+       duplicateIds.add(sorted[i].id);
+       console.warn(`[syncAnimals] duplicate tag detected: ${sorted[i].tagId} (id: ${sorted[i].id})`);
+     }
+   }
+ }
+ // Add _isDuplicate flag so UI can surface these
+ const merged = mergedList.map((a) =>
+   duplicateIds.has(a.id) ? { ...a, _isDuplicate: true } : a
+ );
  await saveToStorage(STORAGE_KEYS.animals, merged);
 
  const localOnlyAnimals = merged.filter(
@@ -1814,7 +1841,16 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
  );
  if (localOnlyAnimals.length > 0) {
  console.log(`[syncAnimals] pushing ${localOnlyAnimals.length} local-only animals to cloud`);
- void pushAnimalsBatchToCloud(localOnlyAnimals, currentUserId || null);
+ const serverTimestamps = await pushAnimalsBatchToCloud(localOnlyAnimals, currentUserId || null);
+ if (serverTimestamps) {
+   // Update local records with server-generated timestamps
+   const tsMap = new Map(serverTimestamps.map((r) => [r.id, r.updated_at]));
+   for (const [id, animal] of localById.entries()) {
+     if (tsMap.has(id)) {
+       localById.set(id, { ...animal, updatedAt: tsMap.get(id)! });
+     }
+   }
+ }
  }
 
  console.log(`[syncAnimals] merged ${merged.length} animals (remote: ${remoteRows.length})`);

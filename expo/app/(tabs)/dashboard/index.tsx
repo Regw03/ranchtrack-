@@ -1,4 +1,4 @@
-import React, { useMemo, useCallback, useRef } from "react";
+import React, { useState, useMemo, useCallback, useRef } from "react";
 import {
   View,
   Text,
@@ -27,6 +27,7 @@ import * as Haptics from "expo-haptics";
 import { ThemeColors } from "@/constants/colors";
 import { useColors } from "@/providers/ThemeProvider";
 import { useRanch } from "@/providers/RanchProvider";
+import { SyncStatusBar } from "@/components/SyncStatusBar";
 import { useSubscription } from "@/providers/SubscriptionProvider";
 import { Animal, DoctoringEvent } from "@/types";
 
@@ -123,7 +124,38 @@ export default function DashboardScreen() {
     activeBusinessYear,
     ranchNotes,
     animals,
+    syncBusinessYears,
+    syncCalvingData,
+    syncDoctoringEvents,
+    syncWeightHealth,
+    syncCustomLists,
+    syncRanchNotes,
+    isSyncingBusinessYears,
+    isSyncingCalvingData,
+    isSyncingDoctoringEvents,
+    isSyncingWeightHealth,
+    isSyncingCustomLists,
+    isSyncingRanchNotes,
   } = useRanch();
+
+  const [lastSyncTime, setLastSyncTime] = useState<string | null>(null);
+  const isSyncing = isSyncingBusinessYears || isSyncingCalvingData || isSyncingDoctoringEvents || isSyncingWeightHealth || isSyncingCustomLists || isSyncingRanchNotes;
+
+  const handleSyncAll = useCallback(async () => {
+    try {
+      await Promise.all([
+        syncBusinessYears(),
+        syncCalvingData(),
+        syncDoctoringEvents(),
+        syncWeightHealth(),
+        syncCustomLists(),
+        syncRanchNotes(),
+      ]);
+      setLastSyncTime(new Date().toISOString());
+    } catch (e) {
+      console.log("[dashboard] sync failed", e);
+    }
+  }, [syncBusinessYears, syncCalvingData, syncDoctoringEvents, syncWeightHealth, syncCustomLists, syncRanchNotes]);
 
 
   const attentionItems = useMemo(() => {
@@ -168,6 +200,12 @@ export default function DashboardScreen() {
         <Text style={styles.greeting}>Today's Ranch</Text>
         <Text style={styles.yearBadge}>{activeBusinessYear.name}</Text>
       </View>
+
+      <SyncStatusBar
+        isSyncing={isSyncing}
+        lastSyncTime={lastSyncTime}
+        onSyncPress={handleSyncAll}
+      />
 
       <View style={styles.quickActionsGrid}>
         <QuickActionButton

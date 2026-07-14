@@ -176,7 +176,7 @@ export async function fetchRanchAnimals(ranchId: string): Promise<AnimalSyncResu
 export async function pushAnimalsBatchToCloud(
  animals: Animal[],
  createdBy: string | null,
-): Promise<void> {
+): Promise<{ id: string; updated_at: string }[] | null | undefined> {
  const remoteAnimals = animals.filter((a) => isRemoteRanch(a.ranchId));
  if (remoteAnimals.length === 0) return;
  try {
@@ -187,10 +187,19 @@ export async function pushAnimalsBatchToCloud(
      created_by: createdBy,
      data: a,
      deleted: false,
-     updated_at: a.updatedAt,
+     updated_at: new Date().toISOString(), // will be overwritten by server
    }));
-   const { error } = await supabase.from("animals").upsert(rows, { onConflict: "id" });
-   if (error) console.log("[sync] pushAnimalsBatch error", error.message);
+   const { data: upserted, error } = await supabase
+     .from("animals")
+     .upsert(rows, { onConflict: "id" })
+     .select("id, updated_at");
+   if (error) {
+     console.log("[sync] pushAnimalsBatch error", error.message);
+   } else if (upserted) {
+     // Return server timestamps so local records can be updated
+     return upserted as { id: string; updated_at: string }[];
+   }
+   return null;
  } catch (e) {
    console.log("[sync] pushAnimalsBatch exception", e);
  }
