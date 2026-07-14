@@ -52,7 +52,7 @@ const NOTIF_HEALTH_KEY = "ranchtrack_notif_health";
 export default function SettingsScreen() {
   const Colors = useColors();
   const { isDark, toggleTheme } = useTheme();
-  const { ranch, currentUserId, resetApp, refreshRanch, isRefreshingRanch, animals, doctoringEvents, currentUserRole, canInviteTeammates, removeTeammate, generateNewInviteCode, isGeneratingInviteCode, syncBusinessYears, syncCalvingData, syncDoctoringEvents, syncWeightHealth, syncCustomLists, syncRanchNotes, isSyncingBusinessYears, isSyncingCalvingData, isSyncingDoctoringEvents, isSyncingWeightHealth, isSyncingCustomLists, isSyncingRanchNotes } = useRanch();
+  const { ranch, currentUserId, resetApp, refreshRanch, isRefreshingRanch, animals, doctoringEvents, currentUserRole, canInviteTeammates, removeTeammate, updateMemberRole, generateNewInviteCode, isGeneratingInviteCode, syncBusinessYears, syncCalvingData, syncDoctoringEvents, syncWeightHealth, syncCustomLists, syncRanchNotes, isSyncingBusinessYears, isSyncingCalvingData, isSyncingDoctoringEvents, isSyncingWeightHealth, isSyncingCustomLists, isSyncingRanchNotes } = useRanch();
   const processing = useProcessing();
   const { isPro, isFree: _isFree, tier, setDevOverrideTier } = useSubscription();
   const { resetOnboarding } = useOnboarding();
@@ -231,6 +231,29 @@ export default function SettingsScreen() {
 
   const animalCount = (animals ?? []).filter((a) => a.status === "active").length;
   const doctoringCount = (doctoringEvents ?? []).length;
+
+  const handleChangeRole = useCallback((userId: string, name: string, currentRole: string) => {
+    const newRole = currentRole === "manager" ? "member" : "manager";
+    const label = newRole === "manager" ? "Promote to Manager" : "Demote to Member";
+    Alert.alert(
+      label,
+      `${label === "Promote to Manager" ? "Give" : "Remove"} manager permissions for ${name}?`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: label,
+          onPress: async () => {
+            try {
+              if (Platform.OS !== "web") void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+              await updateMemberRole({ userId, newRole: newRole as "manager" | "member" });
+            } catch (e) {
+              Alert.alert("Error", e instanceof Error ? e.message : "Could not update role.");
+            }
+          },
+        }
+      ]
+    );
+  }, [updateMemberRole]);
 
   const handleRemoveMember = useCallback((userId: string, name: string) => {
     Alert.alert(
@@ -633,17 +656,31 @@ export default function SettingsScreen() {
                   <Text style={[styles.roleText, { color: ROLE_COLORS[member.role] || Colors.textSecondary }]}>{ROLE_LABELS[member.role] || member.role}</Text>
                 </View>
               </View>
-              {/* Show remove button for owner/manager, but not on self or on owner */}
-              {canInviteTeammates && isPro && !isCurrentUser && member.role !== "owner" &&
-                !(currentUserRole === "manager" && member.role === "manager") && (
+              <View style={styles.memberActions}>
+                {/* Role toggle — owner only */}
+                {currentUserRole === "owner" && !isCurrentUser && member.role !== "owner" && (
                   <TouchableOpacity
-                    onPress={() => handleRemoveMember(member.userId, member.name)}
+                    onPress={() => handleChangeRole(member.userId, member.name, member.role)}
                     hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                    style={styles.removeMemberBtn}
+                    style={styles.roleToggleBtn}
                   >
-                    <UserMinus size={18} color={Colors.error} />
+                    <Text style={styles.roleToggleText}>
+                      {member.role === "manager" ? "Demote" : "Promote"}
+                    </Text>
                   </TouchableOpacity>
                 )}
+                {/* Remove button — owner can remove anyone, manager can remove members only */}
+                {canInviteTeammates && isPro && !isCurrentUser && member.role !== "owner" &&
+                  !(currentUserRole === "manager" && member.role === "manager") && (
+                    <TouchableOpacity
+                      onPress={() => handleRemoveMember(member.userId, member.name)}
+                      hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                      style={styles.removeMemberBtn}
+                    >
+                      <UserMinus size={18} color={Colors.error} />
+                    </TouchableOpacity>
+                  )}
+              </View>
             </View>
           );
         })}
@@ -740,6 +777,9 @@ const createStyles = (Colors: ThemeColors) => StyleSheet.create({
   memberCard: { flexDirection: "row" as const, alignItems: "center" as const, backgroundColor: Colors.surface, borderRadius: 14, padding: 16, marginBottom: 8, borderWidth: 1, borderColor: Colors.borderLight, shadowColor: Colors.shadow, shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.06, shadowRadius: 6, elevation: 2 },
   memberAvatar: { width: 46, height: 46, borderRadius: 23, alignItems: "center" as const, justifyContent: "center" as const },
   removeMemberBtn: { padding: 8 },
+  memberActions: { flexDirection: "row" as const, alignItems: "center" as const, gap: 10 },
+  roleToggleBtn: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8, borderWidth: 1, borderColor: Colors.primary },
+  roleToggleText: { fontSize: 12, fontWeight: "700" as const, color: Colors.primary },
   memberAvatarText: { fontSize: 16, fontWeight: "700" as const, color: Colors.textInverse },
   memberInfo: { flex: 1, marginLeft: 14 },
   memberNameRow: { flexDirection: "row" as const, alignItems: "center" as const, gap: 8 },
