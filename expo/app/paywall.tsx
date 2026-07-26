@@ -32,15 +32,20 @@ interface PlanFeature {
 }
 
 const FEATURES: PlanFeature[] = [
-  { label: "Unlimited animals", tiers: ["pro", "plus"] },
-  { label: "Unlimited processing groups", tiers: ["pro", "plus"] },
-  { label: "Unlimited calving records", tiers: ["pro", "plus"] },
-  { label: "Health & weight tracking", tiers: ["free", "pro", "plus"] },
-  { label: "Team sharing (5 members)", tiers: ["pro"] },
-  { label: "Team sharing (unlimited)", tiers: ["plus"] },
-  { label: "Cloud sync & backup", tiers: ["pro", "plus"] },
+  { label: "Unlimited animals", tiers: ["free", "pro", "plus"] },
+  { label: "Doctoring & health events", tiers: ["free", "pro", "plus"] },
+  { label: "Cloud sync across devices", tiers: ["pro", "plus"] },
+  { label: "Calving lists & records", tiers: ["pro", "plus"] },
+  { label: "Processing groups & events", tiers: ["pro", "plus"] },
+  { label: "Preg check / breeding tracking", tiers: ["pro", "plus"] },
+  { label: "Ranch notes (shared team)", tiers: ["pro", "plus"] },
+  { label: "For sale tracking", tiers: ["pro", "plus"] },
+  { label: "Business years & history", tiers: ["pro", "plus"] },
+  { label: "Up to 5 team members", tiers: ["pro"] },
+  { label: "Additional members $1.99/mo", tiers: ["pro"] },
+  { label: "Unlimited team members", tiers: ["plus"] },
   { label: "Priority support", tiers: ["plus"] },
-  { label: "Custom branding", tiers: ["plus"] },
+  { label: "Multi-herd support (coming soon)", tiers: ["plus"] },
 ];
 
 const TIER_CONFIG: Record<

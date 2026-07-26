@@ -1432,6 +1432,7 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
  name: trimmedRanchName,
  invite_code: inviteCode,
  owner_id: newUser.id,
+ created_at: new Date().toISOString(),
  })
  .select()
  .single();
