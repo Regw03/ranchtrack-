@@ -123,6 +123,7 @@ export default function WorkScreen() {
     soldAnimals,
     needsAttentionAnimals,
     activeBusinessYear,
+    currentUserRole,
   } = useRanch();
 
   const {
@@ -169,15 +170,18 @@ export default function WorkScreen() {
 
   const PAID_ROUTES = ["/log-calving", "/create-calving-list", "/calving-list/", "/calving-record/", "/processing-groups", "/processing-group/", "/for-sale", "/ranch-notes"];
 
+  // Members and managers are part of a paid ranch — don't show paywall
+  const isOnPaidRanch = currentUserRole === "manager" || currentUserRole === "member" || currentUserRole === "owner";
+
   const nav = useCallback((route: string) => {
     const requiresPro = PAID_ROUTES.some((r) => route.startsWith(r));
-    if (requiresPro && isFree) {
+    if (requiresPro && isFree && !isOnPaidRanch) {
       router.push("/paywall" as never);
       return;
     }
     if (Platform.OS !== "web") void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     router.push(route as never);
-  }, [router, isFree]);
+  }, [router, isFree, isOnPaidRanch]);
 
   return (
     <ScrollView

@@ -122,6 +122,7 @@ export default function DashboardScreen() {
     needsAttentionAnimals,
     doctoringEvents,
     activeBusinessYear,
+    currentUserRole,
     ranchNotes,
     animals,
     syncBusinessYears,
@@ -180,15 +181,16 @@ export default function DashboardScreen() {
 
 
   const PAID_QUICK_ACTIONS = ["/log-calving", "/processing-groups", "/processing-sessions"];
+  const isOnPaidRanch = currentUserRole === "manager" || currentUserRole === "member" || currentUserRole === "owner";
 
   const handleQuickAction = useCallback((route: string) => {
     const requiresPro = PAID_QUICK_ACTIONS.some((r) => route.startsWith(r));
-    if (requiresPro && isFree) {
+    if (requiresPro && isFree && !isOnPaidRanch) {
       router.push("/paywall" as never);
       return;
     }
     router.push(route as never);
-  }, [router, isFree]);
+  }, [router, isFree, isOnPaidRanch]);
 
   return (
     <ScrollView

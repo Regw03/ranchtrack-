@@ -1945,6 +1945,18 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
  syncCustomListsMutation.mutate();
  syncRanchNotesMutation.mutate();
 
+    // Periodic background sync every 60 seconds
+    const syncInterval = setInterval(() => {
+      const currentRanch = queryClient.getQueryData<Ranch>(["ranch"]);
+      if (currentRanch?.id && currentRanch.id !== MOCK_RANCH.id) {
+        syncAnimalsMutation.mutate();
+        syncCalvingDataMutation.mutate();
+        syncDoctoringEventsMutation.mutate();
+        syncCustomListsMutation.mutate();
+        syncRanchNotesMutation.mutate();
+      }
+    }, 60000);
+
  // Schedule push notifications based on saved preferences
  void (async () => {
  try {
@@ -1966,6 +1978,7 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
  console.log("[notifications] launch scheduling failed", e);
  }
  })();
+ return () => clearInterval(syncInterval);
  // eslint-disable-next-line react-hooks/exhaustive-deps
  }, [ranch.id]);
 
