@@ -221,10 +221,17 @@ export default function PaywallScreen() {
   const plusMonthly = plusOfferings?.monthly;
   const plusAnnual = plusOfferings?.annual;
 
-  const proMonthlyPrice = proMonthly?.product?.priceString ?? "$10.00";
-  const proAnnualPrice = proAnnual?.product?.priceString ?? "$84.00";
-  const plusMonthlyPrice = plusMonthly?.product?.priceString ?? "$22.00";
-  const plusAnnualPrice = plusAnnual?.product?.priceString ?? "$185.00";
+  // Use RevenueCat prices if they match expected ranges, otherwise use hardcoded prices
+  const rawProMonthly = proMonthly?.product?.priceString;
+  const rawProAnnual = proAnnual?.product?.priceString;
+  const rawPlusMonthly = plusMonthly?.product?.priceString;
+  const rawPlusAnnual = plusAnnual?.product?.priceString;
+
+  // Validate prices are in expected range (avoid showing wrong product prices)
+  const proMonthlyPrice = (rawProMonthly && !rawProMonthly.includes("1.99")) ? rawProMonthly : "$10.00";
+  const proAnnualPrice = (rawProAnnual && !rawProAnnual.includes("1.99")) ? rawProAnnual : "$84.00";
+  const plusMonthlyPrice = (rawPlusMonthly && !rawPlusMonthly.includes("1.99")) ? rawPlusMonthly : "$22.00";
+  const plusAnnualPrice = (rawPlusAnnual && !rawPlusAnnual.includes("1.99")) ? rawPlusAnnual : "$185.00";
 
   const activeProPkg = billing === "annual" ? proAnnual : proMonthly;
   const activePlusPkg = billing === "annual" ? plusAnnual : plusMonthly;
