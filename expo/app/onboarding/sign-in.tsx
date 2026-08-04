@@ -30,7 +30,7 @@ export default function SignInScreen() {
   const router = useRouter();
   const styles = useMemo(() => createStyles(Colors), [Colors]);
 
-  const { ranch, refreshRanch } = useRanch();
+  const { ranch, refreshRanch, loadRanchForUser } = useRanch();
   const { completeOnboarding, isOnboardingComplete } = useOnboarding();
 
   const [email, setEmail] = useState<string>("");
@@ -98,9 +98,11 @@ export default function SignInScreen() {
       await AsyncStorage.setItem("ranchtrack_current_user_id", userId);
 
       try {
-        await refreshRanch();
+        // Look up ranch by user membership
+        await loadRanchForUser(userId);
       } catch (e) {
-        console.log("[sign-in] refreshRanch failed, may need to join a ranch", e);
+        console.log("[sign-in] loadRanchForUser failed", e);
+        // Still complete onboarding — user may need to join a ranch
       }
 
       await completeOnboarding();
@@ -128,7 +130,7 @@ export default function SignInScreen() {
     } finally {
       setIsLoading(false);
     }
-  }, [canContinue, trimmedEmail, password, refreshRanch, completeOnboarding, handleResendConfirmation]);
+  }, [canContinue, trimmedEmail, password, refreshRanch, loadRanchForUser, completeOnboarding, handleResendConfirmation]);
 
   return (
     <View style={styles.container}>

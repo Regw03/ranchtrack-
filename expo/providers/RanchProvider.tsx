@@ -2329,7 +2329,55 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
  onError: (e) => console.log("[syncRanchNotes] error", e),
  });
 
- const refreshRanchMutation = useMutation({
+ const loadRanchForUserMutation = useMutation({
+    mutationFn: async (userId: string) => {
+      // Find which ranch this user belongs to
+      const { data: memberRow, error: memberErr } = await supabase
+        .from("ranch_members")
+        .select("ranch_id")
+        .eq("user_id", userId)
+        .maybeSingle();
+
+      if (memberErr) throw new Error(memberErr.message);
+      if (!memberRow?.ranch_id) {
+        console.log("[loadRanchForUser] no ranch found for user", userId);
+        return null;
+      }
+
+      const [{ data: ranchRow, error: ranchErr }, { data: memberRows }] = await Promise.all([
+        supabase.from("ranches").select("*").eq("id", memberRow.ranch_id).maybeSingle(),
+        supabase.from("ranch_members").select("*").eq("ranch_id", memberRow.ranch_id).order("joined_at", { ascending: true }),
+      ]);
+
+      if (ranchErr || !ranchRow) return null;
+
+      const members: RanchMember[] = (memberRows ?? []).map((m) => ({
+        userId: m.user_id,
+        name: m.name,
+        role: m.role as RanchMember["role"],
+        joinedAt: m.joined_at,
+      }));
+
+      const loadedRanch: Ranch = {
+        id: ranchRow.id,
+        name: ranchRow.name,
+        ownerId: ranchRow.owner_id,
+        members,
+        inviteCode: ranchRow.invite_code,
+        inviteExpiry: ranchRow.invite_expiry ?? undefined,
+        createdAt: ranchRow.created_at,
+      };
+
+      await saveToStorage(STORAGE_KEYS.ranch, loadedRanch);
+      await saveToStorage(STORAGE_KEYS.currentUserId, userId);
+      queryClient.setQueryData(["ranch"], loadedRanch);
+      queryClient.setQueryData(["currentUserId"], userId);
+      console.log("[loadRanchForUser] loaded ranch", loadedRanch.name);
+      return loadedRanch;
+    },
+  });
+
+  const refreshRanchMutation = useMutation({
  mutationFn: async () => {
  const current = queryClient.getQueryData<Ranch>(["ranch"]) ?? ranch;
  if (!current.id || current.id === MOCK_RANCH.id) {
