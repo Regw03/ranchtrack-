@@ -205,7 +205,7 @@ function OnboardingGate() {
         setAuthChecked(true);
       }
     })();
-  }, []);
+  }, [ranch?.id]);  // Re-run when ranch loads after sign in
 
   useEffect(() => {
     if (isLoading || isRanchLoading || !authChecked) return;
