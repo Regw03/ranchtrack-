@@ -1675,11 +1675,22 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
  });
 
  const joinRanchMutation = useMutation({
- mutationFn: async ({ userName, code }: { userName: string; code: string }) => {
+ mutationFn: async ({ userName, code, email, password }: { userName: string; code: string; email?: string; password?: string }) => {
  const trimmedUserName = userName.trim();
  const trimmedCode = code.trim().toUpperCase();
  if (!trimmedUserName) throw new Error("Your name cannot be empty");
  if (!trimmedCode) throw new Error("Ranch code cannot be empty");
+
+ // Create Supabase auth account if email/password provided
+ let authUserId: string | null = null;
+ if (email && password) {
+   const { data: authData, error: authError } = await supabase.auth.signUp({
+     email: email.trim(),
+     password,
+   });
+   if (authError) throw new Error(authError.message);
+   authUserId = authData.user?.id ?? null;
+ }
 
  console.log("[joinRanch] looking up code", trimmedCode);
  const { data: ranchRow, error: ranchErr } = await supabase

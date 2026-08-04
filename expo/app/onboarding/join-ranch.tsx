@@ -29,6 +29,8 @@ export default function JoinRanchScreen() {
   const styles = useMemo(() => createStyles(Colors), [Colors]);
 
   const [userName, setUserName] = useState<string>("");
+  const [email, setEmail] = useState<string>("");
+  const [password, setPassword] = useState<string>("");
   const [code, setCode] = useState<string>("");
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(24)).current;
@@ -42,14 +44,15 @@ export default function JoinRanchScreen() {
 
   const trimmedUser = userName.trim();
   const trimmedCode = code.trim().toUpperCase();
+  const trimmedEmail = email.trim();
   const canContinue =
-    trimmedUser.length > 0 && trimmedCode.length >= 4 && !isJoiningRanch;
+    trimmedUser.length > 0 && trimmedEmail.includes("@") && password.length >= 6 && trimmedCode.length >= 4 && !isJoiningRanch;
 
   const handleJoin = useCallback(async () => {
     if (!canContinue) return;
     if (Platform.OS !== "web") void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     try {
-      await joinRanch({ userName: trimmedUser, code: trimmedCode });
+      await joinRanch({ userName: trimmedUser, email: trimmedEmail, password, code: trimmedCode });
       await completeOnboarding();
       console.log("[join-ranch] joined", trimmedCode);
     } catch (e) {
@@ -107,6 +110,39 @@ export default function JoinRanchScreen() {
                     returnKeyType="next"
                     maxLength={40}
                     testID="join-user-name-input"
+                  />
+                </View>
+              </View>
+
+              <View style={styles.fieldGroup}>
+                <Text style={styles.label}>Email</Text>
+                <View style={styles.inputWrapper}>
+                  <TextInput
+                    value={email}
+                    onChangeText={setEmail}
+                    placeholder="your@email.com"
+                    placeholderTextColor={Colors.textTertiary}
+                    style={styles.input}
+                    autoCapitalize="none"
+                    keyboardType="email-address"
+                    returnKeyType="next"
+                    maxLength={80}
+                  />
+                </View>
+              </View>
+
+              <View style={styles.fieldGroup}>
+                <Text style={styles.label}>Password</Text>
+                <View style={styles.inputWrapper}>
+                  <TextInput
+                    value={password}
+                    onChangeText={setPassword}
+                    placeholder="Min 6 characters"
+                    placeholderTextColor={Colors.textTertiary}
+                    style={styles.input}
+                    secureTextEntry
+                    returnKeyType="next"
+                    maxLength={50}
                   />
                 </View>
               </View>
