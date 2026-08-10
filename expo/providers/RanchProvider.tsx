@@ -1410,14 +1410,14 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
  });
 
  const setupRanchMutation = useMutation({
- mutationFn: async ({ userName, ranchName }: { userName: string; ranchName: string }) => {
+ mutationFn: async ({ userName, ranchName, authUserId }: { userName: string; ranchName: string; authUserId?: string }) => {
  const trimmedUserName = userName.trim();
  const trimmedRanchName = ranchName.trim();
  if (!trimmedUserName) throw new Error("User name cannot be empty");
  if (!trimmedRanchName) throw new Error("Ranch name cannot be empty");
 
  const newUser: User = {
- id: generateUuid(),
+ id: authUserId ?? generateUuid(),
  name: trimmedUserName,
  createdAt: new Date().toISOString(),
  };
@@ -2332,21 +2332,35 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
  const loadRanchForUserMutation = useMutation({
     mutationFn: async (userId: string) => {
       // Find which ranch this user belongs to
+      // Try ranch_members first, then fall back to owner lookup
       const { data: memberRow, error: memberErr } = await supabase
         .from("ranch_members")
         .select("ranch_id")
         .eq("user_id", userId)
         .maybeSingle();
 
+      let ranchId: string | null = memberRow?.ranch_id ?? null;
+
+      // Fall back to checking if user is owner
+      if (!ranchId) {
+        const { data: ownedRanch } = await supabase
+          .from("ranches")
+          .select("id")
+          .eq("owner_id", userId)
+          .maybeSingle();
+        ranchId = ownedRanch?.id ?? null;
+      }
+
       if (memberErr) throw new Error(memberErr.message);
-      if (!memberRow?.ranch_id) {
+      if (!ranchId) {
         console.log("[loadRanchForUser] no ranch found for user", userId);
         return null;
       }
+      const memberRow2 = { ranch_id: ranchId };
 
       const [{ data: ranchRow, error: ranchErr }, { data: memberRows }] = await Promise.all([
-        supabase.from("ranches").select("*").eq("id", memberRow.ranch_id).maybeSingle(),
-        supabase.from("ranch_members").select("*").eq("ranch_id", memberRow.ranch_id).order("joined_at", { ascending: true }),
+        supabase.from("ranches").select("*").eq("id", ranchId).maybeSingle(),
+        supabase.from("ranch_members").select("*").eq("ranch_id", ranchId).order("joined_at", { ascending: true }),
       ]);
 
       if (ranchErr || !ranchRow) return null;
@@ -2369,7 +2383,7 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
       };
 
       await saveToStorage(STORAGE_KEYS.ranch, loadedRanch);
-      await saveToStorage(STORAGE_KEYS.currentUserId, userId);
+      await saveToStorage(STORAGE_KEYS.currentUserIdValue, userId);
       queryClient.setQueryData(["ranch"], loadedRanch);
       queryClient.setQueryData(["currentUserId"], userId);
       console.log("[loadRanchForUser] loaded ranch", loadedRanch.name);

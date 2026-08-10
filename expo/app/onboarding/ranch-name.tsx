@@ -68,7 +68,8 @@ export default function RanchSetupScreen() {
     if (!canContinue) return;
     if (Platform.OS !== "web") void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     try {
-      await setupRanch({ userName: trimmedUser, ranchName: trimmedRanch });
+      const authUserId = await AsyncStorage.getItem("ranchtrack_current_user_id");
+      await setupRanch({ userName: trimmedUser, ranchName: trimmedRanch, authUserId: authUserId ?? undefined });
       await completeOnboarding();
       console.log("[ranch-name] setup complete:", trimmedUser, "@", trimmedRanch);
     } catch (e) {
