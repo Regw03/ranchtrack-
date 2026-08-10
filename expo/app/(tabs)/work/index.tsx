@@ -171,7 +171,8 @@ export default function WorkScreen() {
   const PAID_ROUTES = ["/log-calving", "/create-calving-list", "/calving-list/", "/calving-record/", "/processing-groups", "/processing-group/", "/for-sale", "/ranch-notes"];
 
   // Members and managers are part of a paid ranch — don't show paywall
-  const isOnPaidRanch = currentUserRole === "manager" || currentUserRole === "member" || currentUserRole === "owner";
+  // Only managers/members bypass paywall — owners must have their own subscription
+  const isOnPaidRanch = currentUserRole === "manager" || currentUserRole === "member";
 
   const nav = useCallback((route: string) => {
     const requiresPro = PAID_ROUTES.some((r) => route.startsWith(r));

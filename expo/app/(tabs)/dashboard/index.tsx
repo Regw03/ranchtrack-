@@ -181,7 +181,8 @@ export default function DashboardScreen() {
 
 
   const PAID_QUICK_ACTIONS = ["/log-calving", "/processing-groups", "/processing-sessions"];
-  const isOnPaidRanch = currentUserRole === "manager" || currentUserRole === "member" || currentUserRole === "owner";
+  // Only managers/members bypass paywall — owners must have their own subscription
+  const isOnPaidRanch = currentUserRole === "manager" || currentUserRole === "member";
 
   const handleQuickAction = useCallback((route: string) => {
     const requiresPro = PAID_QUICK_ACTIONS.some((r) => route.startsWith(r));

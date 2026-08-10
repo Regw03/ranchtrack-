@@ -175,7 +175,8 @@ export default function HerdScreen() {
   const router = useRouter();
   const { activeAnimals, animalsByHerdGroup, getBusinessYearName, animals, deceasedAnimals, needsAttentionAnimals, animalStats, currentUserRole } = useRanch();
   const { isFree } = useSubscription();
-  const isOnPaidRanch = currentUserRole === "manager" || currentUserRole === "member" || currentUserRole === "owner";
+  // Only managers/members bypass paywall — owners must have their own subscription
+  const isOnPaidRanch = currentUserRole === "manager" || currentUserRole === "member";
   const [selectedGroup, setSelectedGroup] = useState<HerdGroup | "deceased" | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const styles = useMemo(() => createStyles(Colors), [Colors]);
