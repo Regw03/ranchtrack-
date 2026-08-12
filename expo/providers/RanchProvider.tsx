@@ -1709,8 +1709,10 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
  throw new Error("This invite code has expired. Ask the ranch owner to generate a new one.");
  }
 
+ // Use Supabase auth UUID if available, otherwise generate local UUID
+ const memberId = authUserId ?? generateUuid();
  const newUser: User = {
- id: generateUuid(),
+ id: memberId,
  name: trimmedUserName,
  createdAt: new Date().toISOString(),
  };
@@ -1748,7 +1750,7 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
  const currentUsers = queryClient.getQueryData<User[]>(["users"]) ?? [];
  const updatedUsers = [...currentUsers, newUser];
  await saveToStorage(STORAGE_KEYS.users, updatedUsers);
- await saveToStorage(STORAGE_KEYS.currentUserIdValue, newUser.id);
+      await saveToStorage(STORAGE_KEYS.currentUserIdValue, authUserId ?? newUser.id);
 
  const joinedRanch: Ranch = {
  id: ranchRow.id,
