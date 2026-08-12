@@ -1681,15 +1681,29 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
  if (!trimmedUserName) throw new Error("Your name cannot be empty");
  if (!trimmedCode) throw new Error("Ranch code cannot be empty");
 
- // Create Supabase auth account if email/password provided
+ // Create or sign into Supabase auth account
  let authUserId: string | null = null;
  if (email && password) {
+   // Try sign up first
    const { data: authData, error: authError } = await supabase.auth.signUp({
      email: email.trim(),
      password,
    });
-   if (authError) throw new Error(authError.message);
-   authUserId = authData.user?.id ?? null;
+   if (authError) {
+     // If already registered, sign in instead
+     if (authError.message.toLowerCase().includes("already") || authError.message.toLowerCase().includes("registered")) {
+       const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
+         email: email.trim(),
+         password,
+       });
+       if (signInError) throw new Error(signInError.message);
+       authUserId = signInData.user?.id ?? null;
+     } else {
+       throw new Error(authError.message);
+     }
+   } else {
+     authUserId = authData.user?.id ?? null;
+   }
  }
 
  console.log("[joinRanch] looking up code", trimmedCode);
@@ -1995,7 +2009,51 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
  // eslint-disable-next-line react-hooks/exhaustive-deps
  }, [ranch.id]);
 
- const appStateRef = useRef<string>(AppState.currentState);
+ // Supabase Realtime — instant sync when data changes on any device
+  useEffect(() => {
+    if (!ranch.id || ranch.id === MOCK_RANCH.id) return;
+
+    const channel = supabase
+      .channel(`ranch-${ranch.id}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "animals", filter: `ranch_id=eq.${ranch.id}` },
+        () => { syncAnimalsMutation.mutate(); }
+      )
+      .on("postgres_changes", { event: "*", schema: "public", table: "calving_records", filter: `ranch_id=eq.${ranch.id}` },
+        () => { syncCalvingDataMutation.mutate(); }
+      )
+      .on("postgres_changes", { event: "*", schema: "public", table: "doctoring_events", filter: `ranch_id=eq.${ranch.id}` },
+        () => { syncDoctoringEventsMutation.mutate(); }
+      )
+      .on("postgres_changes", { event: "*", schema: "public", table: "ranch_notes", filter: `ranch_id=eq.${ranch.id}` },
+        () => { syncRanchNotesMutation.mutate(); }
+      )
+      .subscribe();
+
+    return () => { void supabase.removeChannel(channel); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ranch.id]);
+
+  const appStateRef = useRef<string>(AppState.currentState);
+ useEffect(() => {
+    // Sync when app comes to foreground
+    const appStateSub = AppState.addEventListener("change", (nextState) => {
+      if (appStateRef.current.match(/inactive|background/) && nextState === "active") {
+        const currentRanch = queryClient.getQueryData<Ranch>(["ranch"]);
+        if (currentRanch?.id && currentRanch.id !== MOCK_RANCH.id) {
+          console.log("[sync] app foregrounded — syncing");
+          syncAnimalsMutation.mutate();
+          syncCalvingDataMutation.mutate();
+          syncDoctoringEventsMutation.mutate();
+          syncCustomListsMutation.mutate();
+          syncRanchNotesMutation.mutate();
+        }
+      }
+      appStateRef.current = nextState;
+    });
+    return () => appStateSub.remove();
+  }, []);
+
+ const appStateRef2 = useRef<string>(AppState.currentState);
  useEffect(() => {
  const subscription = AppState.addEventListener("change", (nextState: string) => {
  const wasBackground =
