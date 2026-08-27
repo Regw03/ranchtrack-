@@ -815,6 +815,7 @@ export interface RemoteWeightRecordRow {
  unit: string;
  deleted: boolean;
  created_at: string;
+ updated_at: string;
 }
 
 export interface RemoteHealthRecordRow {
@@ -828,6 +829,7 @@ export interface RemoteHealthRecordRow {
  administered_by: string | null;
  deleted: boolean;
  created_at: string;
+ updated_at: string;
 }
 
 /** Push a weight record. All roles can add — merge strategy. */
@@ -846,6 +848,7 @@ export async function pushWeightRecordToCloud(
      unit: record.unit,
      deleted: false,
      created_at: new Date().toISOString(),
+     updated_at: new Date().toISOString(),
    };
    const { error } = await supabase
      .from("weight_records")
@@ -872,6 +875,7 @@ export async function pushHealthRecordToCloud(
      administered_by: record.administeredBy ?? null,
      deleted: false,
      created_at: new Date().toISOString(),
+     updated_at: new Date().toISOString(),
    };
    const { error } = await supabase
      .from("health_records")
@@ -1209,4 +1213,91 @@ export async function fetchRanchNotes(ranchId: string): Promise<RanchNoteSyncRes
    console.log("[sync] fetchRanchNotes exception", msg);
    return { notes: [], error: msg };
  }
+}
+// ─── Processing Sync ──────────────────────────────────────────────────────────
+
+export async function pushProcessingGroupToCloud(
+  group: import("@/types").ProcessingGroup,
+): Promise<void> {
+  if (!isRemoteRanch(group.ranchId)) return;
+  try {
+    const { error } = await supabase.from("processing_groups").upsert({
+      id: group.id,
+      ranch_id: group.ranchId,
+      name: group.name,
+      color: group.color,
+      animal_ids: group.animalIds,
+      business_year_id: group.businessYearId,
+      created_by: group.createdBy ?? null,
+      deleted: false,
+      created_at: group.createdAt,
+      updated_at: group.updatedAt,
+    }, { onConflict: "id" });
+    if (error) console.log("[sync] pushProcessingGroup error", error.message);
+  } catch (e) { console.log("[sync] pushProcessingGroup exception", e); }
+}
+
+export async function pushProcessingEventToCloud(
+  event: import("@/types").ProcessingEvent,
+): Promise<void> {
+  if (!isRemoteRanch(event.ranchId)) return;
+  try {
+    const { error } = await supabase.from("processing_events").upsert({
+      id: event.id,
+      ranch_id: event.ranchId,
+      name: event.name,
+      type: event.type,
+      custom_type_name: event.customTypeName ?? null,
+      date: event.date,
+      group_id: event.groupId,
+      business_year_id: event.businessYearId,
+      status: event.status,
+      notes: event.notes ?? null,
+      created_by: event.createdBy ?? null,
+      created_by_name: event.createdByName ?? null,
+      deleted: false,
+      created_at: event.createdAt,
+      updated_at: event.updatedAt,
+    }, { onConflict: "id" });
+    if (error) console.log("[sync] pushProcessingEvent error", error.message);
+  } catch (e) { console.log("[sync] pushProcessingEvent exception", e); }
+}
+
+export async function pushProcessingRecordToCloud(
+  record: import("@/types").ProcessingRecord,
+  eventRanchId: string,
+): Promise<void> {
+  if (!isRemoteRanch(eventRanchId)) return;
+  try {
+    const { error } = await supabase.from("processing_records").upsert({
+      id: record.id,
+      event_id: record.eventId,
+      animal_id: record.animalId,
+      result: record.result,
+      notes: record.notes ?? null,
+      recorded_by: record.recordedBy ?? null,
+      recorded_by_name: record.recordedByName ?? null,
+      deleted: false,
+      created_at: record.createdAt,
+      updated_at: record.updatedAt,
+    }, { onConflict: "id" });
+    if (error) console.log("[sync] pushProcessingRecord error", error.message);
+  } catch (e) { console.log("[sync] pushProcessingRecord exception", e); }
+}
+
+export async function fetchProcessingData(ranchId: string): Promise<{
+  groups: { id: string; name: string; color: string; animal_ids: string[]; business_year_id: string; created_by: string | null; created_at: string; updated_at: string }[];
+  events: { id: string; ranch_id: string; name: string; type: string; custom_type_name: string | null; date: string; group_id: string; business_year_id: string; status: string; notes: string | null; created_by: string | null; created_by_name: string | null; created_at: string; updated_at: string }[];
+  records: { id: string; event_id: string; animal_id: string; result: string; notes: string | null; recorded_by: string | null; recorded_by_name: string | null; created_at: string; updated_at: string }[];
+}> {
+  const [groupsRes, eventsRes, recordsRes] = await Promise.all([
+    supabase.from("processing_groups").select("*").eq("ranch_id", ranchId).eq("deleted", false),
+    supabase.from("processing_events").select("*").eq("ranch_id", ranchId).eq("deleted", false),
+    supabase.from("processing_records").select("pr.*").from("processing_records as pr").join("processing_events as pe", "pr.event_id", "pe.id").eq("pe.ranch_id", ranchId).eq("pr.deleted", false),
+  ]);
+  return {
+    groups: (groupsRes.data ?? []) as any[],
+    events: (eventsRes.data ?? []) as any[],
+    records: (recordsRes.data ?? []) as any[],
+  };
 }
