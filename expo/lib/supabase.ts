@@ -126,6 +126,7 @@ export async function pushAnimalToCloud(
        created_by: createdBy,
        data: animal,
        deleted: false,
+       created_at: animal.createdAt,
        updated_at: animal.updatedAt,
      },
      { onConflict: "id" },
@@ -187,6 +188,7 @@ export async function pushAnimalsBatchToCloud(
      created_by: createdBy,
      data: a,
      deleted: false,
+     created_at: a.createdAt,
      updated_at: new Date().toISOString(), // will be overwritten by server
    }));
    const { data: upserted, error } = await supabase
