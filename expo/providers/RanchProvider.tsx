@@ -1723,6 +1723,28 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
  throw new Error("This invite code has expired. Ask the ranch owner to generate a new one.");
  }
 
+ // Check member limit using ranch_members count in Supabase
+ const { data: currentMembers } = await supabase
+   .from("ranch_members")
+   .select("user_id")
+   .eq("ranch_id", ranchRow.id);
+
+ const memberCount = currentMembers?.length ?? 0;
+
+ // Check if ranch has a tier stored (set when owner upgrades)
+ // Free tier cannot generate invite codes so getting here means owner is Pro or Plus
+ // We store the tier in the ranch record to enforce limits from joining devices
+ const ranchTier = (ranchRow as any).tier ?? "pro";
+
+ if (ranchTier === "plus") {
+   // Plus = unlimited members, no limit check
+ } else {
+   // Pro = max 5 members (including owner)
+   if (memberCount >= 5) {
+     throw new Error("This ranch has reached its 5-member limit for Ranch Pro. The owner needs to upgrade to Ranch Plus for unlimited members, or purchase the $1.99/mo per-member add-on.");
+   }
+ }
+
  // Use Supabase auth UUID if available, otherwise generate local UUID
  const memberId = authUserId ?? generateUuid();
  const newUser: User = {

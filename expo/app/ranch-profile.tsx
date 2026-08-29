@@ -177,21 +177,24 @@ export default function RanchProfileScreen() {
   }, [canInviteTeammates]);
 
   const handleConfirmInvite = useCallback(async () => {
-    const trimmed = inviteName.trim();
-    if (!trimmed) return;
-    try {
-      await inviteTeammate({ name: trimmed, role: inviteRole });
-      if (Platform.OS !== "web") void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      setInviteOpen(false);
-      setInviteName("");
-    } catch (e) {
-      console.log("Failed to invite", e);
+    // The invite code flow is the correct way to add team members
+    // Close the modal and show instructions
+    setInviteOpen(false);
+    const inviteCode = ranch.inviteCode;
+    if (inviteCode) {
       Alert.alert(
-        "Couldn't invite",
-        e instanceof Error ? e.message : "Please try again.",
+        "Share Invite Code",
+        `Share this code with your team member:\n\n${inviteCode}\n\nThey will use it when signing up for RanchTrack to join your ranch.`,
+        [{ text: "OK" }]
+      );
+    } else {
+      Alert.alert(
+        "No Invite Code",
+        "Go to Settings to generate an invite code first.",
+        [{ text: "OK" }]
       );
     }
-  }, [inviteName, inviteRole, inviteTeammate]);
+  }, [ranch.inviteCode, setInviteOpen]);
 
   const handleResetApp = useCallback(() => {
     if (Platform.OS !== "web") void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
