@@ -499,7 +499,9 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
  const animal = currentAnimals.find((a) => a.id === animalId);
  const updated = currentAnimals.filter((a) => a.id !== animalId);
  await saveToStorage(STORAGE_KEYS.animals, updated);
- void deleteAnimalInCloud(animalId, ranch.id);
+ void deleteAnimalInCloud(animalId, ranch.id).then(() => {
+   setTimeout(() => syncAnimalsMutation.mutate(), 500);
+ });
 
  const currentCalving = queryClient.getQueryData<CalvingRecord[]>(["calvingRecords"]) ?? [];
  const updatedCalving = currentCalving.filter((r) => r.calfId !== animalId);
@@ -2048,6 +2050,12 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
       )
       .on("postgres_changes", { event: "*", schema: "public", table: "ranch_notes", filter: `ranch_id=eq.${ranch.id}` },
         () => { syncRanchNotesMutation.mutate(); }
+      )
+      .on("postgres_changes", { event: "*", schema: "public", table: "calving_lists", filter: `ranch_id=eq.${ranch.id}` },
+        () => { syncCalvingDataMutation.mutate(); }
+      )
+      .on("postgres_changes", { event: "*", schema: "public", table: "custom_lists", filter: `ranch_id=eq.${ranch.id}` },
+        () => { syncCustomListsMutation.mutate(); }
       )
       .subscribe();
 
