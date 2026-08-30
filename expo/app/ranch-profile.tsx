@@ -58,6 +58,7 @@ export default function RanchProfileScreen() {
     inviteTeammate,
     isInvitingTeammate,
     currentUserRole,
+    generateNewInviteCode,
   } = useRanch();
 
   const [editingRanchName, setEditingRanchName] = useState<boolean>(false);
@@ -177,24 +178,24 @@ export default function RanchProfileScreen() {
   }, [canInviteTeammates]);
 
   const handleConfirmInvite = useCallback(async () => {
-    // The invite code flow is the correct way to add team members
-    // Close the modal and show instructions
     setInviteOpen(false);
-    const inviteCode = ranch.inviteCode;
-    if (inviteCode) {
-      Alert.alert(
-        "Share Invite Code",
-        `Share this code with your team member:\n\n${inviteCode}\n\nThey will use it when signing up for RanchTrack to join your ranch.`,
-        [{ text: "OK" }]
-      );
-    } else {
-      Alert.alert(
-        "No Invite Code",
-        "Go to Settings to generate an invite code first.",
-        [{ text: "OK" }]
-      );
+    let inviteCode = ranch.inviteCode;
+    // Auto-generate a code if none exists or it's expired
+    if (!inviteCode || (ranch.inviteExpiry && new Date(ranch.inviteExpiry) < new Date())) {
+      try {
+        const result = await generateNewInviteCode();
+        inviteCode = result.code;
+      } catch (e) {
+        Alert.alert("Error", "Could not generate invite code. Please try again.");
+        return;
+      }
     }
-  }, [ranch.inviteCode, setInviteOpen]);
+    Alert.alert(
+      "Invite Team Member",
+      `Share this code with your team member:\n\n${inviteCode}\n\nThey download RanchTrack, tap "Join Ranch" during signup, and enter this code.`,
+      [{ text: "OK" }]
+    );
+  }, [ranch.inviteCode, ranch.inviteExpiry, generateNewInviteCode, setInviteOpen]);
 
   const handleResetApp = useCallback(() => {
     if (Platform.OS !== "web") void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
