@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   TextInput,
   Alert,
+  Share,
   Platform,
   Modal,
   ActivityIndicator,
@@ -40,6 +41,7 @@ export default function RanchProfileScreen() {
   const router = useRouter();
   const styles = useMemo(() => createStyles(Colors), [Colors]);
 
+  const [sharePending, setSharePending] = React.useState(false);
   const {
     ranch,
     users,
@@ -70,9 +72,6 @@ export default function RanchProfileScreen() {
   const [switchOpen, setSwitchOpen] = useState<boolean>(false);
   const [newUserName, setNewUserName] = useState<string>("");
 
-  const [inviteOpen, setInviteOpen] = useState<boolean>(false);
-  const [inviteName, setInviteName] = useState<string>("");
-  const [inviteRole, setInviteRole] = useState<"manager" | "member">("member");
 
   const owner = useMemo(
     () => ranch.members.find((m) => m.userId === ranch.ownerId),
@@ -172,13 +171,18 @@ export default function RanchProfileScreen() {
       return;
     }
     if (Platform.OS !== "web") void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    setInviteName("");
-    setInviteRole("member");
-    setInviteOpen(true);
+    // Go straight to share sheet - shareInvite handles everything
+    setSharePending(true);
   }, [canInviteTeammates]);
 
+  // Trigger share when button is pressed
+  React.useEffect(() => {
+    if (!sharePending) return;
+    setSharePending(false);
+    void handleConfirmInvite();
+  }, [sharePending]);
+
   const handleConfirmInvite = useCallback(async () => {
-    setInviteOpen(false);
     let inviteCode = ranch.inviteCode;
     // Auto-generate a code if none exists or it's expired
     if (!inviteCode || (ranch.inviteExpiry && new Date(ranch.inviteExpiry) < new Date())) {
@@ -190,12 +194,19 @@ export default function RanchProfileScreen() {
         return;
       }
     }
-    Alert.alert(
-      "Invite Team Member",
-      `Share this code with your team member:\n\n${inviteCode}\n\nThey download RanchTrack, tap "Join Ranch" during signup, and enter this code.`,
-      [{ text: "OK" }]
-    );
-  }, [ranch.inviteCode, ranch.inviteExpiry, generateNewInviteCode, setInviteOpen]);
+    const message = `You've been invited to join a ranch on RanchTrack!\n\nInvite Code: ${inviteCode}\n\nDownload RanchTrack:\n• iOS: https://apps.apple.com/app/ranchtrack/id123456789\n• Android: https://play.google.com/store/apps/details?id=com.ranchtrack.app\n\nOnce installed, tap "Join Ranch" and enter the code above.`;
+
+    try {
+      await Share.share({ message, title: "Join my ranch on RanchTrack" });
+    } catch (e) {
+      // Fallback to alert if share fails
+      Alert.alert(
+        "Invite Code",
+        `Share this code: ${inviteCode}\n\nTell them to download RanchTrack and tap "Join Ranch".`,
+        [{ text: "OK" }]
+      );
+    }
+  }, [ranch.inviteCode, ranch.inviteExpiry, generateNewInviteCode]);
 
   const handleResetApp = useCallback(() => {
     if (Platform.OS !== "web") void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -567,21 +578,7 @@ export default function RanchProfileScreen() {
         isAddingUser={isAddingUser}
         Colors={Colors}
       />
-
-      <InviteTeammateModal
-        visible={inviteOpen}
-        onClose={() => setInviteOpen(false)}
-        name={inviteName}
-        setName={setInviteName}
-        role={inviteRole}
-        setRole={setInviteRole}
-        onConfirm={handleConfirmInvite}
-        isInviting={isInvitingTeammate}
-        canInvite={canInviteTeammates}
-        inviterRole={currentUserRole}
-        Colors={Colors}
-      />
-    </>
+</>
   );
 }
 
@@ -625,155 +622,6 @@ function getRoleMeta(
   }
 }
 
-function InviteTeammateModal({
-  visible,
-  onClose,
-  name,
-  setName,
-  role,
-  setRole,
-  onConfirm,
-  isInviting,
-  canInvite,
-  inviterRole,
-  Colors,
-}: {
-  visible: boolean;
-  onClose: () => void;
-  name: string;
-  setName: (s: string) => void;
-  role: "manager" | "member";
-  setRole: (r: "manager" | "member") => void;
-  onConfirm: () => void;
-  isInviting: boolean;
-  canInvite: boolean;
-  inviterRole: RanchMember["role"] | null;
-  Colors: ThemeColors;
-}) {
-  const styles = useMemo(() => createStyles(Colors), [Colors]);
-  const trimmed = name.trim();
-  const disabled = isInviting || trimmed.length === 0 || !canInvite;
-  return (
-    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
-      <KeyboardAvoidingView
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
-        style={styles.modalBackdrop}
-      >
-        <ScrollView
-          contentContainerStyle={styles.modalScrollContent}
-          keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={false}
-        >
-        <View style={styles.modalCard}>
-          <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>Invite Teammate</Text>
-            <TouchableOpacity onPress={onClose} style={styles.modalClose} activeOpacity={0.7}>
-              <X size={20} color={Colors.textSecondary} />
-            </TouchableOpacity>
-          </View>
-
-          <Text style={styles.modalSubtitle}>
-            {canInvite
-              ? `Inviting as ${inviterRole === "owner" ? "Owner" : "Manager"}. New teammates can be added as Manager or Member.`
-              : "Only owners or managers can invite teammates."}
-          </Text>
-
-          <View style={styles.inviteFieldBlock}>
-            <Text style={styles.inviteFieldLabel}>Name</Text>
-            <TextInput
-              value={name}
-              onChangeText={setName}
-              placeholder="e.g. Sam"
-              placeholderTextColor={Colors.textTertiary}
-              style={styles.modalAddInput}
-              autoCapitalize="words"
-              maxLength={40}
-              autoFocus={canInvite}
-              editable={canInvite}
-              onSubmitEditing={onConfirm}
-              returnKeyType="done"
-              testID="invite-name-input"
-            />
-          </View>
-
-          <View style={styles.inviteFieldBlock}>
-            <Text style={styles.inviteFieldLabel}>Role</Text>
-            <View style={styles.roleOptions}>
-              {(
-                [
-                  { value: "member" as const, label: "Member", desc: "View and log work", icon: "shield" as const },
-                  { value: "manager" as const, label: "Manager", desc: "Can invite teammates", icon: "star" as const },
-                ]
-              ).map((opt) => {
-                const selected = role === opt.value;
-                return (
-                  <TouchableOpacity
-                    key={opt.value}
-                    style={[
-                      styles.roleOption,
-                      selected && {
-                        borderColor: Colors.primary,
-                        backgroundColor: Colors.primary + "12",
-                      },
-                    ]}
-                    activeOpacity={0.85}
-                    onPress={() => {
-                      if (Platform.OS !== "web") void Haptics.selectionAsync();
-                      setRole(opt.value);
-                    }}
-                    disabled={!canInvite}
-                    testID={`invite-role-${opt.value}`}
-                  >
-                    <View
-                      style={[
-                        styles.roleOptionIcon,
-                        {
-                          backgroundColor: selected ? Colors.primary : Colors.backgroundDark,
-                        },
-                      ]}
-                    >
-                      {opt.icon === "star" ? (
-                        <Star size={16} color={selected ? "#fff" : Colors.textSecondary} />
-                      ) : (
-                        <Shield size={16} color={selected ? "#fff" : Colors.textSecondary} />
-                      )}
-                    </View>
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.roleOptionLabel}>{opt.label}</Text>
-                      <Text style={styles.roleOptionDesc}>{opt.desc}</Text>
-                    </View>
-                    {selected && <Check size={18} color={Colors.primary} />}
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-          </View>
-
-          <TouchableOpacity
-            style={[
-              styles.inviteConfirmBtn,
-              { backgroundColor: disabled ? Colors.border : Colors.primary },
-            ]}
-            onPress={onConfirm}
-            disabled={disabled}
-            activeOpacity={0.85}
-            testID="confirm-invite-btn"
-          >
-            {isInviting ? (
-              <ActivityIndicator color="#fff" />
-            ) : (
-              <>
-                <UserPlus size={18} color="#fff" />
-                <Text style={styles.inviteConfirmText}>Send Invite</Text>
-              </>
-            )}
-          </TouchableOpacity>
-        </View>
-        </ScrollView>
-      </KeyboardAvoidingView>
-    </Modal>
-  );
-}
 
 function Section({
   title,
