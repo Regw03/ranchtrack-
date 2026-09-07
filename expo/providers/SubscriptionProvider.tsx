@@ -43,7 +43,7 @@ function findPackageByIdentifier(
   identifier: string,
 ): PurchasesPackage | null {
   if (!offerings) return null;
-  for (const offering of Object.values(offerings.all)) {
+  for (const offering of Object.values(offerings.all) as import("react-native-purchases").PurchasesOffering[]) {
     const pkg = offering.availablePackages.find((p) => p.identifier === identifier);
     if (pkg) return pkg;
   }
