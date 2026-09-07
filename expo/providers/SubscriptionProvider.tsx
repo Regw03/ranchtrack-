@@ -9,6 +9,7 @@ import Purchases, {
   PurchasesError,
 } from "react-native-purchases";
 import { useRanch } from "@/providers/RanchProvider";
+import { setRanchTierInCloud } from "@/lib/supabase";
 
 const API_KEYS = {
   ios: "test_NWwXiCUJBaTPIHpQeBHLJipCIsd",
@@ -52,6 +53,7 @@ function findPackageByIdentifier(
 }
 
 export const [SubscriptionProvider, useSubscription] = createContextHook(() => {
+  const { ranch, currentUserRole } = useRanch();
   const [customerInfo, setCustomerInfo] = useState<CustomerInfo | null>(null);
   const [offerings, setOfferings] = useState<PurchasesOfferings | null>(null);
   const [ready, setReady] = useState<boolean>(false);
@@ -154,6 +156,21 @@ export const [SubscriptionProvider, useSubscription] = createContextHook(() => {
       try {
         const { customerInfo: info } = await Purchases.purchasePackage(pkg);
         setCustomerInfo(info);
+
+        // Persist the tier to the ranch so managers/members' paywall bypass is
+        // actually backed by a real subscription, not just this device's local
+        // RevenueCat state. Only the owner's purchase counts for the ranch —
+        // a manager/member buying their own add-on shouldn't reclassify it.
+        const entitlements = info.entitlements.active;
+        const purchasedTier: SubscriptionTier | null = entitlements[ENTITLEMENT_PLUS]
+          ? "plus"
+          : entitlements[ENTITLEMENT_PRO]
+            ? "pro"
+            : null;
+        if (purchasedTier && currentUserRole === "owner" && ranch.id) {
+          void setRanchTierInCloud(ranch.id, purchasedTier);
+        }
+
         return info;
       } catch (e: unknown) {
         const err = e as PurchasesError;
@@ -165,7 +182,7 @@ export const [SubscriptionProvider, useSubscription] = createContextHook(() => {
         setIsPurchasing(false);
       }
     },
-    [],
+    [currentUserRole, ranch.id],
   );
 
   // ─── Refresh customer info ──────────────────────────────────────────────

@@ -401,8 +401,11 @@ export function ProcessingProvider({ children }: { children: React.ReactNode }) 
  const syncProcessingMutation = useMutation({
  mutationFn: async () => {
  if (!ranch.id) return;
- const { groups: remoteGroups, events: remoteEvents, records: remoteRecords, error } =
- await fetchProcessingData(ranch.id);
+ const result = await fetchProcessingData(ranch.id);
+ const remoteGroups: RemoteProcessingGroupRow[] = result.groups;
+ const remoteEvents: RemoteProcessingEventRow[] = result.events;
+ const remoteRecords: RemoteProcessingRecordRow[] = result.records;
+ const error = result.error;
 
  if (error) {
  const localGroups = queryClient.getQueryData<ProcessingGroup[]>(["processingGroups"]) ?? [];
@@ -421,7 +424,7 @@ export function ProcessingProvider({ children }: { children: React.ReactNode }) 
  let groupsAdded = 0;
  let groupsRemoved = 0;
 
- for (const row of remoteGroups as RemoteProcessingGroupRow[]) {
+ for (const row of remoteGroups) {
  remoteSeenGroupIds.add(row.id);
  if (row.deleted) {
  const existing = localGroupById.get(row.id);
@@ -466,7 +469,7 @@ export function ProcessingProvider({ children }: { children: React.ReactNode }) 
  let eventsAdded = 0;
  let eventsRemoved = 0;
 
- for (const row of remoteEvents as RemoteProcessingEventRow[]) {
+ for (const row of remoteEvents) {
  remoteSeenEventIds.add(row.id);
  if (row.deleted) {
  const existing = localEventById.get(row.id);
@@ -516,7 +519,7 @@ export function ProcessingProvider({ children }: { children: React.ReactNode }) 
  let recordsAdded = 0;
  let recordsRemoved = 0;
 
- for (const row of remoteRecords as RemoteProcessingRecordRow[]) {
+ for (const row of remoteRecords) {
  remoteSeenRecordIds.add(row.id);
  if (row.deleted) {
  const existing = localRecordById.get(row.id);

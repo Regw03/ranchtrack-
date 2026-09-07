@@ -251,15 +251,12 @@ export default function PaywallScreen() {
         }
         // Force refresh customer info to pick up new entitlements
         await refreshCustomerInfo();
-        // Determine tier from package identifier for test store compatibility
+        // Determine tier from package identifier for test store compatibility.
+        // (Writing the tier to the ranch itself now happens centrally in
+        // purchasePackage, keyed off the real entitlement — not this guess.)
         const pkgId = pkg.identifier;
         const purchasedTier: "pro" | "plus" = pkgId.toLowerCase().includes("plus") ? "plus" : "pro";
         setHasTestPurchased(purchasedTier);
-        // Persist to the ranch so managers/members' paywall bypass is actually backed
-        // by a real subscription — only the owner's purchase counts for the ranch.
-        if (currentUserRole === "owner") {
-          void setRanchTier(purchasedTier);
-        }
         Alert.alert(
           "Welcome! 🎉",
           "Your subscription is now active. Enjoy full access to RanchTrack!",
@@ -267,7 +264,7 @@ export default function PaywallScreen() {
         );
       }
     },
-    [purchasePackage, refreshCustomerInfo, router, setHasTestPurchased, currentUserRole, setRanchTier],
+    [purchasePackage, refreshCustomerInfo, router, setHasTestPurchased],
   );
 
   const handleRestore = useCallback(async () => {
