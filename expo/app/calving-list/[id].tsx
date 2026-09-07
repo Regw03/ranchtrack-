@@ -304,7 +304,7 @@ export default function CalvingListDetailScreen() {
  <Text style={styles.emptyEmoji}>🔍</Text>
  <Text style={styles.emptyTitle}>No Results</Text>
  <Text style={styles.emptySubtitle}>
- No records found for "{searchQuery}"
+ No records found for “{searchQuery}”
  </Text>
  </>
  ) : (
@@ -312,7 +312,7 @@ export default function CalvingListDetailScreen() {
  <Text style={styles.emptyEmoji}>🐮</Text>
  <Text style={styles.emptyTitle}>No Records Yet</Text>
  <Text style={styles.emptySubtitle}>
- Tap "Log Calving" to record your first calving event.
+ Tap “Log Calving” to record your first calving event.
  </Text>
  </>
  )}

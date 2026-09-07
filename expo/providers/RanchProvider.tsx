@@ -3,7 +3,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AppState } from "react-native";
-import { parseBirthDate } from "@/utils/helpers";
+import { parseBirthDate, generateId } from "@/utils/helpers";
 import { requireRanch } from "@/utils/ranchGuard";
 import {
  supabase,
@@ -17,6 +17,7 @@ import {
  fetchBusinessYears,
  pushBusinessYearsBatchToCloud,
  pushCalvingListToCloud,
+ pushCalvingListsBatchToCloud,
  deleteCalvingListInCloud,
  pushCalvingRecordToCloud,
  deleteCalvingRecordInCloud,
@@ -30,10 +31,15 @@ import {
  type RemoteDoctoringEventRow,
  pushWeightRecordToCloud,
  pushHealthRecordToCloud,
+ pushWeightRecordsBatchToCloud,
+ pushHealthRecordsBatchToCloud,
+ deleteWeightRecordInCloud,
+ deleteHealthRecordInCloud,
  fetchWeightHealthData,
  type RemoteWeightRecordRow,
  type RemoteHealthRecordRow,
  pushCustomListToCloud,
+ pushCustomListsBatchToCloud,
  deleteCustomListInCloud,
  fetchCustomLists,
  type RemoteCustomListRow,
@@ -112,6 +118,7 @@ const STORAGE_KEYS = {
  ranchNotes: "ranchtrack_ranch_notes",
  users: "ranchtrack_users",
  currentUserIdValue: "ranchtrack_current_user_id",
+ pendingAnimalDeletes: "ranchtrack_pending_animal_deletes",
 } as const;
 
 async function loadFromStorage<T>(key: string, fallback: T): Promise<T> {
@@ -134,10 +141,6 @@ async function saveToStorage<T>(key: string, data: T): Promise<void> {
  } catch (e) {
  console.log("Error saving to storage:", key, e);
  }
-}
-
-function generateId(): string {
- return Date.now().toString(36) + Math.random().toString(36).substr(2, 9);
 }
 
 /**
@@ -241,6 +244,11 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
  const animalsQuery = useQuery({
  queryKey: ["animals"],
  queryFn: () => loadFromStorage<Animal[]>(STORAGE_KEYS.animals, MOCK_ANIMALS),
+ });
+
+ const pendingAnimalDeletesQuery = useQuery({
+ queryKey: ["pendingAnimalDeletes"],
+ queryFn: () => loadFromStorage<string[]>(STORAGE_KEYS.pendingAnimalDeletes, []),
  });
 
  const weightRecordsQuery = useQuery({
@@ -493,14 +501,37 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
  },
  });
 
+ // Deletes an animal in the cloud, tracking it as "pending" until the delete is
+ // confirmed so sync (500ms follow-up, periodic, foreground, or realtime) never
+ // resurrects an animal whose remote soft-delete failed or hasn't landed yet.
+ const deleteAnimalWithRetry = useCallback(
+ async (animalId: string): Promise<boolean> => {
+ const currentPending = queryClient.getQueryData<string[]>(["pendingAnimalDeletes"]) ?? [];
+ if (!currentPending.includes(animalId)) {
+ const updatedPending = [...currentPending, animalId];
+ await saveToStorage(STORAGE_KEYS.pendingAnimalDeletes, updatedPending);
+ queryClient.setQueryData(["pendingAnimalDeletes"], updatedPending);
+ }
+ const success = await deleteAnimalInCloud(animalId, ranch.id);
+ if (success) {
+ const stillPending = queryClient.getQueryData<string[]>(["pendingAnimalDeletes"]) ?? [];
+ const cleared = stillPending.filter((id) => id !== animalId);
+ await saveToStorage(STORAGE_KEYS.pendingAnimalDeletes, cleared);
+ queryClient.setQueryData(["pendingAnimalDeletes"], cleared);
+ }
+ return success;
+ },
+ [queryClient, ranch.id],
+ );
+
  const deleteAnimalMutation = useMutation({
  mutationFn: async (animalId: string) => {
  const currentAnimals = queryClient.getQueryData<Animal[]>(["animals"]) ?? [];
  const animal = currentAnimals.find((a) => a.id === animalId);
  const updated = currentAnimals.filter((a) => a.id !== animalId);
  await saveToStorage(STORAGE_KEYS.animals, updated);
- void deleteAnimalInCloud(animalId, ranch.id).then(() => {
-   setTimeout(() => syncAnimalsMutation.mutate(), 500);
+ void deleteAnimalWithRetry(animalId).then((success) => {
+   if (success) setTimeout(() => syncAnimalsMutation.mutate(), 500);
  });
 
  const currentCalving = queryClient.getQueryData<CalvingRecord[]>(["calvingRecords"]) ?? [];
@@ -543,6 +574,7 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
  const current = queryClient.getQueryData<WeightRecord[]>(["weightRecords"]) ?? [];
  const updated = current.filter((r) => r.id !== recordId);
  await saveToStorage(STORAGE_KEYS.weightRecords, updated);
+ void deleteWeightRecordInCloud(recordId);
  return updated;
  },
  onSuccess: (updated) => {
@@ -573,6 +605,7 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
  const current = queryClient.getQueryData<HealthRecord[]>(["healthRecords"]) ?? [];
  const updated = current.filter((r) => r.id !== recordId);
  await saveToStorage(STORAGE_KEYS.healthRecords, updated);
+ void deleteHealthRecordInCloud(recordId);
  return updated;
  },
  onSuccess: (updated) => {
@@ -1294,7 +1327,7 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
  .map((a) => (a.id === keepId ? mergedAnimal : a));
  await saveToStorage(STORAGE_KEYS.animals, updatedAnimals);
  void pushAnimalToCloud(mergedAnimal, currentUserId || null);
- void deleteAnimalInCloud(removeId, ranch.id);
+ void deleteAnimalWithRetry(removeId);
 
  const currentWR = queryClient.getQueryData<WeightRecord[]>(["weightRecords"]) ?? [];
  const updatedWR = currentWR.map((r) => r.animalId === removeId ? { ...r, animalId: keepId } : r);
@@ -1304,6 +1337,16 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
  const updatedHR = currentHR.map((r) => r.animalId === removeId ? { ...r, animalId: keepId } : r);
  await saveToStorage(STORAGE_KEYS.healthRecords, updatedHR);
 
+ const currentDE = queryClient.getQueryData<DoctoringEvent[]>(["doctoringEvents"]) ?? [];
+ const changedDE: DoctoringEvent[] = [];
+ const updatedDE = currentDE.map((e) => {
+ if (e.animalId !== removeId) return e;
+ const reassigned = { ...e, animalId: keepId, updatedAt: new Date().toISOString() };
+ changedDE.push(reassigned);
+ return reassigned;
+ });
+ await saveToStorage(STORAGE_KEYS.doctoringEvents, updatedDE);
+ for (const e of changedDE) void pushDoctoringEventToCloud(e, currentUserRole);
 
  const currentLists = queryClient.getQueryData<CustomList[]>(["customLists"]) ?? [];
  const updatedLists = currentLists.map((l) => {
@@ -1324,12 +1367,13 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
  keepId,
  );
 
- return { updatedAnimals, updatedWR, updatedHR, updatedLists };
+ return { updatedAnimals, updatedWR, updatedHR, updatedDE, updatedLists };
  },
- onSuccess: ({ updatedAnimals, updatedWR, updatedHR, updatedLists }) => {
+ onSuccess: ({ updatedAnimals, updatedWR, updatedHR, updatedDE, updatedLists }) => {
  queryClient.setQueryData(["animals"], updatedAnimals);
  queryClient.setQueryData(["weightRecords"], updatedWR);
  queryClient.setQueryData(["healthRecords"], updatedHR);
+ queryClient.setQueryData(["doctoringEvents"], updatedDE);
  queryClient.setQueryData(["customLists"], updatedLists);
  },
  });
@@ -1756,6 +1800,16 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
  };
  const joinedAt = new Date().toISOString();
 
+ // A user rejoining with the same account (e.g. after reinstalling) already has a
+ // ranch_members row — skip the insert instead of hitting a duplicate-key error.
+ const { data: existingMember } = await supabase
+ .from("ranch_members")
+ .select("user_id")
+ .eq("ranch_id", ranchRow.id)
+ .eq("user_id", memberId)
+ .maybeSingle();
+
+ if (!existingMember) {
  const { error: memberErr } = await supabase.from("ranch_members").insert({
  ranch_id: ranchRow.id,
  user_id: newUser.id,
@@ -1763,9 +1817,10 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
  role: "member",
  joined_at: joinedAt,
  });
- if (memberErr) {
+ if (memberErr && (memberErr as { code?: string }).code !== "23505") {
  console.error("[joinRanch] failed to insert member", memberErr);
  throw new Error(memberErr.message);
+ }
  }
 
  const { data: memberRows, error: listErr } = await supabase
@@ -1826,9 +1881,16 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
  const localAnimals = queryClient.getQueryData<Animal[]>(["animals"]) ?? [];
  const localById = new Map<string, Animal>(localAnimals.map((a) => [a.id, a]));
  const remoteIds = new Set<string>();
+ const pendingDeleteIds = new Set(queryClient.getQueryData<string[]>(["pendingAnimalDeletes"]) ?? []);
 
  for (const row of remoteRows) {
  remoteIds.add(row.id);
+ if (!row.deleted && pendingDeleteIds.has(row.id)) {
+ // Locally deleted but the cloud soft-delete hasn't been confirmed yet —
+ // don't resurrect it, and retry the delete now that we're online.
+ void deleteAnimalWithRetry(row.id);
+ continue;
+ }
  if (row.deleted) {
  if (localById.has(row.id)) {
  const local = localById.get(row.id)!;
@@ -1891,22 +1953,22 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
  const localOnlyAnimals = merged.filter(
  (a) => a.ranchId === current.id && !remoteIds.has(a.id),
  );
+ let finalMerged = merged;
  if (localOnlyAnimals.length > 0) {
  console.log(`[syncAnimals] pushing ${localOnlyAnimals.length} local-only animals to cloud`);
  const serverTimestamps = await pushAnimalsBatchToCloud(localOnlyAnimals, currentUserId || null);
- if (serverTimestamps) {
-   // Update local records with server-generated timestamps
+ if (serverTimestamps && serverTimestamps.length > 0) {
+   // Update local records with server-generated timestamps, and persist the correction —
+   // otherwise the client-generated timestamp sticks around and can lose a future
+   // last-write-wins comparison against a genuinely newer edit from another device.
    const tsMap = new Map(serverTimestamps.map((r) => [r.id, r.updated_at]));
-   for (const [id, animal] of localById.entries()) {
-     if (tsMap.has(id)) {
-       localById.set(id, { ...animal, updatedAt: tsMap.get(id)! });
-     }
-   }
+   finalMerged = merged.map((a) => (tsMap.has(a.id) ? { ...a, updatedAt: tsMap.get(a.id)! } : a));
+   await saveToStorage(STORAGE_KEYS.animals, finalMerged);
  }
  }
 
- console.log(`[syncAnimals] merged ${merged.length} animals (remote: ${remoteRows.length})`);
- return merged;
+ console.log(`[syncAnimals] merged ${finalMerged.length} animals (remote: ${remoteRows.length})`);
+ return finalMerged;
  },
  onSuccess: (merged) => {
  if (merged) queryClient.setQueryData(["animals"], merged);
@@ -2001,8 +2063,10 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
       const currentRanch = queryClient.getQueryData<Ranch>(["ranch"]);
       if (currentRanch?.id && currentRanch.id !== MOCK_RANCH.id) {
         syncAnimalsMutation.mutate();
+        syncBusinessYearsMutation.mutate();
         syncCalvingDataMutation.mutate();
         syncDoctoringEventsMutation.mutate();
+        syncWeightHealthMutation.mutate();
         syncCustomListsMutation.mutate();
         syncRanchNotesMutation.mutate();
       }
@@ -2057,23 +2121,35 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
       .on("postgres_changes", { event: "*", schema: "public", table: "custom_lists", filter: `ranch_id=eq.${ranch.id}` },
         () => { syncCustomListsMutation.mutate(); }
       )
+      .on("postgres_changes", { event: "*", schema: "public", table: "ranch_members", filter: `ranch_id=eq.${ranch.id}` },
+        () => { refreshRanchMutation.mutate(); }
+      )
+      .on("postgres_changes", { event: "*", schema: "public", table: "weight_records", filter: `ranch_id=eq.${ranch.id}` },
+        () => { syncWeightHealthMutation.mutate(); }
+      )
+      .on("postgres_changes", { event: "*", schema: "public", table: "health_records", filter: `ranch_id=eq.${ranch.id}` },
+        () => { syncWeightHealthMutation.mutate(); }
+      )
       .subscribe();
 
     return () => { void supabase.removeChannel(channel); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ranch.id]);
 
+  // Sync when app comes to foreground.
+  // refreshRanchMutation's onSuccess already triggers syncAnimals + syncBusinessYears,
+  // so only the remaining entity types need to be fired alongside it here.
   const appStateRef = useRef<string>(AppState.currentState);
  useEffect(() => {
-    // Sync when app comes to foreground
     const appStateSub = AppState.addEventListener("change", (nextState) => {
       if (appStateRef.current.match(/inactive|background/) && nextState === "active") {
         const currentRanch = queryClient.getQueryData<Ranch>(["ranch"]);
         if (currentRanch?.id && currentRanch.id !== MOCK_RANCH.id) {
           console.log("[sync] app foregrounded — syncing");
-          syncAnimalsMutation.mutate();
+          refreshRanchMutation.mutate();
           syncCalvingDataMutation.mutate();
           syncDoctoringEventsMutation.mutate();
+          syncWeightHealthMutation.mutate();
           syncCustomListsMutation.mutate();
           syncRanchNotesMutation.mutate();
         }
@@ -2081,32 +2157,8 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
       appStateRef.current = nextState;
     });
     return () => appStateSub.remove();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
- const appStateRef2 = useRef<string>(AppState.currentState);
- useEffect(() => {
- const subscription = AppState.addEventListener("change", (nextState: string) => {
- const wasBackground =
- appStateRef.current === "background" || appStateRef.current === "inactive";
- const nowActive = nextState === "active";
- appStateRef.current = nextState;
- if (wasBackground && nowActive) {
- const currentRanch = queryClient.getQueryData<Ranch>(["ranch"]);
- if (currentRanch?.id && currentRanch.id !== MOCK_RANCH.id) {
- console.log("[AppState] app foregrounded — refreshing ranch data");
- refreshRanchMutation.mutate();
- syncBusinessYearsMutation.mutate();
- syncCalvingDataMutation.mutate();
- syncDoctoringEventsMutation.mutate();
- syncWeightHealthMutation.mutate();
- syncCustomListsMutation.mutate();
- syncRanchNotesMutation.mutate();
- }
- }
- });
- return () => subscription.remove();
- // eslint-disable-next-line react-hooks/exhaustive-deps
- }, []);
 
  // ─── Custom Lists sync mutation ──────────────────────────────────────────
  const syncCustomListsMutation = useMutation({
@@ -2117,7 +2169,7 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
  const { lists: remoteLists, error } = await fetchCustomLists(currentRanch.id);
  if (error) {
  const local = queryClient.getQueryData<CustomList[]>(["customLists"]) ?? [];
- for (const l of local) void pushCustomListToCloud(l, currentUserRole);
+ void pushCustomListsBatchToCloud(local, currentUserRole);
  return;
  }
 
@@ -2150,7 +2202,7 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
  }
 
  const localOnly = local.filter((l) => !remoteIds.has(l.id));
- for (const l of localOnly) void pushCustomListToCloud(l, currentUserRole);
+ void pushCustomListsBatchToCloud(localOnly, currentUserRole);
  },
  onError: (e) => console.log("[syncCustomLists] error", e),
  });
@@ -2166,7 +2218,7 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
  // Server error — push local data up
  const localLists = queryClient.getQueryData<CalvingList[]>(["calvingLists"]) ?? [];
  const localRecords = queryClient.getQueryData<CalvingRecord[]>(["calvingRecords"]) ?? [];
- for (const l of localLists) void pushCalvingListToCloud(l, currentRanch.id, currentUserRole);
+ void pushCalvingListsBatchToCloud(localLists, currentRanch.id, currentUserRole);
  for (const r of localRecords) void pushCalvingRecordToCloud(r, currentRanch.id, currentUserRole);
  return;
  }
@@ -2199,7 +2251,7 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
 
  // Push local-only lists to server
  const localOnlyLists = localLists.filter((l) => !remoteListIds.has(l.id));
- for (const l of localOnlyLists) void pushCalvingListToCloud(l, currentRanch.id, currentUserRole);
+ void pushCalvingListsBatchToCloud(localOnlyLists, currentRanch.id, currentUserRole);
 
  // ── Merge records ────────────────────────────────────────────────────
  const localRecords = queryClient.getQueryData<CalvingRecord[]>(["calvingRecords"]) ?? [];
@@ -2318,8 +2370,8 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
  // Server unreachable — push all local records up
  const localWeights = queryClient.getQueryData<WeightRecord[]>(["weightRecords"]) ?? [];
  const localHealth = queryClient.getQueryData<HealthRecord[]>(["healthRecords"]) ?? [];
- for (const r of localWeights) void pushWeightRecordToCloud(r, currentRanch.id);
- for (const r of localHealth) void pushHealthRecordToCloud(r, currentRanch.id);
+ void pushWeightRecordsBatchToCloud(localWeights, currentRanch.id);
+ void pushHealthRecordsBatchToCloud(localHealth, currentRanch.id);
  return;
  }
 
@@ -2345,7 +2397,7 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
  console.log(`[syncWeightHealth] added ${newWeights.length} weight records from server`);
  }
  const localOnlyWeights = localWeights.filter((r) => !remoteWeightIds.has(r.id));
- for (const r of localOnlyWeights) void pushWeightRecordToCloud(r, currentRanch.id);
+ void pushWeightRecordsBatchToCloud(localOnlyWeights, currentRanch.id);
 
  // ── Merge health records ─────────────────────────────────────────────
  const localHealth = queryClient.getQueryData<HealthRecord[]>(["healthRecords"]) ?? [];
@@ -2371,7 +2423,7 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
  console.log(`[syncWeightHealth] added ${newHealth.length} health records from server`);
  }
  const localOnlyHealth = localHealth.filter((r) => !remoteHealthIds.has(r.id));
- for (const r of localOnlyHealth) void pushHealthRecordToCloud(r, currentRanch.id);
+ void pushHealthRecordsBatchToCloud(localOnlyHealth, currentRanch.id);
  },
  onError: (e) => console.log("[syncWeightHealth] error", e),
  });
@@ -2633,8 +2685,8 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
  if (target.role === "owner") throw new Error("Cannot change the owner role.");
  if (userId === currentUserId) throw new Error("You cannot change your own role.");
 
- // Update in Supabase
- if (currentRanch.id && currentRanch.id !== MOCK_RANCH.id) {
+ // Update in Supabase (skip for a legacy non-uuid local ranch id — there's no backend row to update)
+ if (isUuid(currentRanch.id)) {
  const { error } = await supabase
  .from("ranch_members")
  .update({ role: newRole })
@@ -2679,8 +2731,8 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
  throw new Error("You cannot remove yourself.");
  }
 
- // Remove from Supabase
- if (currentRanch.id && currentRanch.id !== MOCK_RANCH.id) {
+ // Remove from Supabase (skip for a legacy non-uuid local ranch id — there's no backend row to remove)
+ if (isUuid(currentRanch.id)) {
  const { error } = await supabase
  .from("ranch_members")
  .delete()
@@ -2744,6 +2796,8 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
  isJoiningRanch: joinRanchMutation.isPending,
  refreshRanch: refreshRanchMutation.mutateAsync,
  isRefreshingRanch: refreshRanchMutation.isPending,
+ loadRanchForUser: loadRanchForUserMutation.mutateAsync,
+ isLoadingRanchForUser: loadRanchForUserMutation.isPending,
  updateUserName: updateUserNameMutation.mutateAsync,
  isUpdatingUserName: updateUserNameMutation.isPending,
  setActiveUser: setActiveUserMutation.mutateAsync,

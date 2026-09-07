@@ -52,7 +52,7 @@ const NOTIF_HEALTH_KEY = "ranchtrack_notif_health";
 export default function SettingsScreen() {
   const Colors = useColors();
   const { isDark, toggleTheme } = useTheme();
-  const { ranch, currentUserId, resetApp, refreshRanch, isRefreshingRanch, animals, doctoringEvents, currentUserRole, canInviteTeammates, removeTeammate, updateMemberRole, generateNewInviteCode, isGeneratingInviteCode, syncBusinessYears, syncCalvingData, syncDoctoringEvents, syncWeightHealth, syncCustomLists, syncRanchNotes, isSyncingBusinessYears, isSyncingCalvingData, isSyncingDoctoringEvents, isSyncingWeightHealth, isSyncingCustomLists, isSyncingRanchNotes } = useRanch();
+  const { ranch, currentUserId, resetApp, refreshRanch, isRefreshingRanch, animals, doctoringEvents, currentUserRole, canInviteTeammates, removeTeammate, updateMemberRole, generateNewInviteCode, isGeneratingInviteCode, syncAnimals, syncBusinessYears, syncCalvingData, syncDoctoringEvents, syncWeightHealth, syncCustomLists, syncRanchNotes, isSyncingAnimals, isSyncingBusinessYears, isSyncingCalvingData, isSyncingDoctoringEvents, isSyncingWeightHealth, isSyncingCustomLists, isSyncingRanchNotes } = useRanch();
   const processing = useProcessing();
   const { isPro, isFree: _isFree, tier, setDevOverrideTier } = useSubscription();
   const { resetOnboarding } = useOnboarding();
@@ -70,13 +70,14 @@ export default function SettingsScreen() {
 
   const isAnySyncing =
     isSyncing ||
+    isSyncingAnimals ||
     isSyncingBusinessYears ||
     isSyncingCalvingData ||
     isSyncingDoctoringEvents ||
-    
     isSyncingWeightHealth ||
     isSyncingCustomLists ||
-    isSyncingRanchNotes;
+    isSyncingRanchNotes ||
+    processing.isSyncingProcessing;
 
   const ROLE_LABELS: Record<string, string> = { owner: "Owner", manager: "Manager", worker: "Worker" };
   const ROLE_COLORS: Record<string, string> = { owner: Colors.accent, manager: Colors.primary, worker: Colors.textSecondary };
@@ -135,12 +136,14 @@ export default function SettingsScreen() {
     try {
       await Promise.all([
         refreshRanch(),
+        syncAnimals(),
         syncBusinessYears(),
         syncCalvingData(),
         syncDoctoringEvents(),
         syncWeightHealth(),
         syncCustomLists(),
         syncRanchNotes(),
+        processing.syncProcessing(),
       ]);
       const now = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
       setLastSyncTime(now);
@@ -153,7 +156,7 @@ export default function SettingsScreen() {
     } finally {
       setIsSyncing(false);
     }
-  }, [refreshRanch, syncBusinessYears, syncCalvingData, syncDoctoringEvents, syncWeightHealth, syncCustomLists, syncRanchNotes]);
+  }, [refreshRanch, syncAnimals, syncBusinessYears, syncCalvingData, syncDoctoringEvents, syncWeightHealth, syncCustomLists, syncRanchNotes, processing]);
 
   const handleClearData = useCallback(() => {
     Alert.alert(
@@ -166,6 +169,7 @@ export default function SettingsScreen() {
           onPress: async () => {
             try {
               await resetApp();
+              await processing.resetProcessing();
               await resetOnboarding();
               await AsyncStorage.removeItem(AUTH_STORAGE_KEY);
               await AsyncStorage.removeItem("ranchtrack_current_user_id");
@@ -178,7 +182,7 @@ export default function SettingsScreen() {
         },
       ],
     );
-  }, [resetApp, resetOnboarding, router]);
+  }, [resetApp, processing, resetOnboarding, router]);
 
   const handleGenerateCode = useCallback(async () => {
     if (Platform.OS !== "web") void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -218,6 +222,7 @@ export default function SettingsScreen() {
               await AsyncStorage.removeItem("ranchtrack_pending_user_name");
               await AsyncStorage.removeItem("ranchtrack_auth_intent");
               await resetApp();
+              await processing.resetProcessing();
               await resetOnboarding();
               router.replace("/onboarding/welcome");
             } catch (e) {
@@ -227,7 +232,7 @@ export default function SettingsScreen() {
         },
       ],
     );
-  }, [resetApp, resetOnboarding, router]);
+  }, [resetApp, processing, resetOnboarding, router]);
 
   const animalCount = (animals ?? []).filter((a) => a.status === "active").length;
   const doctoringCount = (doctoringEvents ?? []).length;
@@ -382,14 +387,13 @@ export default function SettingsScreen() {
               </View>
             </View>
             {[
-              { label: "Animals", syncing: false },
-              { label: "Ranch & Members", syncing: false },
+              { label: "Animals", syncing: isSyncingAnimals },
+              { label: "Ranch & Members", syncing: isRefreshingRanch },
               { label: "Business Years", syncing: isSyncingBusinessYears },
               { label: "Calving Lists & Records", syncing: isSyncingCalvingData },
-              { label: "Processing Groups & Events", syncing: false },
+              { label: "Processing Groups & Events", syncing: processing.isSyncingProcessing },
               { label: "Doctoring Events", syncing: isSyncingDoctoringEvents },
               { label: "Weight & Health Records", syncing: isSyncingWeightHealth },
-              { label: "Processing Sessions", syncing: false },
               { label: "Custom Lists", syncing: isSyncingCustomLists },
               { label: "Ranch Notes", syncing: isSyncingRanchNotes },
             ].map((item) => (

@@ -270,7 +270,7 @@ export default function WorkScreen() {
         {calvingSearch.trim().length > 0 ? (
           calvingSearchResults.length === 0 ? (
             <Text style={styles.calvingSearchEmpty}>
-              No records found for "{calvingSearch}"
+              No records found for “{calvingSearch}”
             </Text>
           ) : (
             calvingSearchResults.map((record) => {

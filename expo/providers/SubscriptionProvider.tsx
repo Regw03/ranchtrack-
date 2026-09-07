@@ -37,6 +37,19 @@ function initRevenueCatIfNeeded(): void {
   }
 }
 
+/** Finds a package by its exact custom identifier in RevenueCat, searching every offering. */
+function findPackageByIdentifier(
+  offerings: PurchasesOfferings | null,
+  identifier: string,
+): PurchasesPackage | null {
+  if (!offerings) return null;
+  for (const offering of Object.values(offerings.all)) {
+    const pkg = offering.availablePackages.find((p) => p.identifier === identifier);
+    if (pkg) return pkg;
+  }
+  return offerings.current?.availablePackages.find((p) => p.identifier === identifier) ?? null;
+}
+
 export const [SubscriptionProvider, useSubscription] = createContextHook(() => {
   const [customerInfo, setCustomerInfo] = useState<CustomerInfo | null>(null);
   const [offerings, setOfferings] = useState<PurchasesOfferings | null>(null);
@@ -52,19 +65,22 @@ export const [SubscriptionProvider, useSubscription] = createContextHook(() => {
     let cancelled = false;
 
     const fetchData = async () => {
-      try {
-        const info = await Purchases.getCustomerInfo();
-        if (!cancelled) setCustomerInfo(info);
-      } catch (e) {
-        console.log("[SubscriptionProvider] getCustomerInfo failed", e);
+      const [infoResult, offeringsResult] = await Promise.allSettled([
+        Purchases.getCustomerInfo(),
+        Purchases.getOfferings(),
+      ]);
+      if (cancelled) return;
+      if (infoResult.status === "fulfilled") {
+        setCustomerInfo(infoResult.value);
+      } else {
+        console.log("[SubscriptionProvider] getCustomerInfo failed", infoResult.reason);
       }
-      try {
-        const off = await Purchases.getOfferings();
-        if (!cancelled) setOfferings(off);
-      } catch (e) {
-        console.log("[SubscriptionProvider] getOfferings failed", e);
+      if (offeringsResult.status === "fulfilled") {
+        setOfferings(offeringsResult.value);
+      } else {
+        console.log("[SubscriptionProvider] getOfferings failed", offeringsResult.reason);
       }
-      if (!cancelled) setReady(true);
+      setReady(true);
     };
 
     void fetchData();
@@ -181,50 +197,11 @@ export const [SubscriptionProvider, useSubscription] = createContextHook(() => {
   // ─── Offerings helpers ───────────────────────────────────────────────────
 
   // Find packages by their exact custom identifiers in RevenueCat
-  const proMonthlyPackage = useMemo(() => {
-    if (!offerings) return null;
-    for (const offering of Object.values(offerings.all) as import("react-native-purchases").PurchasesOffering[]) {
-      const pkg = offering.availablePackages.find((p) => p.identifier === "monthly pro");
-      if (pkg) return pkg;
-    }
-    return offerings.current?.availablePackages.find((p) => p.identifier === "monthly pro") ?? null;
-  }, [offerings]);
-
-  const proAnnualPackage = useMemo(() => {
-    if (!offerings) return null;
-    for (const offering of Object.values(offerings.all) as import("react-native-purchases").PurchasesOffering[]) {
-      const pkg = offering.availablePackages.find((p) => p.identifier === "Yearly pro");
-      if (pkg) return pkg;
-    }
-    return offerings.current?.availablePackages.find((p) => p.identifier === "Yearly pro") ?? null;
-  }, [offerings]);
-
-  const plusMonthlyPackage = useMemo(() => {
-    if (!offerings) return null;
-    for (const offering of Object.values(offerings.all) as import("react-native-purchases").PurchasesOffering[]) {
-      const pkg = offering.availablePackages.find((p) => p.identifier === "monthly plus");
-      if (pkg) return pkg;
-    }
-    return offerings.current?.availablePackages.find((p) => p.identifier === "monthly plus") ?? null;
-  }, [offerings]);
-
-  const plusAnnualPackage = useMemo(() => {
-    if (!offerings) return null;
-    for (const offering of Object.values(offerings.all) as import("react-native-purchases").PurchasesOffering[]) {
-      const pkg = offering.availablePackages.find((p) => p.identifier === "Yearly plus");
-      if (pkg) return pkg;
-    }
-    return offerings.current?.availablePackages.find((p) => p.identifier === "Yearly plus") ?? null;
-  }, [offerings]);
-
-  const memberAddonPackage = useMemo(() => {
-    if (!offerings) return null;
-    for (const offering of Object.values(offerings.all) as import("react-native-purchases").PurchasesOffering[]) {
-      const pkg = offering.availablePackages.find((p) => p.identifier === "$rc_monthly");
-      if (pkg) return pkg;
-    }
-    return null;
-  }, [offerings]);
+  const proMonthlyPackage = useMemo(() => findPackageByIdentifier(offerings, "monthly pro"), [offerings]);
+  const proAnnualPackage = useMemo(() => findPackageByIdentifier(offerings, "Yearly pro"), [offerings]);
+  const plusMonthlyPackage = useMemo(() => findPackageByIdentifier(offerings, "monthly plus"), [offerings]);
+  const plusAnnualPackage = useMemo(() => findPackageByIdentifier(offerings, "Yearly plus"), [offerings]);
+  const memberAddonPackage = useMemo(() => findPackageByIdentifier(offerings, "$rc_monthly"), [offerings]);
 
   // Keep proOfferings/plusOfferings for backward compat but they now point to our packages
   const proOfferings = useMemo(() => ({

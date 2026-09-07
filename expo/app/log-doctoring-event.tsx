@@ -142,7 +142,7 @@ export default function LogDoctoringEventScreen() {
         <View style={styles.switchRow}>
           <View style={styles.switchLabelWrap}>
             <Text style={styles.switchLabel}>Follow-up Needed</Text>
-            <Text style={styles.switchHint}>Adds to "Needs Attention" list</Text>
+            <Text style={styles.switchHint}>Adds to “Needs Attention” list</Text>
           </View>
           <Switch
             value={followUpNeeded}

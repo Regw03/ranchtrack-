@@ -5,22 +5,8 @@
  * Structure: Group → Event → per-animal Record, flattened to one row per animal per event.
  */
 
-import { Platform } from "react-native";
 import { Animal, BusinessYear, ProcessingGroup, ProcessingEvent, ProcessingRecord } from "@/types";
-
-// ─── CSV helpers ──────────────────────────────────────────────────────────────
-
-function cell(value: string | number | boolean | null | undefined): string {
-  const str = value == null ? "" : String(value);
-  return `"${str.replace(/"/g, '""')}"`;
-}
-
-function buildCSV(
-  headers: string[],
-  rows: (string | number | boolean | null | undefined)[][],
-): string {
-  return [headers, ...rows].map((r) => r.map(cell).join(",")).join("\n");
-}
+import { buildCSV, exportCSV } from "@/utils/csvExport";
 
 // ─── Processing CSV builder ───────────────────────────────────────────────────
 
@@ -139,38 +125,6 @@ function filename(label?: string): string {
   return `ranchtrack-processing${slug}-${date}.csv`;
 }
 
-/** Web: triggers a browser file download */
-function downloadWeb(csv: string, name: string): void {
-  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.setAttribute("download", name);
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
-}
-
-/** Native: writes to a temp file then opens the share sheet */
-async function shareNative(csv: string, name: string): Promise<void> {
-  const { File, Paths } = await import("expo-file-system");
-  const Sharing = await import("expo-sharing");
-
-  const file = new File(Paths.cache, name);
-  file.create({ overwrite: true });
-  file.write(csv);
-
-  const canShare = await Sharing.isAvailableAsync();
-  if (canShare) {
-    await Sharing.shareAsync(file.uri, {
-      mimeType: "text/csv",
-      dialogTitle: "Export Processing Records",
-      UTI: "public.comma-separated-values-text",
-    });
-  }
-}
-
 /**
  * Main export function.
  *
@@ -190,11 +144,5 @@ export async function exportProcessing(
   label?: string,
 ): Promise<void> {
   const csv = buildProcessingCSV(groups, events, records, animals, businessYears);
-  const name = filename(label);
-
-  if (Platform.OS === "web") {
-    downloadWeb(csv, name);
-  } else {
-    await shareNative(csv, name);
-  }
+  await exportCSV(csv, filename(label), "Export Processing Records");
 }

@@ -4,23 +4,9 @@
  * Exports the full animal herd to a CSV file.
  */
 
-import { Platform } from "react-native";
 import { Animal, BusinessYear } from "@/types";
 import { getHerdGroup } from "@/providers/RanchProvider";
-
-// ─── CSV helpers ──────────────────────────────────────────────────────────────
-
-function cell(value: string | number | boolean | null | undefined): string {
-  const str = value == null ? "" : String(value);
-  return `"${str.replace(/"/g, '""')}"`;
-}
-
-function buildCSV(
-  headers: string[],
-  rows: (string | number | boolean | null | undefined)[][],
-): string {
-  return [headers, ...rows].map((r) => r.map(cell).join(",")).join("\n");
-}
+import { buildCSV, exportCSV } from "@/utils/csvExport";
 
 // ─── Herd CSV builder ─────────────────────────────────────────────────────────
 
@@ -84,38 +70,6 @@ function filename(): string {
   return `ranchtrack-herd-${date}.csv`;
 }
 
-/** Web: triggers a browser file download */
-function downloadWeb(csv: string, name: string): void {
-  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.setAttribute("download", name);
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
-}
-
-/** Native: writes to a temp file then opens the share sheet */
-async function shareNative(csv: string, name: string): Promise<void> {
-  const { File, Paths } = await import("expo-file-system");
-  const Sharing = await import("expo-sharing");
-
-  const file = new File(Paths.cache, name);
-  file.create({ overwrite: true });
-  file.write(csv);
-
-  const canShare = await Sharing.isAvailableAsync();
-  if (canShare) {
-    await Sharing.shareAsync(file.uri, {
-      mimeType: "text/csv",
-      dialogTitle: "Export Herd List",
-      UTI: "public.comma-separated-values-text",
-    });
-  }
-}
-
 /**
  * Main export function.
  * Call this when the user taps the export button on the herd screen.
@@ -128,11 +82,5 @@ export async function exportHerd(
   businessYears: BusinessYear[],
 ): Promise<void> {
   const csv = buildHerdCSV(animals, businessYears);
-  const name = filename();
-
-  if (Platform.OS === "web") {
-    downloadWeb(csv, name);
-  } else {
-    await shareNative(csv, name);
-  }
+  await exportCSV(csv, filename(), "Export Herd List");
 }

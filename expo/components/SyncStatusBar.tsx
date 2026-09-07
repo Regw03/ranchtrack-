@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useRef, useState, useCallback } from "react";
 import {
   View,
   Text,
@@ -34,7 +34,7 @@ export function SyncStatusBar({
 }: SyncStatusBarProps) {
   const Colors = useColors();
   const [isOnline, setIsOnline] = useState(true);
-  const spinValue = new Animated.Value(0);
+  const spinValue = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     const unsubscribe = NetInfo.addEventListener((state) => {
@@ -54,16 +54,20 @@ export function SyncStatusBar({
 
   // Spin animation for syncing
   useEffect(() => {
-    if (syncState === "syncing") {
-      Animated.loop(
-        Animated.timing(spinValue, {
-          toValue: 1,
-          duration: 1000,
-          useNativeDriver: true,
-        })
-      ).start();
-    }
-  }, [syncState]);
+    if (syncState !== "syncing") return;
+    const loop = Animated.loop(
+      Animated.timing(spinValue, {
+        toValue: 1,
+        duration: 1000,
+        useNativeDriver: true,
+      })
+    );
+    loop.start();
+    return () => {
+      loop.stop();
+      spinValue.setValue(0);
+    };
+  }, [syncState, spinValue]);
 
   const spin = spinValue.interpolate({
     inputRange: [0, 1],

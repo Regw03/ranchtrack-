@@ -27,6 +27,7 @@ import * as Haptics from "expo-haptics";
 import { ThemeColors } from "@/constants/colors";
 import { useColors } from "@/providers/ThemeProvider";
 import { useRanch } from "@/providers/RanchProvider";
+import { useProcessing } from "@/providers/ProcessingProvider";
 import { SyncStatusBar } from "@/components/SyncStatusBar";
 import { useSubscription } from "@/providers/SubscriptionProvider";
 import { Animal, DoctoringEvent } from "@/types";
@@ -125,12 +126,14 @@ export default function DashboardScreen() {
     currentUserRole,
     ranchNotes,
     animals,
+    syncAnimals,
     syncBusinessYears,
     syncCalvingData,
     syncDoctoringEvents,
     syncWeightHealth,
     syncCustomLists,
     syncRanchNotes,
+    isSyncingAnimals,
     isSyncingBusinessYears,
     isSyncingCalvingData,
     isSyncingDoctoringEvents,
@@ -138,25 +141,28 @@ export default function DashboardScreen() {
     isSyncingCustomLists,
     isSyncingRanchNotes,
   } = useRanch();
+  const { syncProcessing, isSyncingProcessing } = useProcessing();
 
   const [lastSyncTime, setLastSyncTime] = useState<string | null>(null);
-  const isSyncing = isSyncingBusinessYears || isSyncingCalvingData || isSyncingDoctoringEvents || isSyncingWeightHealth || isSyncingCustomLists || isSyncingRanchNotes;
+  const isSyncing = isSyncingAnimals || isSyncingBusinessYears || isSyncingCalvingData || isSyncingDoctoringEvents || isSyncingWeightHealth || isSyncingCustomLists || isSyncingRanchNotes || isSyncingProcessing;
 
   const handleSyncAll = useCallback(async () => {
     try {
       await Promise.all([
+        syncAnimals(),
         syncBusinessYears(),
         syncCalvingData(),
         syncDoctoringEvents(),
         syncWeightHealth(),
         syncCustomLists(),
         syncRanchNotes(),
+        syncProcessing(),
       ]);
       setLastSyncTime(new Date().toISOString());
     } catch (e) {
       console.log("[dashboard] sync failed", e);
     }
-  }, [syncBusinessYears, syncCalvingData, syncDoctoringEvents, syncWeightHealth, syncCustomLists, syncRanchNotes]);
+  }, [syncAnimals, syncBusinessYears, syncCalvingData, syncDoctoringEvents, syncWeightHealth, syncCustomLists, syncRanchNotes, syncProcessing]);
 
 
   const attentionItems = useMemo(() => {
@@ -200,7 +206,7 @@ export default function DashboardScreen() {
       showsVerticalScrollIndicator={false}
     >
       <View style={styles.header}>
-        <Text style={styles.greeting}>Today's Ranch</Text>
+        <Text style={styles.greeting}>Today’s Ranch</Text>
         <Text style={styles.yearBadge}>{activeBusinessYear.name}</Text>
       </View>
 

@@ -84,7 +84,7 @@ export default function ForgotPasswordScreen() {
  {", "}a password reset link has been sent.
  </Text>
  <Text style={styles.successNote}>
- The link expires after 24 hours. Check your spam folder if you don't see it.
+ The link expires after 24 hours. Check your spam folder if you don’t see it.
  </Text>
  </Animated.View>
 
@@ -129,7 +129,7 @@ export default function ForgotPasswordScreen() {
 
  <Text style={styles.title}>Forgot Password?</Text>
  <Text style={styles.subtitle}>
- Enter the email address you signed up with and we'll send you a link to reset your password.
+ Enter the email address you signed up with and we’ll send you a link to reset your password.
  </Text>
 
  <Text style={styles.label}>Email Address</Text>

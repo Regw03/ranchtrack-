@@ -398,7 +398,7 @@ export default function ProcessingGroupDetailScreen() {
  if (section.title === "Events" && events.length === 0) {
  return (
  <Text style={styles.emptyText}>
- No events yet — tap "New Processing Event" to get started.
+ No events yet — tap “New Processing Event” to get started.
  </Text>
  );
  }

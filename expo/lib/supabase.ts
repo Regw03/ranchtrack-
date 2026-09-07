@@ -107,6 +107,11 @@ function isRemoteRanch(ranchId: string | undefined | null): ranchId is string {
  return !!ranchId && ranchId.length > 0;
 }
 
+/** Normalizes a caught exception into a display-safe message string. */
+function toErrorMessage(e: unknown): string {
+ return e instanceof Error ? e.message : "Unknown error";
+}
+
 export type UserRole = "owner" | "manager" | "member" | "worker" | null;
 const canOverwrite = (role: UserRole) => role === "owner" || role === "manager";
 
@@ -137,16 +142,22 @@ export async function pushAnimalToCloud(
  }
 }
 
-export async function deleteAnimalInCloud(animalId: string, ranchId: string): Promise<void> {
- if (!isRemoteRanch(ranchId)) return;
+/** Soft-delete an animal in Supabase. Returns true only if the delete is confirmed. */
+export async function deleteAnimalInCloud(animalId: string, ranchId: string): Promise<boolean> {
+ if (!isRemoteRanch(ranchId)) return true;
  try {
    const { error } = await supabase
      .from("animals")
      .update({ deleted: true, updated_at: new Date().toISOString() })
      .eq("id", animalId);
-   if (error) console.log("[sync] deleteAnimal error", error.message);
+   if (error) {
+     console.log("[sync] deleteAnimal error", error.message);
+     return false;
+   }
+   return true;
  } catch (e) {
    console.log("[sync] deleteAnimal exception", e);
+   return false;
  }
 }
 
@@ -168,7 +179,7 @@ export async function fetchRanchAnimals(ranchId: string): Promise<AnimalSyncResu
    }
    return { remoteRows: (data ?? []) as RemoteAnimalRow[] };
  } catch (e) {
-   const msg = e instanceof Error ? e.message : "Unknown error";
+   const msg = toErrorMessage(e);
    console.log("[sync] fetchAnimals exception", msg);
    return { remoteRows: [], error: msg };
  }
@@ -314,7 +325,7 @@ export async function fetchBusinessYears(
      activeYearId: activeResult.data?.active_year_id ?? null,
    };
  } catch (e) {
-   const msg = e instanceof Error ? e.message : "Unknown error";
+   const msg = toErrorMessage(e);
    console.log("[sync] fetchBusinessYears exception", msg);
    return { years: [], activeYearId: null, error: msg };
  }
@@ -427,6 +438,40 @@ export async function pushCalvingListToCloud(
  } catch (e) { console.log("[sync] pushCalvingList exception", e); }
 }
 
+/**
+ * Push multiple calving lists in one request.
+ * Owner/Manager: upsert (last write wins).
+ * Member: insert new only — never overwrites.
+ */
+export async function pushCalvingListsBatchToCloud(
+ lists: import("@/types").CalvingList[],
+ ranchId: string,
+ userRole: UserRole,
+): Promise<void> {
+ if (!isRemoteRanch(ranchId) || lists.length === 0) return;
+ try {
+   const rows: RemoteCalvingListRow[] = lists.map((list) => ({
+     id: list.id,
+     ranch_id: ranchId,
+     name: list.name,
+     color: list.color,
+     business_year_id: list.businessYearId,
+     deleted: false,
+     created_at: list.createdAt,
+     updated_at: list.updatedAt,
+   }));
+   if (canOverwrite(userRole)) {
+     const { error } = await supabase.from("calving_lists").upsert(rows, { onConflict: "id" });
+     if (error) console.log("[sync] pushCalvingListsBatch upsert error", error.message);
+   } else {
+     for (const row of rows) {
+       const { error } = await supabase.from("calving_lists").insert(row);
+       if (error && error.code !== "23505") console.log("[sync] pushCalvingListsBatch insert error", error.message);
+     }
+   }
+ } catch (e) { console.log("[sync] pushCalvingListsBatch exception", e); }
+}
+
 /** Soft-delete a calving list in Supabase (owner/manager only). */
 export async function deleteCalvingListInCloud(
  listId: string,
@@ -535,7 +580,7 @@ export async function fetchCalvingData(ranchId: string): Promise<CalvingListSync
      records: (recordsResult.data ?? []) as RemoteCalvingRecordRow[],
    };
  } catch (e) {
-   const msg = e instanceof Error ? e.message : "Unknown error";
+   const msg = toErrorMessage(e);
    console.log("[sync] fetchCalvingData exception", msg);
    return { lists: [], records: [], error: msg };
  }
@@ -654,7 +699,7 @@ export async function fetchDoctoringEvents(
    }
    return { events: (data ?? []) as RemoteDoctoringEventRow[] };
  } catch (e) {
-   const msg = e instanceof Error ? e.message : "Unknown error";
+   const msg = toErrorMessage(e);
    console.log("[sync] fetchDoctoringEvents exception", msg);
    return { events: [], error: msg };
  }
@@ -798,7 +843,7 @@ export async function fetchBreedingData(ranchId: string): Promise<BreedingSyncRe
      groups: (groupsResult.data ?? []) as RemoteBreedingGroupRow[],
    };
  } catch (e) {
-   const msg = e instanceof Error ? e.message : "Unknown error";
+   const msg = toErrorMessage(e);
    console.log("[sync] fetchBreedingData exception", msg);
    return { records: [], groups: [], error: msg };
  }
@@ -884,6 +929,76 @@ export async function pushHealthRecordToCloud(
  } catch (e) { console.log("[sync] pushHealthRecord exception", e); }
 }
 
+/** Push multiple weight records in one request. All roles can add — merge strategy. */
+export async function pushWeightRecordsBatchToCloud(
+ records: import("@/types").WeightRecord[],
+ ranchId: string,
+): Promise<void> {
+ if (!isRemoteRanch(ranchId) || records.length === 0) return;
+ try {
+   const rows: RemoteWeightRecordRow[] = records.map((record) => ({
+     id: record.id,
+     ranch_id: ranchId,
+     animal_id: record.animalId,
+     date: record.date,
+     weight: record.weight,
+     unit: record.unit,
+     deleted: false,
+     created_at: new Date().toISOString(),
+     updated_at: new Date().toISOString(),
+   }));
+   const { error } = await supabase.from("weight_records").upsert(rows, { onConflict: "id" });
+   if (error) console.log("[sync] pushWeightRecordsBatch error", error.message);
+ } catch (e) { console.log("[sync] pushWeightRecordsBatch exception", e); }
+}
+
+/** Push multiple health records in one request. All roles can add — merge strategy. */
+export async function pushHealthRecordsBatchToCloud(
+ records: import("@/types").HealthRecord[],
+ ranchId: string,
+): Promise<void> {
+ if (!isRemoteRanch(ranchId) || records.length === 0) return;
+ try {
+   const rows: RemoteHealthRecordRow[] = records.map((record) => ({
+     id: record.id,
+     ranch_id: ranchId,
+     animal_id: record.animalId,
+     type: record.type,
+     date: record.date,
+     description: record.description,
+     notes: record.notes,
+     administered_by: record.administeredBy ?? null,
+     deleted: false,
+     created_at: new Date().toISOString(),
+     updated_at: new Date().toISOString(),
+   }));
+   const { error } = await supabase.from("health_records").upsert(rows, { onConflict: "id" });
+   if (error) console.log("[sync] pushHealthRecordsBatch error", error.message);
+ } catch (e) { console.log("[sync] pushHealthRecordsBatch exception", e); }
+}
+
+/** Soft-delete a weight record in Supabase. */
+export async function deleteWeightRecordInCloud(recordId: string): Promise<void> {
+ try {
+   const { error } = await supabase
+     .from("weight_records")
+     .update({ deleted: true, updated_at: new Date().toISOString() })
+     .eq("id", recordId);
+   if (error) console.log("[sync] deleteWeightRecord error", error.message);
+ } catch (e) { console.log("[sync] deleteWeightRecord exception", e); }
+}
+
+/** Soft-delete a health record in Supabase. */
+export async function deleteHealthRecordInCloud(recordId: string): Promise<void> {
+ try {
+   const { error } = await supabase
+     .from("health_records")
+     .update({ deleted: true, updated_at: new Date().toISOString() })
+     .eq("id", recordId);
+   if (error) console.log("[sync] deleteHealthRecord error", error.message);
+ } catch (e) { console.log("[sync] deleteHealthRecord exception", e); }
+}
+
 export interface WeightHealthSyncResult {
  weightRecords: RemoteWeightRecordRow[];
  healthRecords: RemoteHealthRecordRow[];
@@ -909,7 +1024,7 @@ export async function fetchWeightHealthData(
      healthRecords: (healthResult.data ?? []) as RemoteHealthRecordRow[],
    };
  } catch (e) {
-   const msg = e instanceof Error ? e.message : "Unknown error";
+   const msg = toErrorMessage(e);
    console.log("[sync] fetchWeightHealth exception", msg);
    return { weightRecords: [], healthRecords: [], error: msg };
  }
@@ -1018,7 +1133,7 @@ export async function fetchProcessingSessions(
    }
    return { sessions: (data ?? []) as RemoteProcessingSessionRow[] };
  } catch (e) {
-   const msg = e instanceof Error ? e.message : "Unknown error";
+   const msg = toErrorMessage(e);
    console.log("[sync] fetchProcessingSessions exception", msg);
    return { sessions: [], error: msg };
  }
@@ -1081,6 +1196,46 @@ export async function pushCustomListToCloud(
  } catch (e) { console.log("[sync] pushCustomList exception", e); }
 }
 
+/**
+ * Push multiple custom lists in one request.
+ * Owner/Manager: upsert (last write wins).
+ * Member: insert new only — never overwrites.
+ */
+export async function pushCustomListsBatchToCloud(
+ lists: import("@/types").CustomList[],
+ userRole: UserRole,
+): Promise<void> {
+ const remoteLists = lists.filter((l) => isRemoteRanch(l.ranchId));
+ if (remoteLists.length === 0) return;
+ try {
+   const rows: RemoteCustomListRow[] = remoteLists.map((list) => ({
+     id: list.id,
+     ranch_id: list.ranchId,
+     name: list.name,
+     color: list.color,
+     icon: list.icon,
+     list_type: list.listType,
+     species: list.species ?? null,
+     parent_id: list.parentId ?? null,
+     animal_ids: list.animalIds,
+     created_by: list.createdBy,
+     deleted: false,
+     created_at: list.createdAt,
+     updated_at: list.updatedAt,
+   }));
+   if (canOverwrite(userRole)) {
+     const { error } = await supabase.from("custom_lists").upsert(rows, { onConflict: "id" });
+     if (error) console.log("[sync] pushCustomListsBatch upsert error", error.message);
+   } else {
+     for (const row of rows) {
+       const { error } = await supabase.from("custom_lists").insert(row);
+       if (error && error.code !== "23505")
+         console.log("[sync] pushCustomListsBatch insert error", error.message);
+     }
+   }
+ } catch (e) { console.log("[sync] pushCustomListsBatch exception", e); }
+}
+
 /** Soft-delete a custom list (owner/manager only). */
 export async function deleteCustomListInCloud(
  listId: string,
@@ -1116,7 +1271,7 @@ export async function fetchCustomLists(ranchId: string): Promise<CustomListSyncR
    }
    return { lists: (data ?? []) as RemoteCustomListRow[] };
  } catch (e) {
-   const msg = e instanceof Error ? e.message : "Unknown error";
+   const msg = toErrorMessage(e);
    console.log("[sync] fetchCustomLists exception", msg);
    return { lists: [], error: msg };
  }
@@ -1209,7 +1364,7 @@ export async function fetchRanchNotes(ranchId: string): Promise<RanchNoteSyncRes
    }
    return { notes: (data ?? []) as RemoteRanchNoteRow[] };
  } catch (e) {
-   const msg = e instanceof Error ? e.message : "Unknown error";
+   const msg = toErrorMessage(e);
    console.log("[sync] fetchRanchNotes exception", msg);
    return { notes: [], error: msg };
  }
@@ -1285,19 +1440,128 @@ export async function pushProcessingRecordToCloud(
   } catch (e) { console.log("[sync] pushProcessingRecord exception", e); }
 }
 
-export async function fetchProcessingData(ranchId: string): Promise<{
-  groups: { id: string; name: string; color: string; animal_ids: string[]; business_year_id: string; created_by: string | null; created_at: string; updated_at: string }[];
-  events: { id: string; ranch_id: string; name: string; type: string; custom_type_name: string | null; date: string; group_id: string; business_year_id: string; status: string; notes: string | null; created_by: string | null; created_by_name: string | null; created_at: string; updated_at: string }[];
-  records: { id: string; event_id: string; animal_id: string; result: string; notes: string | null; recorded_by: string | null; recorded_by_name: string | null; created_at: string; updated_at: string }[];
-}> {
-  const [groupsRes, eventsRes, recordsRes] = await Promise.all([
-    supabase.from("processing_groups").select("*").eq("ranch_id", ranchId).eq("deleted", false),
-    supabase.from("processing_events").select("*").eq("ranch_id", ranchId).eq("deleted", false),
-    supabase.from("processing_records").select("pr.*").from("processing_records as pr").join("processing_events as pe", "pr.event_id", "pe.id").eq("pe.ranch_id", ranchId).eq("pr.deleted", false),
-  ]);
-  return {
-    groups: (groupsRes.data ?? []) as any[],
-    events: (eventsRes.data ?? []) as any[],
-    records: (recordsRes.data ?? []) as any[],
-  };
+export async function deleteProcessingGroupInCloud(groupId: string): Promise<void> {
+  try {
+    const { error } = await supabase
+      .from("processing_groups")
+      .update({ deleted: true, updated_at: new Date().toISOString() })
+      .eq("id", groupId);
+    if (error) console.log("[sync] deleteProcessingGroup error", error.message);
+  } catch (e) { console.log("[sync] deleteProcessingGroup exception", e); }
+}
+
+export async function deleteProcessingEventInCloud(eventId: string): Promise<void> {
+  try {
+    const { error } = await supabase
+      .from("processing_events")
+      .update({ deleted: true, updated_at: new Date().toISOString() })
+      .eq("id", eventId);
+    if (error) console.log("[sync] deleteProcessingEvent error", error.message);
+  } catch (e) { console.log("[sync] deleteProcessingEvent exception", e); }
+}
+
+export async function deleteProcessingRecordInCloud(recordId: string): Promise<void> {
+  try {
+    const { error } = await supabase
+      .from("processing_records")
+      .update({ deleted: true, updated_at: new Date().toISOString() })
+      .eq("id", recordId);
+    if (error) console.log("[sync] deleteProcessingRecord error", error.message);
+  } catch (e) { console.log("[sync] deleteProcessingRecord exception", e); }
+}
+
+export interface RemoteProcessingGroupRow {
+  id: string;
+  ranch_id: string;
+  name: string;
+  color: string;
+  animal_ids: string[];
+  business_year_id: string;
+  created_by: string | null;
+  deleted: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface RemoteProcessingEventRow {
+  id: string;
+  ranch_id: string;
+  name: string;
+  type: string;
+  custom_type_name: string | null;
+  date: string;
+  group_id: string;
+  business_year_id: string;
+  status: string;
+  notes: string | null;
+  created_by: string | null;
+  created_by_name: string | null;
+  deleted: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface RemoteProcessingRecordRow {
+  id: string;
+  event_id: string;
+  animal_id: string;
+  result: string;
+  notes: string | null;
+  recorded_by: string | null;
+  recorded_by_name: string | null;
+  deleted: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ProcessingDataSyncResult {
+  groups: RemoteProcessingGroupRow[];
+  events: RemoteProcessingEventRow[];
+  records: RemoteProcessingRecordRow[];
+  error?: string;
+}
+
+/** Fetch all processing groups, events, and records for a ranch. */
+export async function fetchProcessingData(ranchId: string): Promise<ProcessingDataSyncResult> {
+  if (!isRemoteRanch(ranchId)) return { groups: [], events: [], records: [] };
+  try {
+    const [groupsRes, eventsRes] = await Promise.all([
+      supabase.from("processing_groups").select("*").eq("ranch_id", ranchId).eq("deleted", false),
+      supabase.from("processing_events").select("*").eq("ranch_id", ranchId).eq("deleted", false),
+    ]);
+    if (groupsRes.error) {
+      console.log("[sync] fetchProcessingData groups error", groupsRes.error.message);
+      return { groups: [], events: [], records: [], error: groupsRes.error.message };
+    }
+    if (eventsRes.error) {
+      console.log("[sync] fetchProcessingData events error", eventsRes.error.message);
+      return { groups: [], events: [], records: [], error: eventsRes.error.message };
+    }
+
+    const events = (eventsRes.data ?? []) as RemoteProcessingEventRow[];
+    const eventIds = events.map((e) => e.id);
+    let records: RemoteProcessingRecordRow[] = [];
+    if (eventIds.length > 0) {
+      const recordsRes = await supabase
+        .from("processing_records")
+        .select("*")
+        .in("event_id", eventIds)
+        .eq("deleted", false);
+      if (recordsRes.error) {
+        console.log("[sync] fetchProcessingData records error", recordsRes.error.message);
+        return { groups: [], events: [], records: [], error: recordsRes.error.message };
+      }
+      records = (recordsRes.data ?? []) as RemoteProcessingRecordRow[];
+    }
+
+    return {
+      groups: (groupsRes.data ?? []) as RemoteProcessingGroupRow[],
+      events,
+      records,
+    };
+  } catch (e) {
+    const msg = toErrorMessage(e);
+    console.log("[sync] fetchProcessingData exception", msg);
+    return { groups: [], events: [], records: [], error: msg };
+  }
 }

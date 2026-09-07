@@ -1,4 +1,5 @@
-import React, { createContext, useContext, useCallback } from "react";
+import React, { createContext, useContext, useCallback, useEffect, useRef } from "react";
+import { AppState } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRanch } from "@/providers/RanchProvider";
@@ -6,6 +7,13 @@ import {
   pushProcessingGroupToCloud,
   pushProcessingEventToCloud,
   pushProcessingRecordToCloud,
+  deleteProcessingGroupInCloud,
+  deleteProcessingEventInCloud,
+  deleteProcessingRecordInCloud,
+  fetchProcessingData,
+  type RemoteProcessingGroupRow,
+  type RemoteProcessingEventRow,
+  type RemoteProcessingRecordRow,
 } from "@/lib/supabase";
 import {
  ProcessingGroup,
@@ -14,6 +22,7 @@ import {
  ProcessingEventType,
  ProcessingResult,
 } from "@/types";
+import { generateId } from "@/utils/helpers";
 
 // ─── Storage keys ─────────────────────────────────────────────────────────────
 
@@ -24,10 +33,6 @@ const STORAGE_KEYS = {
 } as const;
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
-
-function generateId(): string {
- return `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
-}
 
 async function load<T>(key: string, fallback: T): Promise<T> {
  try {
@@ -88,6 +93,13 @@ interface ProcessingContextValue {
  };
 
  isLoading: boolean;
+
+ // Cloud sync
+ syncProcessing: () => Promise<void>;
+ isSyncingProcessing: boolean;
+
+ // Local data management
+ resetProcessing: () => Promise<void>;
 }
 
 // ─── Context ──────────────────────────────────────────────────────────────────
@@ -157,6 +169,7 @@ export function ProcessingProvider({ children }: { children: React.ReactNode }) 
  const updated = [...current, newGroup];
  await save(STORAGE_KEYS.groups, updated);
  queryClient.setQueryData(["processingGroups"], updated);
+ void pushProcessingGroupToCloud(newGroup);
  return newGroup;
  },
  });
@@ -169,6 +182,8 @@ export function ProcessingProvider({ children }: { children: React.ReactNode }) 
  );
  await save(STORAGE_KEYS.groups, updated);
  queryClient.setQueryData(["processingGroups"], updated);
+ const updatedGroup = updated.find((g) => g.id === group.id);
+ if (updatedGroup) void pushProcessingGroupToCloud(updatedGroup);
  },
  });
 
@@ -178,11 +193,25 @@ export function ProcessingProvider({ children }: { children: React.ReactNode }) 
  const updated = current.filter((g) => g.id !== groupId);
  await save(STORAGE_KEYS.groups, updated);
  queryClient.setQueryData(["processingGroups"], updated);
- // Also remove all events for this group
+ void deleteProcessingGroupInCloud(groupId);
+
+ // Also remove all events for this group, and any records tied to those events
  const currentEvents = queryClient.getQueryData<ProcessingEvent[]>(["processingEvents"]) ?? [];
+ const removedEvents = currentEvents.filter((e) => e.groupId === groupId);
  const updatedEvents = currentEvents.filter((e) => e.groupId !== groupId);
  await save(STORAGE_KEYS.events, updatedEvents);
  queryClient.setQueryData(["processingEvents"], updatedEvents);
+ for (const e of removedEvents) void deleteProcessingEventInCloud(e.id);
+
+ if (removedEvents.length > 0) {
+ const removedEventIds = new Set(removedEvents.map((e) => e.id));
+ const currentRecords = queryClient.getQueryData<ProcessingRecord[]>(["processingRecords"]) ?? [];
+ const removedRecords = currentRecords.filter((r) => removedEventIds.has(r.eventId));
+ const updatedRecords = currentRecords.filter((r) => !removedEventIds.has(r.eventId));
+ await save(STORAGE_KEYS.records, updatedRecords);
+ queryClient.setQueryData(["processingRecords"], updatedRecords);
+ for (const r of removedRecords) void deleteProcessingRecordInCloud(r.id);
+ }
  },
  });
 
@@ -196,6 +225,8 @@ export function ProcessingProvider({ children }: { children: React.ReactNode }) 
  );
  await save(STORAGE_KEYS.groups, updated);
  queryClient.setQueryData(["processingGroups"], updated);
+ const updatedGroup = updated.find((g) => g.id === groupId);
+ if (updatedGroup) void pushProcessingGroupToCloud(updatedGroup);
  },
  });
 
@@ -209,6 +240,8 @@ export function ProcessingProvider({ children }: { children: React.ReactNode }) 
  );
  await save(STORAGE_KEYS.groups, updated);
  queryClient.setQueryData(["processingGroups"], updated);
+ const updatedGroup = updated.find((g) => g.id === groupId);
+ if (updatedGroup) void pushProcessingGroupToCloud(updatedGroup);
  },
  });
 
@@ -244,6 +277,7 @@ export function ProcessingProvider({ children }: { children: React.ReactNode }) 
  const updated = [newEvent, ...current];
  await save(STORAGE_KEYS.events, updated);
  queryClient.setQueryData(["processingEvents"], updated);
+ void pushProcessingEventToCloud(newEvent);
  return newEvent;
  },
  });
@@ -256,6 +290,8 @@ export function ProcessingProvider({ children }: { children: React.ReactNode }) 
  );
  await save(STORAGE_KEYS.events, updated);
  queryClient.setQueryData(["processingEvents"], updated);
+ const updatedEvent = updated.find((e) => e.id === event.id);
+ if (updatedEvent) void pushProcessingEventToCloud(updatedEvent);
  },
  });
 
@@ -265,11 +301,15 @@ export function ProcessingProvider({ children }: { children: React.ReactNode }) 
  const updated = current.filter((e) => e.id !== eventId);
  await save(STORAGE_KEYS.events, updated);
  queryClient.setQueryData(["processingEvents"], updated);
+ void deleteProcessingEventInCloud(eventId);
+
  // Remove all records for this event
  const currentRecords = queryClient.getQueryData<ProcessingRecord[]>(["processingRecords"]) ?? [];
+ const removedRecords = currentRecords.filter((r) => r.eventId === eventId);
  const updatedRecords = currentRecords.filter((r) => r.eventId !== eventId);
  await save(STORAGE_KEYS.records, updatedRecords);
  queryClient.setQueryData(["processingRecords"], updatedRecords);
+ for (const r of removedRecords) void deleteProcessingRecordInCloud(r.id);
  },
  });
 
@@ -313,13 +353,17 @@ export function ProcessingProvider({ children }: { children: React.ReactNode }) 
  await save(STORAGE_KEYS.records, updated);
  queryClient.setQueryData(["processingRecords"], updated);
 
+ const savedRecord = updated.find(
+ (r) => r.eventId === input.eventId && r.animalId === input.animalId,
+ );
+ const events = queryClient.getQueryData<ProcessingEvent[]>(["processingEvents"]) ?? [];
+ const event = events.find((e) => e.id === input.eventId);
+ if (savedRecord && event) void pushProcessingRecordToCloud(savedRecord, event.ranchId);
+
  // Auto-update event status based on how many animals are recorded
  const eventRecords = updated.filter((r) => r.eventId === input.eventId);
  const group = (queryClient.getQueryData<ProcessingGroup[]>(["processingGroups"]) ?? [])
- .find((g) => {
- const events = queryClient.getQueryData<ProcessingEvent[]>(["processingEvents"]) ?? [];
- return events.find((e) => e.id === input.eventId)?.groupId === g.id;
- });
+ .find((g) => event?.groupId === g.id);
 
  if (group) {
  const total = group.animalIds.length;
@@ -334,9 +378,157 @@ export function ProcessingProvider({ children }: { children: React.ReactNode }) 
  );
  await save(STORAGE_KEYS.events, updatedEvents);
  queryClient.setQueryData(["processingEvents"], updatedEvents);
+ const updatedEvent = updatedEvents.find((e) => e.id === input.eventId);
+ if (updatedEvent) void pushProcessingEventToCloud(updatedEvent);
  }
  },
  });
+
+ const resetProcessingMutation = useMutation({
+ mutationFn: async () => {
+ await Promise.all(Object.values(STORAGE_KEYS).map((k) => AsyncStorage.removeItem(k)));
+ },
+ onSuccess: () => {
+ queryClient.setQueryData(["processingGroups"], []);
+ queryClient.setQueryData(["processingEvents"], []);
+ queryClient.setQueryData(["processingRecords"], []);
+ },
+ });
+
+ // ─── Cloud sync ─────────────────────────────────────────────────────────────
+
+ const syncProcessingMutation = useMutation({
+ mutationFn: async () => {
+ if (!ranch.id) return;
+ const { groups: remoteGroups, events: remoteEvents, records: remoteRecords, error } =
+ await fetchProcessingData(ranch.id);
+
+ if (error) {
+ const localGroups = queryClient.getQueryData<ProcessingGroup[]>(["processingGroups"]) ?? [];
+ const localEvents = queryClient.getQueryData<ProcessingEvent[]>(["processingEvents"]) ?? [];
+ const localRecords = queryClient.getQueryData<ProcessingRecord[]>(["processingRecords"]) ?? [];
+ for (const g of localGroups) void pushProcessingGroupToCloud(g);
+ for (const e of localEvents) void pushProcessingEventToCloud(e);
+ for (const r of localRecords) void pushProcessingRecordToCloud(r, ranch.id);
+ return;
+ }
+
+ // ── Merge groups ─────────────────────────────────────────────────────
+ const localGroups = queryClient.getQueryData<ProcessingGroup[]>(["processingGroups"]) ?? [];
+ const localGroupIds = new Set(localGroups.map((g) => g.id));
+ const remoteGroupIds = new Set(remoteGroups.map((g: RemoteProcessingGroupRow) => g.id));
+
+ const newGroups: ProcessingGroup[] = remoteGroups
+ .filter((g: RemoteProcessingGroupRow) => !localGroupIds.has(g.id))
+ .map((g: RemoteProcessingGroupRow) => ({
+ id: g.id,
+ ranchId: g.ranch_id,
+ name: g.name,
+ color: g.color,
+ animalIds: g.animal_ids,
+ businessYearId: g.business_year_id,
+ createdBy: g.created_by ?? undefined,
+ createdAt: g.created_at,
+ updatedAt: g.updated_at,
+ }));
+
+ let mergedGroups = localGroups;
+ if (newGroups.length > 0) {
+ mergedGroups = [...localGroups, ...newGroups];
+ await save(STORAGE_KEYS.groups, mergedGroups);
+ queryClient.setQueryData(["processingGroups"], mergedGroups);
+ }
+ const localOnlyGroups = localGroups.filter((g) => !remoteGroupIds.has(g.id));
+ for (const g of localOnlyGroups) void pushProcessingGroupToCloud(g);
+
+ // ── Merge events ─────────────────────────────────────────────────────
+ const localEvents = queryClient.getQueryData<ProcessingEvent[]>(["processingEvents"]) ?? [];
+ const localEventIds = new Set(localEvents.map((e) => e.id));
+ const remoteEventIds = new Set(remoteEvents.map((e: RemoteProcessingEventRow) => e.id));
+
+ const newEvents: ProcessingEvent[] = remoteEvents
+ .filter((e: RemoteProcessingEventRow) => !localEventIds.has(e.id))
+ .map((e: RemoteProcessingEventRow) => ({
+ id: e.id,
+ ranchId: e.ranch_id,
+ name: e.name,
+ type: e.type as ProcessingEventType,
+ customTypeName: e.custom_type_name ?? undefined,
+ date: e.date,
+ groupId: e.group_id,
+ businessYearId: e.business_year_id,
+ status: e.status as ProcessingEvent["status"],
+ notes: e.notes ?? undefined,
+ createdBy: e.created_by ?? undefined,
+ createdByName: e.created_by_name ?? undefined,
+ createdAt: e.created_at,
+ updatedAt: e.updated_at,
+ }));
+
+ let mergedEvents = localEvents;
+ if (newEvents.length > 0) {
+ mergedEvents = [...localEvents, ...newEvents];
+ await save(STORAGE_KEYS.events, mergedEvents);
+ queryClient.setQueryData(["processingEvents"], mergedEvents);
+ }
+ const localOnlyEvents = localEvents.filter((e) => !remoteEventIds.has(e.id));
+ for (const e of localOnlyEvents) void pushProcessingEventToCloud(e);
+
+ // ── Merge records ────────────────────────────────────────────────────
+ const localRecords = queryClient.getQueryData<ProcessingRecord[]>(["processingRecords"]) ?? [];
+ const localRecordIds = new Set(localRecords.map((r) => r.id));
+ const remoteRecordIds = new Set(remoteRecords.map((r: RemoteProcessingRecordRow) => r.id));
+
+ const newRecords: ProcessingRecord[] = remoteRecords
+ .filter((r: RemoteProcessingRecordRow) => !localRecordIds.has(r.id))
+ .map((r: RemoteProcessingRecordRow) => ({
+ id: r.id,
+ eventId: r.event_id,
+ animalId: r.animal_id,
+ result: r.result as ProcessingResult,
+ notes: r.notes ?? undefined,
+ recordedBy: r.recorded_by ?? undefined,
+ recordedByName: r.recorded_by_name ?? undefined,
+ createdAt: r.created_at,
+ updatedAt: r.updated_at,
+ }));
+
+ if (newRecords.length > 0) {
+ const mergedRecords = [...localRecords, ...newRecords];
+ await save(STORAGE_KEYS.records, mergedRecords);
+ queryClient.setQueryData(["processingRecords"], mergedRecords);
+ }
+ const localOnlyRecords = localRecords.filter((r) => !remoteRecordIds.has(r.id));
+ for (const r of localOnlyRecords) void pushProcessingRecordToCloud(r, ranch.id);
+ },
+ onError: (e) => console.log("[syncProcessing] error", e),
+ });
+
+ const lastSyncedRanchIdRef = useRef<string>("");
+ useEffect(() => {
+ if (!ranch.id) return;
+ if (lastSyncedRanchIdRef.current === ranch.id) return;
+ lastSyncedRanchIdRef.current = ranch.id;
+ syncProcessingMutation.mutate();
+
+ const interval = setInterval(() => {
+ if (ranch.id) syncProcessingMutation.mutate();
+ }, 60000);
+ return () => clearInterval(interval);
+ // eslint-disable-next-line react-hooks/exhaustive-deps
+ }, [ranch.id]);
+
+ const appStateRef = useRef<string>(AppState.currentState);
+ useEffect(() => {
+ const subscription = AppState.addEventListener("change", (nextState) => {
+ if (appStateRef.current.match(/inactive|background/) && nextState === "active" && ranch.id) {
+ syncProcessingMutation.mutate();
+ }
+ appStateRef.current = nextState;
+ });
+ return () => subscription.remove();
+ // eslint-disable-next-line react-hooks/exhaustive-deps
+ }, [ranch.id]);
 
  // ─── Lookups ───────────────────────────────────────────────────────────────
 
@@ -406,6 +598,11 @@ export function ProcessingProvider({ children }: { children: React.ReactNode }) 
 
  isLoading:
  groupsQuery.isLoading || eventsQuery.isLoading || recordsQuery.isLoading,
+
+ syncProcessing: async () => { await syncProcessingMutation.mutateAsync(); },
+ isSyncingProcessing: syncProcessingMutation.isPending,
+
+ resetProcessing: async () => { await resetProcessingMutation.mutateAsync(); },
  };
 
  return (
