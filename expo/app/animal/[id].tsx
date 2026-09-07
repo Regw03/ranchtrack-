@@ -132,7 +132,7 @@ function HealthTimeline({ records, onDelete }: { records: HealthRecord[]; onDele
 }
 
 
-function DoctoringTimeline({ events, onResolve }: { events: DoctoringEvent[]; onResolve: (event: DoctoringEvent) => void }) {
+function DoctoringTimeline({ events, onResolve, onDelete }: { events: DoctoringEvent[]; onResolve: (event: DoctoringEvent) => void; onDelete: (eventId: string) => void }) {
  const Colors = useColors();
  const styles = useMemo(() => createStyles(Colors), [Colors]);
  const TYPE_COLORS: Record<string, string> = { injury: Colors.error, illness: Colors.warning, lameness: "#8B6914", infection: "#C44D8B", custom: Colors.textSecondary };
@@ -158,6 +158,9 @@ function DoctoringTimeline({ events, onResolve }: { events: DoctoringEvent[]; on
  </View>
  </View>
  <Text style={styles.timelineDate}>{formatDate(event.date)}</Text>
+ <TouchableOpacity onPress={() => onDelete(event.id)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+ <Trash2 size={14} color={Colors.error} />
+ </TouchableOpacity>
  </View>
  {event.notes ? <Text style={styles.timelineDescription}>{event.notes}</Text> : null}
  {event.treatment ? (
@@ -221,7 +224,7 @@ export default function AnimalDetailScreen() {
  const Colors = useColors();
  const { id } = useLocalSearchParams<{ id: string }>();
  const router = useRouter();
- const { getAnimalById, getWeightRecordsForAnimal, getHealthRecordsForAnimal, deleteAnimal, toggleMarkedForSale, markAsDeceased, undoDeceased, undoSold, getListsForAnimal, removeAnimalFromList, customLists, updateAnimal, getAnimalDisplayWithYear, getBusinessYearName, animals, mergeAnimals, isMergingAnimals, getDoctoringEventsForAnimal, updateDoctoringEvent, deleteWeightRecord, deleteHealthRecord } = useRanch();
+ const { getAnimalById, getWeightRecordsForAnimal, getHealthRecordsForAnimal, deleteAnimal, toggleMarkedForSale, markAsDeceased, undoDeceased, undoSold, getListsForAnimal, removeAnimalFromList, customLists, updateAnimal, getAnimalDisplayWithYear, getBusinessYearName, animals, mergeAnimals, isMergingAnimals, getDoctoringEventsForAnimal, updateDoctoringEvent, deleteDoctoringEvent, deleteWeightRecord, deleteHealthRecord } = useRanch();
  const [showMergeModal, setShowMergeModal] = useState(false);
  const [mergeSearch, setMergeSearch] = useState("");
  const styles = useMemo(() => createStyles(Colors), [Colors]);
@@ -340,6 +343,13 @@ export default function AnimalDetailScreen() {
  ]);
  }, [deleteHealthRecord]);
 
+ const handleDeleteDoctoringEvent = useCallback((eventId: string) => {
+ Alert.alert("Delete Event", "Delete this doctoring event?", [
+ { text: "Cancel", style: "cancel" },
+ { text: "Delete", style: "destructive", onPress: () => void deleteDoctoringEvent(eventId) },
+ ]);
+ }, [deleteDoctoringEvent]);
+
 
  if (!animal) {
  return (<View style={styles.notFound}><Text style={styles.notFoundText}>Animal not found</Text></View>);
@@ -415,7 +425,7 @@ export default function AnimalDetailScreen() {
  <DoctoringTimeline events={doctoringEvents} onResolve={async (event) => {
  await updateDoctoringEvent({ ...event, resolved: true });
  if (Platform.OS !== "web") void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
- }} />
+ }} onDelete={handleDeleteDoctoringEvent} />
  </View>
  )}
 

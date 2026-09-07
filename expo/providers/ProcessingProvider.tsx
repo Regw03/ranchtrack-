@@ -4,6 +4,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRanch } from "@/providers/RanchProvider";
 import {
+  supabase,
   pushProcessingGroupToCloud,
   pushProcessingEventToCloud,
   pushProcessingRecordToCloud,
@@ -415,90 +416,142 @@ export function ProcessingProvider({ children }: { children: React.ReactNode }) 
 
  // ── Merge groups ─────────────────────────────────────────────────────
  const localGroups = queryClient.getQueryData<ProcessingGroup[]>(["processingGroups"]) ?? [];
- const localGroupIds = new Set(localGroups.map((g) => g.id));
- const remoteGroupIds = new Set(remoteGroups.map((g: RemoteProcessingGroupRow) => g.id));
+ const localGroupById = new Map(localGroups.map((g) => [g.id, g]));
+ const remoteSeenGroupIds = new Set<string>();
+ let groupsAdded = 0;
+ let groupsRemoved = 0;
 
- const newGroups: ProcessingGroup[] = remoteGroups
- .filter((g: RemoteProcessingGroupRow) => !localGroupIds.has(g.id))
- .map((g: RemoteProcessingGroupRow) => ({
- id: g.id,
- ranchId: g.ranch_id,
- name: g.name,
- color: g.color,
- animalIds: g.animal_ids,
- businessYearId: g.business_year_id,
- createdBy: g.created_by ?? undefined,
- createdAt: g.created_at,
- updatedAt: g.updated_at,
- }));
+ for (const row of remoteGroups as RemoteProcessingGroupRow[]) {
+ remoteSeenGroupIds.add(row.id);
+ if (row.deleted) {
+ const existing = localGroupById.get(row.id);
+ if (existing) {
+ const localTs = new Date(existing.updatedAt).getTime();
+ const remoteTs = new Date(row.updated_at).getTime();
+ if (remoteTs >= localTs) {
+ localGroupById.delete(row.id);
+ groupsRemoved += 1;
+ }
+ }
+ continue;
+ }
+ if (!localGroupById.has(row.id)) {
+ localGroupById.set(row.id, {
+ id: row.id,
+ ranchId: row.ranch_id,
+ name: row.name,
+ color: row.color,
+ animalIds: row.animal_ids,
+ businessYearId: row.business_year_id,
+ createdBy: row.created_by ?? undefined,
+ createdAt: row.created_at,
+ updatedAt: row.updated_at,
+ });
+ groupsAdded += 1;
+ }
+ }
 
- let mergedGroups = localGroups;
- if (newGroups.length > 0) {
- mergedGroups = [...localGroups, ...newGroups];
+ const mergedGroups = Array.from(localGroupById.values());
+ if (groupsAdded > 0 || groupsRemoved > 0) {
  await save(STORAGE_KEYS.groups, mergedGroups);
  queryClient.setQueryData(["processingGroups"], mergedGroups);
  }
- const localOnlyGroups = localGroups.filter((g) => !remoteGroupIds.has(g.id));
+ const localOnlyGroups = mergedGroups.filter((g) => !remoteSeenGroupIds.has(g.id));
  for (const g of localOnlyGroups) void pushProcessingGroupToCloud(g);
 
  // ── Merge events ─────────────────────────────────────────────────────
  const localEvents = queryClient.getQueryData<ProcessingEvent[]>(["processingEvents"]) ?? [];
- const localEventIds = new Set(localEvents.map((e) => e.id));
- const remoteEventIds = new Set(remoteEvents.map((e: RemoteProcessingEventRow) => e.id));
+ const localEventById = new Map(localEvents.map((e) => [e.id, e]));
+ const remoteSeenEventIds = new Set<string>();
+ let eventsAdded = 0;
+ let eventsRemoved = 0;
 
- const newEvents: ProcessingEvent[] = remoteEvents
- .filter((e: RemoteProcessingEventRow) => !localEventIds.has(e.id))
- .map((e: RemoteProcessingEventRow) => ({
- id: e.id,
- ranchId: e.ranch_id,
- name: e.name,
- type: e.type as ProcessingEventType,
- customTypeName: e.custom_type_name ?? undefined,
- date: e.date,
- groupId: e.group_id,
- businessYearId: e.business_year_id,
- status: e.status as ProcessingEvent["status"],
- notes: e.notes ?? undefined,
- createdBy: e.created_by ?? undefined,
- createdByName: e.created_by_name ?? undefined,
- createdAt: e.created_at,
- updatedAt: e.updated_at,
- }));
+ for (const row of remoteEvents as RemoteProcessingEventRow[]) {
+ remoteSeenEventIds.add(row.id);
+ if (row.deleted) {
+ const existing = localEventById.get(row.id);
+ if (existing) {
+ const localTs = new Date(existing.updatedAt).getTime();
+ const remoteTs = new Date(row.updated_at).getTime();
+ if (remoteTs >= localTs) {
+ localEventById.delete(row.id);
+ eventsRemoved += 1;
+ }
+ }
+ continue;
+ }
+ if (!localEventById.has(row.id)) {
+ localEventById.set(row.id, {
+ id: row.id,
+ ranchId: row.ranch_id,
+ name: row.name,
+ type: row.type as ProcessingEventType,
+ customTypeName: row.custom_type_name ?? undefined,
+ date: row.date,
+ groupId: row.group_id,
+ businessYearId: row.business_year_id,
+ status: row.status as ProcessingEvent["status"],
+ notes: row.notes ?? undefined,
+ createdBy: row.created_by ?? undefined,
+ createdByName: row.created_by_name ?? undefined,
+ createdAt: row.created_at,
+ updatedAt: row.updated_at,
+ });
+ eventsAdded += 1;
+ }
+ }
 
- let mergedEvents = localEvents;
- if (newEvents.length > 0) {
- mergedEvents = [...localEvents, ...newEvents];
+ const mergedEvents = Array.from(localEventById.values());
+ if (eventsAdded > 0 || eventsRemoved > 0) {
  await save(STORAGE_KEYS.events, mergedEvents);
  queryClient.setQueryData(["processingEvents"], mergedEvents);
  }
- const localOnlyEvents = localEvents.filter((e) => !remoteEventIds.has(e.id));
+ const localOnlyEvents = mergedEvents.filter((e) => !remoteSeenEventIds.has(e.id));
  for (const e of localOnlyEvents) void pushProcessingEventToCloud(e);
 
  // ── Merge records ────────────────────────────────────────────────────
  const localRecords = queryClient.getQueryData<ProcessingRecord[]>(["processingRecords"]) ?? [];
- const localRecordIds = new Set(localRecords.map((r) => r.id));
- const remoteRecordIds = new Set(remoteRecords.map((r: RemoteProcessingRecordRow) => r.id));
+ const localRecordById = new Map(localRecords.map((r) => [r.id, r]));
+ const remoteSeenRecordIds = new Set<string>();
+ let recordsAdded = 0;
+ let recordsRemoved = 0;
 
- const newRecords: ProcessingRecord[] = remoteRecords
- .filter((r: RemoteProcessingRecordRow) => !localRecordIds.has(r.id))
- .map((r: RemoteProcessingRecordRow) => ({
- id: r.id,
- eventId: r.event_id,
- animalId: r.animal_id,
- result: r.result as ProcessingResult,
- notes: r.notes ?? undefined,
- recordedBy: r.recorded_by ?? undefined,
- recordedByName: r.recorded_by_name ?? undefined,
- createdAt: r.created_at,
- updatedAt: r.updated_at,
- }));
+ for (const row of remoteRecords as RemoteProcessingRecordRow[]) {
+ remoteSeenRecordIds.add(row.id);
+ if (row.deleted) {
+ const existing = localRecordById.get(row.id);
+ if (existing) {
+ const localTs = new Date(existing.updatedAt).getTime();
+ const remoteTs = new Date(row.updated_at).getTime();
+ if (remoteTs >= localTs) {
+ localRecordById.delete(row.id);
+ recordsRemoved += 1;
+ }
+ }
+ continue;
+ }
+ if (!localRecordById.has(row.id)) {
+ localRecordById.set(row.id, {
+ id: row.id,
+ eventId: row.event_id,
+ animalId: row.animal_id,
+ result: row.result as ProcessingResult,
+ notes: row.notes ?? undefined,
+ recordedBy: row.recorded_by ?? undefined,
+ recordedByName: row.recorded_by_name ?? undefined,
+ createdAt: row.created_at,
+ updatedAt: row.updated_at,
+ });
+ recordsAdded += 1;
+ }
+ }
 
- if (newRecords.length > 0) {
- const mergedRecords = [...localRecords, ...newRecords];
+ const mergedRecords = Array.from(localRecordById.values());
+ if (recordsAdded > 0 || recordsRemoved > 0) {
  await save(STORAGE_KEYS.records, mergedRecords);
  queryClient.setQueryData(["processingRecords"], mergedRecords);
  }
- const localOnlyRecords = localRecords.filter((r) => !remoteRecordIds.has(r.id));
+ const localOnlyRecords = mergedRecords.filter((r) => !remoteSeenRecordIds.has(r.id));
  for (const r of localOnlyRecords) void pushProcessingRecordToCloud(r, ranch.id);
  },
  onError: (e) => console.log("[syncProcessing] error", e),
@@ -527,6 +580,29 @@ export function ProcessingProvider({ children }: { children: React.ReactNode }) 
  appStateRef.current = nextState;
  });
  return () => subscription.remove();
+ // eslint-disable-next-line react-hooks/exhaustive-deps
+ }, [ranch.id]);
+
+ // Supabase Realtime — instant sync when processing data changes on any device.
+ // processing_records has no ranch_id column (it's scoped via its event), so
+ // that subscription can't be filtered by ranch — the sync call it triggers
+ // re-fetches scoped to ranch.id regardless, so this is just a harmless extra
+ // wakeup when another ranch's processing data changes.
+ useEffect(() => {
+ if (!ranch.id) return;
+ const channel = supabase
+ .channel(`processing-${ranch.id}`)
+ .on("postgres_changes", { event: "*", schema: "public", table: "processing_groups", filter: `ranch_id=eq.${ranch.id}` },
+ () => { syncProcessingMutation.mutate(); }
+ )
+ .on("postgres_changes", { event: "*", schema: "public", table: "processing_events", filter: `ranch_id=eq.${ranch.id}` },
+ () => { syncProcessingMutation.mutate(); }
+ )
+ .on("postgres_changes", { event: "*", schema: "public", table: "processing_records" },
+ () => { syncProcessingMutation.mutate(); }
+ )
+ .subscribe();
+ return () => { void supabase.removeChannel(channel); };
  // eslint-disable-next-line react-hooks/exhaustive-deps
  }, [ranch.id]);
 

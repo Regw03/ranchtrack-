@@ -22,6 +22,7 @@ import {
 import { ThemeColors } from "@/constants/colors";
 import { useColors } from "@/providers/ThemeProvider";
 import { useSubscription, SubscriptionTier } from "@/providers/SubscriptionProvider";
+import { useRanch } from "@/providers/RanchProvider";
 import { PurchasesPackage } from "react-native-purchases";
 
 type BillingPeriod = "monthly" | "annual";
@@ -213,6 +214,7 @@ export default function PaywallScreen() {
     restorePurchases,
     isPurchasing,
   } = useSubscription();
+  const { currentUserRole, setRanchTier } = useRanch();
 
   const [billing, setBilling] = useState<BillingPeriod>("monthly");
 
@@ -251,10 +253,12 @@ export default function PaywallScreen() {
         await refreshCustomerInfo();
         // Determine tier from package identifier for test store compatibility
         const pkgId = pkg.identifier;
-        if (pkgId.toLowerCase().includes("plus")) {
-          setHasTestPurchased("plus");
-        } else {
-          setHasTestPurchased("pro");
+        const purchasedTier: "pro" | "plus" = pkgId.toLowerCase().includes("plus") ? "plus" : "pro";
+        setHasTestPurchased(purchasedTier);
+        // Persist to the ranch so managers/members' paywall bypass is actually backed
+        // by a real subscription — only the owner's purchase counts for the ranch.
+        if (currentUserRole === "owner") {
+          void setRanchTier(purchasedTier);
         }
         Alert.alert(
           "Welcome! 🎉",
@@ -263,12 +267,17 @@ export default function PaywallScreen() {
         );
       }
     },
-    [purchasePackage, refreshCustomerInfo, router, setHasTestPurchased],
+    [purchasePackage, refreshCustomerInfo, router, setHasTestPurchased, currentUserRole, setRanchTier],
   );
 
   const handleRestore = useCallback(async () => {
-    await restorePurchases();
-  }, [restorePurchases]);
+    const info = await restorePurchases();
+    if (info && currentUserRole === "owner") {
+      const entitlements = info.entitlements.active;
+      if (entitlements.plus) void setRanchTier("plus");
+      else if (entitlements.pro) void setRanchTier("pro");
+    }
+  }, [restorePurchases, currentUserRole, setRanchTier]);
 
   if (!ready) {
     return (

@@ -75,6 +75,8 @@ export default function WelcomeScreen() {
       // If already authenticated, skip sign-up and go straight to ranch name
       const authId = await getCurrentAuthUserId();
       if (authId) {
+        await AsyncStorage.setItem(AUTH_STORAGE_KEY, authId);
+        await AsyncStorage.setItem("ranchtrack_current_user_id", authId);
         router.push("/onboarding/ranch-name");
       } else {
         router.push("/onboarding/sign-up");
@@ -92,6 +94,8 @@ export default function WelcomeScreen() {
     try {
       const authId = await getCurrentAuthUserId();
       if (authId) {
+        await AsyncStorage.setItem(AUTH_STORAGE_KEY, authId);
+        await AsyncStorage.setItem("ranchtrack_current_user_id", authId);
         router.push("/onboarding/join-ranch");
       } else {
         // Store intent so sign-up knows to redirect to join-ranch after

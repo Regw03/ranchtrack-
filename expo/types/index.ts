@@ -21,6 +21,8 @@ export interface Ranch {
   members: RanchMember[];
   inviteCode: string;
   inviteExpiry?: string;
+  /** The ranch owner's subscription tier. Determines whether managers/members bypass the paywall. */
+  tier?: "free" | "pro" | "plus";
   createdAt: string;
 }
 

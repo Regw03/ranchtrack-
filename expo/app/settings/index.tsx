@@ -36,7 +36,7 @@ import { ThemeColors } from "@/constants/colors";
 import { useColors } from "@/providers/ThemeProvider";
 import { useTheme } from "@/providers/ThemeProvider";
 import { useRanch } from "@/providers/RanchProvider";
-import { useSubscription } from "@/providers/SubscriptionProvider";
+import { useSubscription, usePaidAccess } from "@/providers/SubscriptionProvider";
 import { scheduleAllNotifications, cancelBreedingNotifications, cancelDoctoringNotifications } from "@/lib/notifications";
 import { useProcessing } from "@/providers/ProcessingProvider";
 import { useOnboarding } from "@/providers/OnboardingProvider";
@@ -54,7 +54,8 @@ export default function SettingsScreen() {
   const { isDark, toggleTheme } = useTheme();
   const { ranch, currentUserId, resetApp, refreshRanch, isRefreshingRanch, animals, doctoringEvents, currentUserRole, canInviteTeammates, removeTeammate, updateMemberRole, generateNewInviteCode, isGeneratingInviteCode, syncAnimals, syncBusinessYears, syncCalvingData, syncDoctoringEvents, syncWeightHealth, syncCustomLists, syncRanchNotes, isSyncingAnimals, isSyncingBusinessYears, isSyncingCalvingData, isSyncingDoctoringEvents, isSyncingWeightHealth, isSyncingCustomLists, isSyncingRanchNotes } = useRanch();
   const processing = useProcessing();
-  const { isPro, isFree: _isFree, tier, setDevOverrideTier } = useSubscription();
+  const { isFree: _isFree, tier, setDevOverrideTier } = useSubscription();
+  const hasAccess = usePaidAccess();
   const { resetOnboarding } = useOnboarding();
   const router = useRouter();
   const styles = useMemo(() => createStyles(Colors), [Colors]);
@@ -626,7 +627,7 @@ export default function SettingsScreen() {
           </View>
           <View style={styles.inviteCopyBtn}><Copy size={18} color={Colors.primary} /><Text style={styles.inviteCopyText}>Copy</Text></View>
         </TouchableOpacity>
-        {isPro && canInviteTeammates && (
+        {hasAccess && canInviteTeammates && (
           <TouchableOpacity
             style={styles.generateCodeBtn}
             onPress={handleGenerateCode}
@@ -674,7 +675,7 @@ export default function SettingsScreen() {
                   </TouchableOpacity>
                 )}
                 {/* Remove button — owner can remove anyone, manager can remove members only */}
-                {canInviteTeammates && isPro && !isCurrentUser && member.role !== "owner" &&
+                {canInviteTeammates && hasAccess && !isCurrentUser && member.role !== "owner" &&
                   !(currentUserRole === "manager" && member.role === "manager") && (
                     <TouchableOpacity
                       onPress={() => handleRemoveMember(member.userId, member.name)}

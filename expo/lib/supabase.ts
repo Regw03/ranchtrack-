@@ -68,7 +68,27 @@ export interface RemoteRanchRow {
  name: string;
  invite_code: string;
  owner_id: string;
+ tier?: "free" | "pro" | "plus" | null;
  created_at: string;
+}
+
+/**
+ * Persists the ranch's subscription tier to Supabase, set when the owner
+ * purchases/restores a subscription. Assumes a `tier` column on `ranches` —
+ * if that column doesn't exist yet in the live schema, this fails silently
+ * (logged, not thrown), matching every other push function in this file.
+ */
+export async function setRanchTierInCloud(
+ ranchId: string,
+ tier: "free" | "pro" | "plus",
+): Promise<void> {
+ if (!isRemoteRanch(ranchId)) return;
+ try {
+   const { error } = await supabase.from("ranches").update({ tier }).eq("id", ranchId);
+   if (error) console.log("[sync] setRanchTier error", error.message);
+ } catch (e) {
+   console.log("[sync] setRanchTier exception", e);
+ }
 }
 
 export interface RemoteRanchMemberRow {
@@ -567,9 +587,11 @@ export interface CalvingListSyncResult {
 export async function fetchCalvingData(ranchId: string): Promise<CalvingListSyncResult> {
  if (!isRemoteRanch(ranchId)) return { lists: [], records: [] };
  try {
+   // Note: does NOT filter out deleted rows — callers need to see tombstones
+   // (deleted: true) so they can remove matching records from local storage.
    const [listsResult, recordsResult] = await Promise.all([
-     supabase.from("calving_lists").select("*").eq("ranch_id", ranchId).eq("deleted", false),
-     supabase.from("calving_records").select("*").eq("ranch_id", ranchId).eq("deleted", false),
+     supabase.from("calving_lists").select("*").eq("ranch_id", ranchId),
+     supabase.from("calving_records").select("*").eq("ranch_id", ranchId),
    ]);
    if (listsResult.error) {
      console.log("[sync] fetchCalvingData lists error", listsResult.error.message);
@@ -688,11 +710,12 @@ export async function fetchDoctoringEvents(
 ): Promise<DoctoringEventSyncResult> {
  if (!isRemoteRanch(ranchId)) return { events: [] };
  try {
+   // Does not filter out deleted rows — the caller needs tombstones to remove
+   // matching records from local storage.
    const { data, error } = await supabase
      .from("doctoring_events")
      .select("*")
-     .eq("ranch_id", ranchId)
-     .eq("deleted", false);
+     .eq("ranch_id", ranchId);
    if (error) {
      console.log("[sync] fetchDoctoringEvents error", error.message);
      return { events: [], error: error.message };
@@ -1011,9 +1034,11 @@ export async function fetchWeightHealthData(
 ): Promise<WeightHealthSyncResult> {
  if (!isRemoteRanch(ranchId)) return { weightRecords: [], healthRecords: [] };
  try {
+   // Does not filter out deleted rows — the caller needs tombstones to remove
+   // matching records from local storage.
    const [weightResult, healthResult] = await Promise.all([
-     supabase.from("weight_records").select("*").eq("ranch_id", ranchId).eq("deleted", false),
-     supabase.from("health_records").select("*").eq("ranch_id", ranchId).eq("deleted", false),
+     supabase.from("weight_records").select("*").eq("ranch_id", ranchId),
+     supabase.from("health_records").select("*").eq("ranch_id", ranchId),
    ]);
    if (weightResult.error) {
      console.log("[sync] fetchWeightHealth error", weightResult.error.message);
@@ -1260,11 +1285,12 @@ export interface CustomListSyncResult {
 export async function fetchCustomLists(ranchId: string): Promise<CustomListSyncResult> {
  if (!isRemoteRanch(ranchId)) return { lists: [] };
  try {
+   // Does not filter out deleted rows — the caller needs tombstones to remove
+   // matching records from local storage.
    const { data, error } = await supabase
      .from("custom_lists")
      .select("*")
-     .eq("ranch_id", ranchId)
-     .eq("deleted", false);
+     .eq("ranch_id", ranchId);
    if (error) {
      console.log("[sync] fetchCustomLists error", error.message);
      return { lists: [], error: error.message };
@@ -1352,11 +1378,12 @@ export interface RanchNoteSyncResult {
 export async function fetchRanchNotes(ranchId: string): Promise<RanchNoteSyncResult> {
  if (!isRemoteRanch(ranchId)) return { notes: [] };
  try {
+   // Does not filter out deleted rows — the caller needs tombstones to remove
+   // matching records from local storage.
    const { data, error } = await supabase
      .from("ranch_notes")
      .select("*")
      .eq("ranch_id", ranchId)
-     .eq("deleted", false)
      .order("created_at", { ascending: false });
    if (error) {
      console.log("[sync] fetchRanchNotes error", error.message);
@@ -1525,9 +1552,11 @@ export interface ProcessingDataSyncResult {
 export async function fetchProcessingData(ranchId: string): Promise<ProcessingDataSyncResult> {
   if (!isRemoteRanch(ranchId)) return { groups: [], events: [], records: [] };
   try {
+    // Does not filter out deleted rows — the caller needs tombstones to remove
+    // matching records from local storage.
     const [groupsRes, eventsRes] = await Promise.all([
-      supabase.from("processing_groups").select("*").eq("ranch_id", ranchId).eq("deleted", false),
-      supabase.from("processing_events").select("*").eq("ranch_id", ranchId).eq("deleted", false),
+      supabase.from("processing_groups").select("*").eq("ranch_id", ranchId),
+      supabase.from("processing_events").select("*").eq("ranch_id", ranchId),
     ]);
     if (groupsRes.error) {
       console.log("[sync] fetchProcessingData groups error", groupsRes.error.message);
@@ -1545,8 +1574,7 @@ export async function fetchProcessingData(ranchId: string): Promise<ProcessingDa
       const recordsRes = await supabase
         .from("processing_records")
         .select("*")
-        .in("event_id", eventIds)
-        .eq("deleted", false);
+        .in("event_id", eventIds);
       if (recordsRes.error) {
         console.log("[sync] fetchProcessingData records error", recordsRes.error.message);
         return { groups: [], events: [], records: [], error: recordsRes.error.message };

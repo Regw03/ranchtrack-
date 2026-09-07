@@ -8,6 +8,7 @@ import Purchases, {
   PurchasesPackage,
   PurchasesError,
 } from "react-native-purchases";
+import { useRanch } from "@/providers/RanchProvider";
 
 const API_KEYS = {
   ios: "test_NWwXiCUJBaTPIHpQeBHLJipCIsd",
@@ -257,3 +258,18 @@ export const [SubscriptionProvider, useSubscription] = createContextHook(() => {
     ],
   );
 });
+
+/**
+ * Whether the current user has access to paid features.
+ * Owners need their own active subscription (they're the one who'd pay).
+ * Managers/members bypass their own subscription check — they rely on the
+ * ranch's tier, which is only ever "pro"/"plus" once the owner has actually
+ * purchased (see setRanchTierMutation in RanchProvider, and joinRanchMutation's
+ * free-tier join block).
+ */
+export function usePaidAccess(): boolean {
+  const { currentUserRole, ranch } = useRanch();
+  const { isPro } = useSubscription();
+  if (currentUserRole === "owner") return isPro;
+  return ranch.tier === "pro" || ranch.tier === "plus";
+}

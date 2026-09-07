@@ -29,7 +29,7 @@ import { useColors } from "@/providers/ThemeProvider";
 import { useRanch } from "@/providers/RanchProvider";
 import { useProcessing } from "@/providers/ProcessingProvider";
 import { SyncStatusBar } from "@/components/SyncStatusBar";
-import { useSubscription } from "@/providers/SubscriptionProvider";
+import { usePaidAccess } from "@/providers/SubscriptionProvider";
 import { Animal, DoctoringEvent } from "@/types";
 
 function QuickActionButton({
@@ -116,14 +116,13 @@ function AttentionItem({
 export default function DashboardScreen() {
   const Colors = useColors();
   const router = useRouter();
-  const { isFree } = useSubscription();
+  const hasAccess = usePaidAccess();
   const styles = useMemo(() => createStyles(Colors), [Colors]);
 
   const {
     needsAttentionAnimals,
     doctoringEvents,
     activeBusinessYear,
-    currentUserRole,
     ranchNotes,
     animals,
     syncAnimals,
@@ -187,17 +186,15 @@ export default function DashboardScreen() {
 
 
   const PAID_QUICK_ACTIONS = ["/log-calving", "/processing-groups", "/processing-sessions"];
-  // Only managers/members bypass paywall — owners must have their own subscription
-  const isOnPaidRanch = currentUserRole === "manager" || currentUserRole === "member";
 
   const handleQuickAction = useCallback((route: string) => {
     const requiresPro = PAID_QUICK_ACTIONS.some((r) => route.startsWith(r));
-    if (requiresPro && isFree && !isOnPaidRanch) {
+    if (requiresPro && !hasAccess) {
       router.push("/paywall" as never);
       return;
     }
     router.push(route as never);
-  }, [router, isFree, isOnPaidRanch]);
+  }, [router, hasAccess]);
 
   return (
     <ScrollView
@@ -247,7 +244,7 @@ export default function DashboardScreen() {
         <View style={styles.section}>
           <TouchableOpacity
             style={styles.sectionHeader}
-            onPress={() => isFree ? router.push("/paywall" as never) : router.push("/ranch-notes" as never)}
+            onPress={() => hasAccess ? router.push("/ranch-notes" as never) : router.push("/paywall" as never)}
             activeOpacity={0.7}
           >
             <View style={[styles.sectionIconWrap, { backgroundColor: "#D4943A18" }]}>
@@ -261,7 +258,7 @@ export default function DashboardScreen() {
             <TouchableOpacity
               key={note.id}
               style={styles.noteCard}
-              onPress={() => isFree ? router.push("/paywall" as never) : router.push("/ranch-notes" as never)}
+              onPress={() => hasAccess ? router.push("/ranch-notes" as never) : router.push("/paywall" as never)}
               activeOpacity={0.75}
             >
               <Text style={styles.noteText} numberOfLines={2}>{note.text}</Text>

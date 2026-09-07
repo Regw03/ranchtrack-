@@ -34,6 +34,7 @@ import { Stack, useRouter } from "expo-router";
 import { ThemeColors } from "@/constants/colors";
 import { useColors } from "@/providers/ThemeProvider";
 import { useRanch } from "@/providers/RanchProvider";
+import { usePaidAccess } from "@/providers/SubscriptionProvider";
 import { getInitials } from "@/utils/helpers";
 
 export default function RanchProfileScreen() {
@@ -62,6 +63,7 @@ export default function RanchProfileScreen() {
     currentUserRole,
     generateNewInviteCode,
   } = useRanch();
+  const hasAccess = usePaidAccess();
 
   const [editingRanchName, setEditingRanchName] = useState<boolean>(false);
   const [ranchDraft, setRanchDraft] = useState<string>(ranch.name);
@@ -170,10 +172,15 @@ export default function RanchProfileScreen() {
       if (Platform.OS !== "web") void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
       return;
     }
+    if (!hasAccess) {
+      if (Platform.OS !== "web") void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+      router.push("/paywall" as never);
+      return;
+    }
     if (Platform.OS !== "web") void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     // Go straight to share sheet - shareInvite handles everything
     setSharePending(true);
-  }, [canInviteTeammates]);
+  }, [canInviteTeammates, hasAccess, router]);
 
   // Trigger share when button is pressed
   React.useEffect(() => {

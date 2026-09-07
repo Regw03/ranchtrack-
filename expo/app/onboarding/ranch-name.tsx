@@ -21,6 +21,7 @@ import { useColors } from "@/providers/ThemeProvider";
 import { useRanch } from "@/providers/RanchProvider";
 import { useOnboarding } from "@/providers/OnboardingProvider";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { getCurrentAuthUserId } from "@/lib/supabase";
 
 const PENDING_NAME_KEY = "ranchtrack_pending_user_name";
 
@@ -68,8 +69,14 @@ export default function RanchSetupScreen() {
     if (!canContinue) return;
     if (Platform.OS !== "web") void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     try {
-      const authUserId = await AsyncStorage.getItem("ranchtrack_current_user_id");
-      await setupRanch({ userName: trimmedUser, ranchName: trimmedRanch, authUserId: authUserId ?? undefined });
+      // Prefer the live Supabase session over AsyncStorage — the "already
+      // authenticated, skip sign-up" path from welcome.tsx never populates
+      // ranchtrack_current_user_id, so relying on storage alone here can silently
+      // fall back to a locally-generated id that won't match auth.uid().
+      const liveAuthUserId = await getCurrentAuthUserId();
+      const storedAuthUserId = await AsyncStorage.getItem("ranchtrack_current_user_id");
+      const authUserId = liveAuthUserId ?? storedAuthUserId ?? undefined;
+      await setupRanch({ userName: trimmedUser, ranchName: trimmedRanch, authUserId });
       await completeOnboarding();
       console.log("[ranch-name] setup complete:", trimmedUser, "@", trimmedRanch);
     } catch (e) {

@@ -26,7 +26,7 @@ import * as Haptics from "expo-haptics";
 import { ThemeColors } from "@/constants/colors";
 import { useColors } from "@/providers/ThemeProvider";
 import { useRanch } from "@/providers/RanchProvider";
-import { useSubscription } from "@/providers/SubscriptionProvider";
+import { usePaidAccess } from "@/providers/SubscriptionProvider";
 import { useProcessing } from "@/providers/ProcessingProvider";
 import BusinessYearPicker from "@/components/BusinessYearPicker";
 
@@ -113,7 +113,7 @@ function ActionChip({
 export default function WorkScreen() {
   const Colors = useColors();
   const router = useRouter();
-  const { isPro, isFree } = useSubscription();
+  const hasAccess = usePaidAccess();
   const styles = useMemo(() => createStyles(Colors), [Colors]);
 
   const {
@@ -123,7 +123,6 @@ export default function WorkScreen() {
     soldAnimals,
     needsAttentionAnimals,
     activeBusinessYear,
-    currentUserRole,
   } = useRanch();
 
   const {
@@ -170,19 +169,15 @@ export default function WorkScreen() {
 
   const PAID_ROUTES = ["/log-calving", "/create-calving-list", "/calving-list/", "/calving-record/", "/processing-groups", "/processing-group/", "/for-sale", "/ranch-notes"];
 
-  // Members and managers are part of a paid ranch — don't show paywall
-  // Only managers/members bypass paywall — owners must have their own subscription
-  const isOnPaidRanch = currentUserRole === "manager" || currentUserRole === "member";
-
   const nav = useCallback((route: string) => {
     const requiresPro = PAID_ROUTES.some((r) => route.startsWith(r));
-    if (requiresPro && isFree && !isOnPaidRanch) {
+    if (requiresPro && !hasAccess) {
       router.push("/paywall" as never);
       return;
     }
     if (Platform.OS !== "web") void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     router.push(route as never);
-  }, [router, isFree, isOnPaidRanch]);
+  }, [router, hasAccess]);
 
   return (
     <ScrollView

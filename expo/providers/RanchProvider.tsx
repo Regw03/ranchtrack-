@@ -16,6 +16,7 @@ import {
  pushActiveBusinessYearToCloud,
  fetchBusinessYears,
  pushBusinessYearsBatchToCloud,
+ setRanchTierInCloud,
  pushCalvingListToCloud,
  pushCalvingListsBatchToCloud,
  deleteCalvingListInCloud,
@@ -1420,6 +1421,19 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
  },
  });
 
+ const deleteDoctoringEventMutation = useMutation({
+ mutationFn: async (eventId: string) => {
+ const current = queryClient.getQueryData<DoctoringEvent[]>(["doctoringEvents"]) ?? [];
+ const updated = current.filter((e) => e.id !== eventId);
+ await saveToStorage(STORAGE_KEYS.doctoringEvents, updated);
+ void deleteDoctoringEventInCloud(eventId);
+ return updated;
+ },
+ onSuccess: (updated) => {
+ queryClient.setQueryData(["doctoringEvents"], updated);
+ },
+ });
+
  const getDoctoringEventsForAnimal = useCallback(
  (animalId: string) =>
  doctoringEvents
@@ -1516,6 +1530,7 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
  },
  ],
  inviteCode: ranchRow.invite_code,
+ tier: "free",
  createdAt: ranchRow.created_at,
  };
  await saveToStorage(STORAGE_KEYS.ranch, newRanch);
@@ -1720,6 +1735,20 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
  },
  });
 
+ const setRanchTierMutation = useMutation({
+ mutationFn: async (tier: "free" | "pro" | "plus") => {
+ const currentRanch = queryClient.getQueryData<Ranch>(["ranch"]) ?? ranch;
+ if (!currentRanch.id) throw new Error("No ranch found");
+ void setRanchTierInCloud(currentRanch.id, tier);
+ const updatedRanch: Ranch = { ...currentRanch, tier };
+ await saveToStorage(STORAGE_KEYS.ranch, updatedRanch);
+ return updatedRanch;
+ },
+ onSuccess: (updatedRanch) => {
+ queryClient.setQueryData(["ranch"], updatedRanch);
+ },
+ });
+
  const joinRanchMutation = useMutation({
  mutationFn: async ({ userName, code, email, password }: { userName: string; code: string; email?: string; password?: string }) => {
  const trimmedUserName = userName.trim();
@@ -1777,12 +1806,14 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
 
  const memberCount = currentMembers?.length ?? 0;
 
- // Check if ranch has a tier stored (set when owner upgrades)
- // Free tier cannot generate invite codes so getting here means owner is Pro or Plus
- // We store the tier in the ranch record to enforce limits from joining devices
- const ranchTier = (ranchRow as any).tier ?? "pro";
+ // Check if ranch has a tier stored (set when the owner purchases).
+ // An unset/missing tier is treated as free — not pro — since nothing should
+ // silently grant paid access.
+ const ranchTier = ((ranchRow as { tier?: string | null }).tier ?? "free") as "free" | "pro" | "plus";
 
- if (ranchTier === "plus") {
+ if (ranchTier === "free") {
+   throw new Error("This ranch's owner needs to upgrade to Ranch Pro or Plus before teammates can join.");
+ } else if (ranchTier === "plus") {
    // Plus = unlimited members, no limit check
  } else {
    // Pro = max 5 members (including owner)
@@ -1851,6 +1882,7 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
  ownerId: ranchRow.owner_id,
  members,
  inviteCode: ranchRow.invite_code,
+ tier: ranchTier,
  createdAt: ranchRow.created_at,
  };
  await saveToStorage(STORAGE_KEYS.ranch, joinedRanch);
@@ -2106,6 +2138,9 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
       .on("postgres_changes", { event: "*", schema: "public", table: "animals", filter: `ranch_id=eq.${ranch.id}` },
         () => { syncAnimalsMutation.mutate(); }
       )
+      .on("postgres_changes", { event: "*", schema: "public", table: "business_years", filter: `ranch_id=eq.${ranch.id}` },
+        () => { syncBusinessYearsMutation.mutate(); }
+      )
       .on("postgres_changes", { event: "*", schema: "public", table: "calving_records", filter: `ranch_id=eq.${ranch.id}` },
         () => { syncCalvingDataMutation.mutate(); }
       )
@@ -2174,34 +2209,52 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
  }
 
  const local = queryClient.getQueryData<CustomList[]>(["customLists"]) ?? [];
- const localIds = new Set(local.map((l) => l.id));
- const remoteIds = new Set(remoteLists.map((l: RemoteCustomListRow) => l.id));
+ const localById = new Map(local.map((l) => [l.id, l]));
+ const remoteSeenIds = new Set<string>();
+ let removedCount = 0;
+ let addedCount = 0;
 
- const newFromRemote: CustomList[] = remoteLists
- .filter((r: RemoteCustomListRow) => !localIds.has(r.id))
- .map((r: RemoteCustomListRow) => ({
- id: r.id,
+ for (const row of remoteLists as RemoteCustomListRow[]) {
+ remoteSeenIds.add(row.id);
+ if (row.deleted) {
+ const existing = localById.get(row.id);
+ if (existing) {
+ const localTs = new Date(existing.updatedAt).getTime();
+ const remoteTs = new Date(row.updated_at).getTime();
+ if (remoteTs >= localTs) {
+ localById.delete(row.id);
+ removedCount += 1;
+ }
+ }
+ continue;
+ }
+ if (!localById.has(row.id)) {
+ localById.set(row.id, {
+ id: row.id,
  ranchId: currentRanch.id,
- name: r.name,
- color: r.color,
- icon: r.icon,
- listType: r.list_type as CustomList["listType"],
- species: (r.species as CustomList["species"]) ?? undefined,
- parentId: r.parent_id ?? undefined,
- animalIds: r.animal_ids,
- createdBy: r.created_by,
- createdAt: r.created_at,
- updatedAt: r.updated_at,
- }));
-
- if (newFromRemote.length > 0) {
- const merged = [...local, ...newFromRemote];
- await saveToStorage(STORAGE_KEYS.customLists, merged);
- queryClient.setQueryData(["customLists"], merged);
- console.log(`[syncCustomLists] added ${newFromRemote.length} lists from server`);
+ name: row.name,
+ color: row.color,
+ icon: row.icon,
+ listType: row.list_type as CustomList["listType"],
+ species: (row.species as CustomList["species"]) ?? undefined,
+ parentId: row.parent_id ?? undefined,
+ animalIds: row.animal_ids,
+ createdBy: row.created_by,
+ createdAt: row.created_at,
+ updatedAt: row.updated_at,
+ });
+ addedCount += 1;
+ }
  }
 
- const localOnly = local.filter((l) => !remoteIds.has(l.id));
+ const merged = Array.from(localById.values());
+ if (addedCount > 0 || removedCount > 0) {
+ await saveToStorage(STORAGE_KEYS.customLists, merged);
+ queryClient.setQueryData(["customLists"], merged);
+ console.log(`[syncCustomLists] added ${addedCount}, removed ${removedCount} lists`);
+ }
+
+ const localOnly = merged.filter((l) => !remoteSeenIds.has(l.id));
  void pushCustomListsBatchToCloud(localOnly, currentUserRole);
  },
  onError: (e) => console.log("[syncCustomLists] error", e),
@@ -2225,77 +2278,111 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
 
  // ── Merge lists ──────────────────────────────────────────────────────
  const localLists = queryClient.getQueryData<CalvingList[]>(["calvingLists"]) ?? [];
- const localListIds = new Set(localLists.map((l) => l.id));
- const remoteListIds = new Set(remoteLists.map((l: RemoteCalvingListRow) => l.id));
+ const localListById = new Map(localLists.map((l) => [l.id, l]));
+ const remoteSeenListIds = new Set<string>();
+ let listsAdded = 0;
+ let listsRemoved = 0;
 
- // Add remote lists not seen locally
- const newLists: CalvingList[] = remoteLists
- .filter((r: RemoteCalvingListRow) => !localListIds.has(r.id))
- .map((r: RemoteCalvingListRow) => ({
- id: r.id,
+ for (const row of remoteLists as RemoteCalvingListRow[]) {
+ remoteSeenListIds.add(row.id);
+ if (row.deleted) {
+ const existing = localListById.get(row.id);
+ if (existing) {
+ const localTs = new Date(existing.updatedAt).getTime();
+ const remoteTs = new Date(row.updated_at).getTime();
+ if (remoteTs >= localTs) {
+ localListById.delete(row.id);
+ listsRemoved += 1;
+ }
+ }
+ continue;
+ }
+ if (!localListById.has(row.id)) {
+ localListById.set(row.id, {
+ id: row.id,
  ranchId: currentRanch.id,
- name: r.name,
- color: r.color,
- businessYearId: r.business_year_id,
- createdAt: r.created_at,
- updatedAt: r.updated_at,
- }));
+ name: row.name,
+ color: row.color,
+ businessYearId: row.business_year_id,
+ createdAt: row.created_at,
+ updatedAt: row.updated_at,
+ });
+ listsAdded += 1;
+ }
+ }
 
- let mergedLists = localLists;
- if (newLists.length > 0) {
- mergedLists = [...localLists, ...newLists];
+ const mergedLists = Array.from(localListById.values());
+ if (listsAdded > 0 || listsRemoved > 0) {
  await saveToStorage(STORAGE_KEYS.calvingLists, mergedLists);
  queryClient.setQueryData(["calvingLists"], mergedLists);
- console.log(`[syncCalving] added ${newLists.length} lists from server`);
+ console.log(`[syncCalving] added ${listsAdded}, removed ${listsRemoved} lists`);
  }
 
  // Push local-only lists to server
- const localOnlyLists = localLists.filter((l) => !remoteListIds.has(l.id));
+ const localOnlyLists = mergedLists.filter((l) => !remoteSeenListIds.has(l.id));
  void pushCalvingListsBatchToCloud(localOnlyLists, currentRanch.id, currentUserRole);
 
  // ── Merge records ────────────────────────────────────────────────────
  const localRecords = queryClient.getQueryData<CalvingRecord[]>(["calvingRecords"]) ?? [];
- const localRecordIds = new Set(localRecords.map((r) => r.id));
- const remoteRecordIds = new Set(remoteRecords.map((r: RemoteCalvingRecordRow) => r.id));
+ const localRecordById = new Map(localRecords.map((r) => [r.id, r]));
+ const remoteSeenRecordIds = new Set<string>();
+ let recordsAdded = 0;
+ let recordsRemoved = 0;
 
- // Add remote records not seen locally
- const newRecords: CalvingRecord[] = remoteRecords
- .filter((r: RemoteCalvingRecordRow) => !localRecordIds.has(r.id))
- .map((r: RemoteCalvingRecordRow) => ({
- id: r.id,
- calvingListId: r.calving_list_id,
- businessYearId: r.business_year_id,
- birthMonth: r.birth_month,
- birthDay: r.birth_day,
- date: r.date,
- cowTag: r.cow_tag,
- calfTag: r.calf_tag,
- assisted: r.assisted,
- calfType: (r.calf_type as CalvingRecord["calfType"]) ?? undefined,
- sireTag: r.sire_tag ?? undefined,
- birthWeight: r.birth_weight ?? undefined,
- birthWeightUnit: (r.birth_weight_unit as CalvingRecord["birthWeightUnit"]) ?? undefined,
- notes: r.notes ?? undefined,
- photoUrl: r.photo_url ?? undefined,
- cowId: r.cow_id ?? undefined,
- calfId: r.calf_id ?? undefined,
- createdBy: r.created_by ?? undefined,
- createdByName: r.created_by_name ?? undefined,
- createdAt: r.created_at,
- updatedAt: r.updated_at,
- }));
+ for (const row of remoteRecords as RemoteCalvingRecordRow[]) {
+ remoteSeenRecordIds.add(row.id);
+ if (row.deleted) {
+ const existing = localRecordById.get(row.id);
+ if (existing) {
+ const localTs = new Date(existing.updatedAt).getTime();
+ const remoteTs = new Date(row.updated_at).getTime();
+ if (remoteTs >= localTs) {
+ localRecordById.delete(row.id);
+ recordsRemoved += 1;
+ }
+ }
+ continue;
+ }
+ if (!localRecordById.has(row.id)) {
+ localRecordById.set(row.id, {
+ id: row.id,
+ calvingListId: row.calving_list_id,
+ businessYearId: row.business_year_id,
+ birthMonth: row.birth_month,
+ birthDay: row.birth_day,
+ date: row.date,
+ cowTag: row.cow_tag,
+ calfTag: row.calf_tag,
+ assisted: row.assisted,
+ calfType: (row.calf_type as CalvingRecord["calfType"]) ?? undefined,
+ sireTag: row.sire_tag ?? undefined,
+ birthWeight: row.birth_weight ?? undefined,
+ birthWeightUnit: (row.birth_weight_unit as CalvingRecord["birthWeightUnit"]) ?? undefined,
+ notes: row.notes ?? undefined,
+ photoUrl: row.photo_url ?? undefined,
+ cowId: row.cow_id ?? undefined,
+ calfId: row.calf_id ?? undefined,
+ createdBy: row.created_by ?? undefined,
+ createdByName: row.created_by_name ?? undefined,
+ createdAt: row.created_at,
+ updatedAt: row.updated_at,
+ });
+ recordsAdded += 1;
+ }
+ }
 
- if (newRecords.length > 0) {
- const mergedRecords = [...localRecords, ...newRecords].sort(
+ if (recordsAdded > 0 || recordsRemoved > 0) {
+ const mergedRecords = Array.from(localRecordById.values()).sort(
  (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime(),
  );
  await saveToStorage(STORAGE_KEYS.calvingRecords, mergedRecords);
  queryClient.setQueryData(["calvingRecords"], mergedRecords);
- console.log(`[syncCalving] added ${newRecords.length} records from server`);
+ console.log(`[syncCalving] added ${recordsAdded}, removed ${recordsRemoved} records`);
  }
 
  // Push local-only records to server
- const localOnlyRecords = localRecords.filter((r) => !remoteRecordIds.has(r.id));
+ const finalRecords = Array.from(localRecordById.values());
+ const localOnlyRecords = finalRecords.filter((r) => !remoteSeenRecordIds.has(r.id));
  for (const r of localOnlyRecords) void pushCalvingRecordToCloud(r, currentRanch.id, currentUserRole);
  },
  onError: (e) => console.log("[syncCalving] error", e),
@@ -2315,41 +2402,59 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
  return;
  }
 
- // Merge: add remote events not seen locally
+ // Merge: add remote events not seen locally, remove ones deleted remotely
  const localEvents = queryClient.getQueryData<DoctoringEvent[]>(["doctoringEvents"]) ?? [];
- const localIds = new Set(localEvents.map((e) => e.id));
- const remoteIds = new Set(remoteEvents.map((e: RemoteDoctoringEventRow) => e.id));
+ const localById = new Map(localEvents.map((e) => [e.id, e]));
+ const remoteSeenIds = new Set<string>();
+ let added = 0;
+ let removed = 0;
 
- const newFromRemote: DoctoringEvent[] = remoteEvents
- .filter((r: RemoteDoctoringEventRow) => !localIds.has(r.id))
- .map((r: RemoteDoctoringEventRow) => ({
- id: r.id,
+ for (const row of remoteEvents as RemoteDoctoringEventRow[]) {
+ remoteSeenIds.add(row.id);
+ if (row.deleted) {
+ const existing = localById.get(row.id);
+ if (existing) {
+ const localTs = new Date(existing.updatedAt).getTime();
+ const remoteTs = new Date(row.updated_at).getTime();
+ if (remoteTs >= localTs) {
+ localById.delete(row.id);
+ removed += 1;
+ }
+ }
+ continue;
+ }
+ if (!localById.has(row.id)) {
+ localById.set(row.id, {
+ id: row.id,
  ranchId: currentRanch.id,
- animalId: r.animal_id,
- date: r.date,
- type: r.type as DoctoringEvent["type"],
- customTypeName: r.custom_type_name ?? undefined,
- notes: r.notes,
- treatment: r.treatment ?? undefined,
- followUpNeeded: r.follow_up_needed,
- resolved: r.resolved,
- createdBy: r.created_by ?? undefined,
- createdByName: r.created_by_name ?? undefined,
- createdAt: r.created_at,
- updatedAt: r.updated_at,
- }));
+ animalId: row.animal_id,
+ date: row.date,
+ type: row.type as DoctoringEvent["type"],
+ customTypeName: row.custom_type_name ?? undefined,
+ notes: row.notes,
+ treatment: row.treatment ?? undefined,
+ followUpNeeded: row.follow_up_needed,
+ resolved: row.resolved,
+ createdBy: row.created_by ?? undefined,
+ createdByName: row.created_by_name ?? undefined,
+ createdAt: row.created_at,
+ updatedAt: row.updated_at,
+ });
+ added += 1;
+ }
+ }
 
- if (newFromRemote.length > 0) {
- const merged = [...localEvents, ...newFromRemote].sort(
+ const merged = Array.from(localById.values()).sort(
  (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime(),
  );
+ if (added > 0 || removed > 0) {
  await saveToStorage(STORAGE_KEYS.doctoringEvents, merged);
  queryClient.setQueryData(["doctoringEvents"], merged);
- console.log(`[syncDoctoring] added ${newFromRemote.length} events from server`);
+ console.log(`[syncDoctoring] added ${added}, removed ${removed} events`);
  }
 
  // Push local-only events to server
- const localOnly = localEvents.filter((e) => !remoteIds.has(e.id));
+ const localOnly = merged.filter((e) => !remoteSeenIds.has(e.id));
  for (const e of localOnly) void pushDoctoringEventToCloud(e, currentUserRole);
  },
  onError: (e) => console.log("[syncDoctoring] error", e),
@@ -2377,52 +2482,72 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
 
  // ── Merge weight records ─────────────────────────────────────────────
  const localWeights = queryClient.getQueryData<WeightRecord[]>(["weightRecords"]) ?? [];
- const localWeightIds = new Set(localWeights.map((r) => r.id));
- const remoteWeightIds = new Set(remoteWeights.map((r: RemoteWeightRecordRow) => r.id));
+ const localWeightById = new Map(localWeights.map((r) => [r.id, r]));
+ const remoteSeenWeightIds = new Set<string>();
+ let weightsAdded = 0;
+ let weightsRemoved = 0;
 
- const newWeights: WeightRecord[] = remoteWeights
- .filter((r: RemoteWeightRecordRow) => !localWeightIds.has(r.id))
- .map((r: RemoteWeightRecordRow) => ({
- id: r.id,
- animalId: r.animal_id,
- date: r.date,
- weight: r.weight,
- unit: r.unit as WeightRecord["unit"],
- }));
-
- if (newWeights.length > 0) {
- const merged = [...localWeights, ...newWeights];
- await saveToStorage(STORAGE_KEYS.weightRecords, merged);
- queryClient.setQueryData(["weightRecords"], merged);
- console.log(`[syncWeightHealth] added ${newWeights.length} weight records from server`);
+ for (const row of remoteWeights as RemoteWeightRecordRow[]) {
+ remoteSeenWeightIds.add(row.id);
+ if (row.deleted) {
+ if (localWeightById.delete(row.id)) weightsRemoved += 1;
+ continue;
  }
- const localOnlyWeights = localWeights.filter((r) => !remoteWeightIds.has(r.id));
+ if (!localWeightById.has(row.id)) {
+ localWeightById.set(row.id, {
+ id: row.id,
+ animalId: row.animal_id,
+ date: row.date,
+ weight: row.weight,
+ unit: row.unit as WeightRecord["unit"],
+ });
+ weightsAdded += 1;
+ }
+ }
+
+ const mergedWeights = Array.from(localWeightById.values());
+ if (weightsAdded > 0 || weightsRemoved > 0) {
+ await saveToStorage(STORAGE_KEYS.weightRecords, mergedWeights);
+ queryClient.setQueryData(["weightRecords"], mergedWeights);
+ console.log(`[syncWeightHealth] added ${weightsAdded}, removed ${weightsRemoved} weight records`);
+ }
+ const localOnlyWeights = mergedWeights.filter((r) => !remoteSeenWeightIds.has(r.id));
  void pushWeightRecordsBatchToCloud(localOnlyWeights, currentRanch.id);
 
  // ── Merge health records ─────────────────────────────────────────────
  const localHealth = queryClient.getQueryData<HealthRecord[]>(["healthRecords"]) ?? [];
- const localHealthIds = new Set(localHealth.map((r) => r.id));
- const remoteHealthIds = new Set(remoteHealth.map((r: RemoteHealthRecordRow) => r.id));
+ const localHealthById = new Map(localHealth.map((r) => [r.id, r]));
+ const remoteSeenHealthIds = new Set<string>();
+ let healthAdded = 0;
+ let healthRemoved = 0;
 
- const newHealth: HealthRecord[] = remoteHealth
- .filter((r: RemoteHealthRecordRow) => !localHealthIds.has(r.id))
- .map((r: RemoteHealthRecordRow) => ({
- id: r.id,
- animalId: r.animal_id,
- type: r.type as HealthRecord["type"],
- date: r.date,
- description: r.description,
- notes: r.notes,
- administeredBy: r.administered_by ?? undefined,
- }));
-
- if (newHealth.length > 0) {
- const merged = [...localHealth, ...newHealth];
- await saveToStorage(STORAGE_KEYS.healthRecords, merged);
- queryClient.setQueryData(["healthRecords"], merged);
- console.log(`[syncWeightHealth] added ${newHealth.length} health records from server`);
+ for (const row of remoteHealth as RemoteHealthRecordRow[]) {
+ remoteSeenHealthIds.add(row.id);
+ if (row.deleted) {
+ if (localHealthById.delete(row.id)) healthRemoved += 1;
+ continue;
  }
- const localOnlyHealth = localHealth.filter((r) => !remoteHealthIds.has(r.id));
+ if (!localHealthById.has(row.id)) {
+ localHealthById.set(row.id, {
+ id: row.id,
+ animalId: row.animal_id,
+ type: row.type as HealthRecord["type"],
+ date: row.date,
+ description: row.description,
+ notes: row.notes,
+ administeredBy: row.administered_by ?? undefined,
+ });
+ healthAdded += 1;
+ }
+ }
+
+ const mergedHealth = Array.from(localHealthById.values());
+ if (healthAdded > 0 || healthRemoved > 0) {
+ await saveToStorage(STORAGE_KEYS.healthRecords, mergedHealth);
+ queryClient.setQueryData(["healthRecords"], mergedHealth);
+ console.log(`[syncWeightHealth] added ${healthAdded}, removed ${healthRemoved} health records`);
+ }
+ const localOnlyHealth = mergedHealth.filter((r) => !remoteSeenHealthIds.has(r.id));
  void pushHealthRecordsBatchToCloud(localOnlyHealth, currentRanch.id);
  },
  onError: (e) => console.log("[syncWeightHealth] error", e),
@@ -2442,30 +2567,48 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
  }
 
  const local = queryClient.getQueryData<RanchNote[]>(["ranchNotes"]) ?? [];
- const localIds = new Set(local.map((n) => n.id));
- const remoteIds = new Set(remoteNotes.map((n: RemoteRanchNoteRow) => n.id));
+ const localById = new Map(local.map((n) => [n.id, n]));
+ const remoteSeenIds = new Set<string>();
+ let added = 0;
+ let removed = 0;
 
- const newFromRemote: RanchNote[] = remoteNotes
- .filter((r: RemoteRanchNoteRow) => !localIds.has(r.id))
- .map((r: RemoteRanchNoteRow) => ({
- id: r.id,
+ for (const row of remoteNotes as RemoteRanchNoteRow[]) {
+ remoteSeenIds.add(row.id);
+ if (row.deleted) {
+ const existing = localById.get(row.id);
+ if (existing) {
+ const localTs = new Date(existing.updatedAt).getTime();
+ const remoteTs = new Date(row.updated_at).getTime();
+ if (remoteTs >= localTs) {
+ localById.delete(row.id);
+ removed += 1;
+ }
+ }
+ continue;
+ }
+ if (!localById.has(row.id)) {
+ localById.set(row.id, {
+ id: row.id,
  ranchId: currentRanch.id,
- text: r.text,
- createdBy: r.created_by,
- createdAt: r.created_at,
- updatedAt: r.updated_at,
- }));
-
- if (newFromRemote.length > 0) {
- const merged = [...local, ...newFromRemote].sort(
- (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
- );
- await saveToStorage(STORAGE_KEYS.ranchNotes, merged);
- queryClient.setQueryData(["ranchNotes"], merged);
- console.log(`[syncRanchNotes] added ${newFromRemote.length} notes from server`);
+ text: row.text,
+ createdBy: row.created_by,
+ createdAt: row.created_at,
+ updatedAt: row.updated_at,
+ });
+ added += 1;
+ }
  }
 
- const localOnly = local.filter((n) => !remoteIds.has(n.id));
+ const merged = Array.from(localById.values()).sort(
+ (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+ );
+ if (added > 0 || removed > 0) {
+ await saveToStorage(STORAGE_KEYS.ranchNotes, merged);
+ queryClient.setQueryData(["ranchNotes"], merged);
+ console.log(`[syncRanchNotes] added ${added}, removed ${removed} notes`);
+ }
+
+ const localOnly = merged.filter((n) => !remoteSeenIds.has(n.id));
  for (const n of localOnly) void pushRanchNoteToCloud(n, currentUserRole);
  },
  onError: (e) => console.log("[syncRanchNotes] error", e),
@@ -2521,6 +2664,7 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
         members,
         inviteCode: ranchRow.invite_code,
         inviteExpiry: ranchRow.invite_expiry ?? undefined,
+        tier: (ranchRow.tier as Ranch["tier"]) ?? "free",
         createdAt: ranchRow.created_at,
       };
 
@@ -2572,6 +2716,7 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
  ownerId: ranchRow.owner_id,
  members,
  inviteCode: ranchRow.invite_code,
+ tier: (ranchRow.tier as Ranch["tier"]) ?? "free",
  createdAt: ranchRow.created_at,
  };
  await saveToStorage(STORAGE_KEYS.ranch, updated);
@@ -2785,6 +2930,7 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
  isUpdatingMemberRole: updateMemberRoleMutation.isPending,
  generateNewInviteCode: generateInviteCodeMutation.mutateAsync,
  isGeneratingInviteCode: generateInviteCodeMutation.isPending,
+ setRanchTier: setRanchTierMutation.mutateAsync,
  setRanchName: setRanchNameMutation.mutateAsync,
  isSettingRanchName: setRanchNameMutation.isPending,
  ranchNotes,
@@ -2876,6 +3022,7 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
  doctoringEvents,
  addDoctoringEvent: addDoctoringEventMutation.mutateAsync,
  updateDoctoringEvent: updateDoctoringEventMutation.mutateAsync,
+ deleteDoctoringEvent: deleteDoctoringEventMutation.mutateAsync,
  getDoctoringEventsForAnimal,
  needsAttentionAnimals,
  isAddingDoctoringEvent: addDoctoringEventMutation.isPending,

@@ -173,10 +173,8 @@ function AnimalRow({ animal, yearLabel, showYear }: { animal: Animal; yearLabel:
 export default function HerdScreen() {
   const Colors = useColors();
   const router = useRouter();
-  const { activeAnimals, animalsByHerdGroup, getBusinessYearName, animals, deceasedAnimals, needsAttentionAnimals, animalStats, currentUserRole } = useRanch();
+  const { activeAnimals, animalsByHerdGroup, getBusinessYearName, animals, deceasedAnimals, needsAttentionAnimals, animalStats } = useRanch();
   const { isFree } = useSubscription();
-  // Only managers/members bypass paywall — owners must have their own subscription
-  const isOnPaidRanch = currentUserRole === "manager" || currentUserRole === "member";
   const [selectedGroup, setSelectedGroup] = useState<HerdGroup | "deceased" | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const styles = useMemo(() => createStyles(Colors), [Colors]);
