@@ -924,7 +924,6 @@ function createStyles(Colors: ThemeColors) {
       gap: 5,
       marginTop: 4,
     },
-    memberRole: { fontSize: 13, fontWeight: "700" as const },
     youBadge: {
       backgroundColor: Colors.primary,
       paddingHorizontal: 8,
@@ -957,61 +956,6 @@ function createStyles(Colors: ThemeColors) {
       fontSize: 12,
       fontWeight: "800" as const,
       letterSpacing: 0.3,
-    },
-    inviteFieldBlock: {
-      marginTop: 14,
-    },
-    inviteFieldLabel: {
-      fontSize: 12,
-      fontWeight: "800" as const,
-      color: Colors.textSecondary,
-      textTransform: "uppercase" as const,
-      letterSpacing: 1.1,
-      marginBottom: 8,
-      marginLeft: 4,
-    },
-    roleOptions: { gap: 10 },
-    roleOption: {
-      flexDirection: "row" as const,
-      alignItems: "center" as const,
-      gap: 12,
-      padding: 14,
-      borderRadius: 12,
-      borderWidth: 1.5,
-      borderColor: Colors.borderLight,
-      backgroundColor: Colors.surface,
-    },
-    roleOptionIcon: {
-      width: 36,
-      height: 36,
-      borderRadius: 10,
-      alignItems: "center" as const,
-      justifyContent: "center" as const,
-    },
-    roleOptionLabel: {
-      fontSize: 15,
-      fontWeight: "800" as const,
-      color: Colors.text,
-    },
-    roleOptionDesc: {
-      fontSize: 12,
-      fontWeight: "500" as const,
-      color: Colors.textSecondary,
-      marginTop: 2,
-    },
-    inviteConfirmBtn: {
-      flexDirection: "row" as const,
-      alignItems: "center" as const,
-      justifyContent: "center" as const,
-      gap: 8,
-      paddingVertical: 16,
-      borderRadius: 14,
-      marginTop: 18,
-    },
-    inviteConfirmText: {
-      fontSize: 16,
-      fontWeight: "800" as const,
-      color: "#fff",
     },
     inviteIcon: {
       width: 40,
@@ -1078,10 +1022,6 @@ function createStyles(Colors: ThemeColors) {
     modalBackdrop: {
       flex: 1,
       backgroundColor: "rgba(0,0,0,0.45)",
-      justifyContent: "flex-end" as const,
-    },
-    modalScrollContent: {
-      flexGrow: 1,
       justifyContent: "flex-end" as const,
     },
     modalCard: {
