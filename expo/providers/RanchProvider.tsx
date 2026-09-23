@@ -1993,7 +1993,7 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
    // Update local records with server-generated timestamps, and persist the correction —
    // otherwise the client-generated timestamp sticks around and can lose a future
    // last-write-wins comparison against a genuinely newer edit from another device.
-   const tsMap = new Map(serverTimestamps.map((r) => [r.id, r.updated_at]));
+   const tsMap = new Map<string, string>(serverTimestamps.map((r) => [r.id, r.updated_at]));
    finalMerged = merged.map((a) => (tsMap.has(a.id) ? { ...a, updatedAt: tsMap.get(a.id)! } : a));
    await saveToStorage(STORAGE_KEYS.animals, finalMerged);
  }
@@ -2209,7 +2209,7 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
  }
 
  const local = queryClient.getQueryData<CustomList[]>(["customLists"]) ?? [];
- const localById = new Map(local.map((l) => [l.id, l]));
+ const localById = new Map<string, CustomList>(local.map((l) => [l.id, l]));
  const remoteSeenIds = new Set<string>();
  let removedCount = 0;
  let addedCount = 0;
@@ -2278,7 +2278,7 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
 
  // ── Merge lists ──────────────────────────────────────────────────────
  const localLists = queryClient.getQueryData<CalvingList[]>(["calvingLists"]) ?? [];
- const localListById = new Map(localLists.map((l) => [l.id, l]));
+ const localListById = new Map<string, CalvingList>(localLists.map((l) => [l.id, l]));
  const remoteSeenListIds = new Set<string>();
  let listsAdded = 0;
  let listsRemoved = 0;
@@ -2324,7 +2324,7 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
 
  // ── Merge records ────────────────────────────────────────────────────
  const localRecords = queryClient.getQueryData<CalvingRecord[]>(["calvingRecords"]) ?? [];
- const localRecordById = new Map(localRecords.map((r) => [r.id, r]));
+ const localRecordById = new Map<string, CalvingRecord>(localRecords.map((r) => [r.id, r]));
  const remoteSeenRecordIds = new Set<string>();
  let recordsAdded = 0;
  let recordsRemoved = 0;
@@ -2404,7 +2404,7 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
 
  // Merge: add remote events not seen locally, remove ones deleted remotely
  const localEvents = queryClient.getQueryData<DoctoringEvent[]>(["doctoringEvents"]) ?? [];
- const localById = new Map(localEvents.map((e) => [e.id, e]));
+ const localById = new Map<string, DoctoringEvent>(localEvents.map((e) => [e.id, e]));
  const remoteSeenIds = new Set<string>();
  let added = 0;
  let removed = 0;
@@ -2482,7 +2482,7 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
 
  // ── Merge weight records ─────────────────────────────────────────────
  const localWeights = queryClient.getQueryData<WeightRecord[]>(["weightRecords"]) ?? [];
- const localWeightById = new Map(localWeights.map((r) => [r.id, r]));
+ const localWeightById = new Map<string, WeightRecord>(localWeights.map((r) => [r.id, r]));
  const remoteSeenWeightIds = new Set<string>();
  let weightsAdded = 0;
  let weightsRemoved = 0;
@@ -2516,7 +2516,7 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
 
  // ── Merge health records ─────────────────────────────────────────────
  const localHealth = queryClient.getQueryData<HealthRecord[]>(["healthRecords"]) ?? [];
- const localHealthById = new Map(localHealth.map((r) => [r.id, r]));
+ const localHealthById = new Map<string, HealthRecord>(localHealth.map((r) => [r.id, r]));
  const remoteSeenHealthIds = new Set<string>();
  let healthAdded = 0;
  let healthRemoved = 0;
@@ -2567,7 +2567,7 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
  }
 
  const local = queryClient.getQueryData<RanchNote[]>(["ranchNotes"]) ?? [];
- const localById = new Map(local.map((n) => [n.id, n]));
+ const localById = new Map<string, RanchNote>(local.map((n) => [n.id, n]));
  const remoteSeenIds = new Set<string>();
  let added = 0;
  let removed = 0;
