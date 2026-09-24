@@ -853,9 +853,10 @@ export interface BreedingSyncResult {
 export async function fetchBreedingData(ranchId: string): Promise<BreedingSyncResult> {
  if (!isRemoteRanch(ranchId)) return { records: [], groups: [] };
  try {
+   // does NOT filter out deleted rows — callers need to see tombstones to propagate deletes
    const [recordsResult, groupsResult] = await Promise.all([
-     supabase.from("breeding_records").select("*").eq("ranch_id", ranchId).eq("deleted", false),
-     supabase.from("breeding_groups").select("*").eq("ranch_id", ranchId).eq("deleted", false),
+     supabase.from("breeding_records").select("*").eq("ranch_id", ranchId),
+     supabase.from("breeding_groups").select("*").eq("ranch_id", ranchId),
    ]);
    if (recordsResult.error) {
      console.log("[sync] fetchBreedingData error", recordsResult.error.message);
@@ -1147,11 +1148,11 @@ export async function fetchProcessingSessions(
 ): Promise<ProcessingSessionSyncResult> {
  if (!isRemoteRanch(ranchId)) return { sessions: [] };
  try {
+   // does NOT filter out deleted rows — callers need to see tombstones to propagate deletes
    const { data, error } = await supabase
      .from("processing_sessions")
      .select("*")
-     .eq("ranch_id", ranchId)
-     .eq("deleted", false);
+     .eq("ranch_id", ranchId);
    if (error) {
      console.log("[sync] fetchProcessingSessions error", error.message);
      return { sessions: [], error: error.message };
