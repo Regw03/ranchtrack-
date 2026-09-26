@@ -62,13 +62,52 @@ export default function AddAnimalToListScreen() {
     setSaving(true);
     try {
       if (Platform.OS !== "web") void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      const result = await addAnimal({ tagId: tagId.trim() || `HORSE-${Date.now().toString(36).toUpperCase()}`, name: name.trim() || undefined, species, breed: breed.trim() || "Unknown", birthDate: birthDate.trim() || new Date().getFullYear().toString(), sex: sex as "male" | "female" | "steer" | "heifer", notes: notes.trim(), photoUrl: photoUri ?? undefined, status: "active", markedForSale: type === "to_be_sold" });
+
+      const noteParts: string[] = [];
+      if (notes.trim()) noteParts.push(notes.trim());
+      let sireId: string | undefined;
+      let motherId: string | undefined;
+      let saleNote: string | undefined;
+
+      if (type === "custom" && (breedFields.sireTagId.trim() || breedFields.lastBredDate.trim() || breedFields.expectedDueDate.trim() || breedFields.breedingNotes.trim())) {
+        if (breedFields.sireTagId.trim()) {
+          sireId = animals.find((a) => a.tagId.toLowerCase() === breedFields.sireTagId.trim().toLowerCase())?.id;
+        }
+        const breedingLine = [
+          `Breeding (${breedFields.breedingStatus})`,
+          breedFields.sireTagId.trim() ? `Sire: ${breedFields.sireTagId.trim()}` : null,
+          breedFields.lastBredDate.trim() ? `Last Bred: ${breedFields.lastBredDate.trim()}` : null,
+          breedFields.expectedDueDate.trim() ? `Expected Due: ${breedFields.expectedDueDate.trim()}` : null,
+          breedFields.breedingNotes.trim() || null,
+        ].filter(Boolean).join(" — ");
+        noteParts.push(breedingLine);
+      }
+
+      if (type === "to_be_sold" && (saleFields.reasonForSale.trim() || saleFields.askingPrice.trim())) {
+        saleNote = saleFields.reasonForSale.trim() || undefined;
+        if (saleFields.askingPrice.trim()) noteParts.push(`Asking Price: ${saleFields.askingPrice.trim()}`);
+      }
+
+      if (type === "birthing" && (birthFields.damTagId.trim() || birthFields.expectedDueDate.trim() || birthFields.birthingNotes.trim())) {
+        if (birthFields.damTagId.trim()) {
+          motherId = animals.find((a) => a.tagId.toLowerCase() === birthFields.damTagId.trim().toLowerCase())?.id;
+        }
+        const birthingLine = [
+          getBirthingTitle(species),
+          birthFields.damTagId.trim() ? `Dam: ${birthFields.damTagId.trim()}` : null,
+          birthFields.expectedDueDate.trim() ? `Expected Due: ${birthFields.expectedDueDate.trim()}` : null,
+          birthFields.birthingNotes.trim() || null,
+        ].filter(Boolean).join(" — ");
+        noteParts.push(birthingLine);
+      }
+
+      const result = await addAnimal({ tagId: tagId.trim() || `HORSE-${Date.now().toString(36).toUpperCase()}`, name: name.trim() || undefined, species, breed: breed.trim() || "Unknown", birthDate: birthDate.trim() || new Date().getFullYear().toString(), sex: sex as "male" | "female" | "steer" | "heifer", notes: noteParts.join("\n"), photoUrl: photoUri ?? undefined, status: "active", markedForSale: type === "to_be_sold", saleNote, sireId, motherId });
       const newAnimalId = result.newAnimal.id;
       if (listId) { await addAnimalToList({ listId, animalId: newAnimalId }); }
       if (type === "vaccinations" && vaccFields.vaccineName.trim()) { await addHealthRecord({ animalId: newAnimalId, type: "vaccination", date: vaccFields.vaccineDate || new Date().toISOString().split("T")[0], description: vaccFields.vaccineName.trim(), notes: vaccFields.vaccineNotes.trim(), administeredBy: vaccFields.administeredBy.trim() || undefined }); }
       router.back();
     } catch (e) { console.log("Error creating animal profile:", e); Alert.alert("Error", "Failed to create animal profile."); } finally { setSaving(false); }
-  }, [tagId, saving, addAnimal, addAnimalToList, listId, type, vaccFields, birthFields, router]);
+  }, [tagId, saving, addAnimal, addAnimalToList, listId, type, species, notes, name, breed, birthDate, sex, photoUri, vaccFields, breedFields, saleFields, birthFields, animals, router]);
 
   const breedingStatusOptions = [{ value: "bred", label: "Bred" }, { value: "confirmed", label: "Confirmed" }, { value: "open", label: "Open" }];
 

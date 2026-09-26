@@ -1448,8 +1448,7 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
  doctoringEvents
  .filter((e) => e.animalId === animalId)
  .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
- // eslint-disable-next-line react-hooks/exhaustive-deps
- [doctoringEvents.length],
+ [doctoringEvents],
  );
 
  const setRanchNameMutation = useMutation({
@@ -3020,7 +3019,7 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
  });
  return animals.filter((a) => a.status === "active" && animalIdsNeedingAttention.has(a.id));
  // eslint-disable-next-line react-hooks/exhaustive-deps
- }, [doctoringEvents.length, animalsSaleKey]);
+ }, [doctoringEvents, animalsSaleKey]);
 
  const currentUserRole: "owner" | "manager" | "member" | "worker" | null = useMemo(() => {
  const m = ranch.members.find((mm) => mm.userId === currentUserId);

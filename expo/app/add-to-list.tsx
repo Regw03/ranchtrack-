@@ -6,30 +6,42 @@ import * as Haptics from "expo-haptics";
 import { ThemeColors } from "@/constants/colors";
 import { useColors } from "@/providers/ThemeProvider";
 import { useRanch } from "@/providers/RanchProvider";
-import { Animal } from "@/types";
+import { Animal, CustomList } from "@/types";
 import { SPECIES_ICONS, getAnimalDisplayName, getGenderTitle } from "@/mocks/animals";
 
 export default function AddToListScreen() {
   const Colors = useColors();
-  const { listId } = useLocalSearchParams<{ listId: string }>();
+  const { listId, animalId } = useLocalSearchParams<{ listId?: string; animalId?: string }>();
   const router = useRouter();
-  const { animals, getListById, addAnimalToList, removeAnimalFromList } = useRanch();
+  const { animals, customLists, getListById, addAnimalToList, removeAnimalFromList } = useRanch();
   const styles = useMemo(() => createStyles(Colors), [Colors]);
-  const list = useMemo(() => getListById(listId ?? ""), [getListById, listId]);
+  const list = useMemo(() => (listId ? getListById(listId) : undefined), [getListById, listId]);
+  const animal = useMemo(() => (animalId ? animals.find((a) => a.id === animalId) : undefined), [animals, animalId]);
   const [searchQuery, setSearchQuery] = useState("");
+
+  // Two modes: pick animals for a known list (list already set), or pick a list for a known animal.
+  const mode: "pickAnimals" | "pickLists" = list ? "pickAnimals" : "pickLists";
 
   const filteredAnimals = useMemo(() => { if (!searchQuery) return animals; const q = searchQuery.toLowerCase(); return animals.filter((a) => (a.name ?? "").toLowerCase().includes(q) || a.tagId.toLowerCase().includes(q) || a.breed.toLowerCase().includes(q)); }, [animals, searchQuery]);
 
-  const handleToggle = useCallback((animalId: string) => {
+  const filteredLists = useMemo(() => { if (!searchQuery) return customLists; const q = searchQuery.toLowerCase(); return customLists.filter((l) => l.name.toLowerCase().includes(q)); }, [customLists, searchQuery]);
+
+  const handleToggleAnimal = useCallback((toggleAnimalId: string) => {
     if (!list) return;
     if (Platform.OS !== "web") void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    if (list.animalIds.includes(animalId)) { void removeAnimalFromList({ listId: list.id, animalId }); } else { void addAnimalToList({ listId: list.id, animalId }); }
+    if (list.animalIds.includes(toggleAnimalId)) { void removeAnimalFromList({ listId: list.id, animalId: toggleAnimalId }); } else { void addAnimalToList({ listId: list.id, animalId: toggleAnimalId }); }
   }, [list, addAnimalToList, removeAnimalFromList]);
+
+  const handleToggleList = useCallback((toggleListId: string, isInList: boolean) => {
+    if (!animal) return;
+    if (Platform.OS !== "web") void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    if (isInList) { void removeAnimalFromList({ listId: toggleListId, animalId: animal.id }); } else { void addAnimalToList({ listId: toggleListId, animalId: animal.id }); }
+  }, [animal, addAnimalToList, removeAnimalFromList]);
 
   const renderAnimalRow = useCallback(({ item }: { item: Animal }) => {
     const isInList = list?.animalIds.includes(item.id) ?? false;
     return (
-      <TouchableOpacity style={[styles.animalRow, isInList && styles.animalRowSelected]} onPress={() => handleToggle(item.id)} activeOpacity={0.7}>
+      <TouchableOpacity style={[styles.animalRow, isInList && styles.animalRowSelected]} onPress={() => handleToggleAnimal(item.id)} activeOpacity={0.7}>
         <View style={styles.animalRowLeft}>
           {item.photoUrl ? <Image source={{ uri: item.photoUrl }} style={styles.animalThumb} /> : <View style={styles.animalThumbPlaceholder}><Text style={styles.animalThumbEmoji}>{SPECIES_ICONS[item.species] || "🐾"}</Text></View>}
           <View style={styles.animalRowInfo}><Text style={styles.animalRowName}>{getAnimalDisplayName(item)}</Text><Text style={styles.animalRowMeta}>{item.tagId} · {item.breed} · {getGenderTitle(item.species, item.sex)}</Text></View>
@@ -37,20 +49,41 @@ export default function AddToListScreen() {
         <View style={[styles.checkCircle, isInList && styles.checkCircleActive]}>{isInList && <Check size={14} color={Colors.textInverse} />}</View>
       </TouchableOpacity>
     );
-  }, [list, handleToggle, Colors, styles]);
+  }, [list, handleToggleAnimal, Colors, styles]);
 
-  if (!list) return (<View style={styles.notFound}><Text style={styles.notFoundText}>List not found</Text></View>);
+  const renderListRow = useCallback(({ item }: { item: CustomList }) => {
+    const isInList = animal ? item.animalIds.includes(animal.id) : false;
+    return (
+      <TouchableOpacity style={[styles.animalRow, isInList && styles.animalRowSelected]} onPress={() => handleToggleList(item.id, isInList)} activeOpacity={0.7}>
+        <View style={styles.animalRowLeft}>
+          <View style={[styles.animalThumbPlaceholder, { backgroundColor: item.color }]}><Text style={styles.animalThumbEmoji}>{item.icon || "📋"}</Text></View>
+          <View style={styles.animalRowInfo}><Text style={styles.animalRowName}>{item.name}</Text><Text style={styles.animalRowMeta}>{item.animalIds.length} animal{item.animalIds.length !== 1 ? "s" : ""}</Text></View>
+        </View>
+        <View style={[styles.checkCircle, isInList && styles.checkCircleActive]}>{isInList && <Check size={14} color={Colors.textInverse} />}</View>
+      </TouchableOpacity>
+    );
+  }, [animal, handleToggleList, styles]);
+
+  if (mode === "pickAnimals" && !list) return (<View style={styles.notFound}><Text style={styles.notFoundText}>List not found</Text></View>);
+  if (mode === "pickLists" && !animal) return (<View style={styles.notFound}><Text style={styles.notFoundText}>Animal not found</Text></View>);
 
   return (
     <>
-      <Stack.Screen options={{ title: `Add to ${list.name}` }} />
+      <Stack.Screen options={{ title: mode === "pickAnimals" ? `Add to ${list?.name}` : `Add ${animal ? getAnimalDisplayName(animal) : ""} to a List` }} />
       <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === "ios" ? "padding" : undefined}>
-        <View style={styles.searchContainer}><Search size={18} color={Colors.textTertiary} /><TextInput style={styles.searchInput} placeholder="Search animals..." placeholderTextColor={Colors.textTertiary} value={searchQuery} onChangeText={setSearchQuery} /></View>
-        <TouchableOpacity style={styles.createNewBtn} onPress={() => { if (!list) return; if (Platform.OS !== "web") void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); router.push({ pathname: "/add-animal-to-list", params: { listId: list.id, listType: list.listType, listSpecies: list.species ?? "" } }); }} activeOpacity={0.8} testID="create-new-animal-btn">
-          <PlusCircle size={20} color={Colors.textInverse} /><Text style={styles.createNewBtnText}>Create New Animal Profile</Text>
-        </TouchableOpacity>
-        <View style={styles.countBar}><Text style={styles.countText}>{list.animalIds.length} animal{list.animalIds.length !== 1 ? "s" : ""} in this list</Text><Text style={styles.countHint}>or select existing below</Text></View>
-        <FlatList data={filteredAnimals} keyExtractor={(item) => item.id} renderItem={renderAnimalRow} contentContainerStyle={styles.listContent} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled" ListEmptyComponent={<View style={styles.emptyState}><Text style={styles.emptyText}>No animals found</Text></View>} />
+        <View style={styles.searchContainer}><Search size={18} color={Colors.textTertiary} /><TextInput style={styles.searchInput} placeholder={mode === "pickAnimals" ? "Search animals..." : "Search lists..."} placeholderTextColor={Colors.textTertiary} value={searchQuery} onChangeText={setSearchQuery} /></View>
+        {mode === "pickAnimals" && list && (
+          <>
+            <TouchableOpacity style={styles.createNewBtn} onPress={() => { if (Platform.OS !== "web") void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); router.push({ pathname: "/add-animal-to-list", params: { listId: list.id, listType: list.listType, listSpecies: list.species ?? "" } }); }} activeOpacity={0.8} testID="create-new-animal-btn">
+              <PlusCircle size={20} color={Colors.textInverse} /><Text style={styles.createNewBtnText}>Create New Animal Profile</Text>
+            </TouchableOpacity>
+            <View style={styles.countBar}><Text style={styles.countText}>{list.animalIds.length} animal{list.animalIds.length !== 1 ? "s" : ""} in this list</Text><Text style={styles.countHint}>or select existing below</Text></View>
+            <FlatList data={filteredAnimals} keyExtractor={(item) => item.id} renderItem={renderAnimalRow} contentContainerStyle={styles.listContent} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled" ListEmptyComponent={<View style={styles.emptyState}><Text style={styles.emptyText}>No animals found</Text></View>} />
+          </>
+        )}
+        {mode === "pickLists" && (
+          <FlatList data={filteredLists} keyExtractor={(item) => item.id} renderItem={renderListRow} contentContainerStyle={styles.listContent} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled" ListEmptyComponent={<View style={styles.emptyState}><Text style={styles.emptyText}>No lists found</Text></View>} />
+        )}
         <View style={styles.footer}><TouchableOpacity style={styles.doneBtn} onPress={() => router.back()} activeOpacity={0.8}><Text style={styles.doneBtnText}>Done</Text></TouchableOpacity></View>
       </KeyboardAvoidingView>
     </>

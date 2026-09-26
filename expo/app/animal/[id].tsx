@@ -439,7 +439,7 @@ export default function AnimalDetailScreen() {
  </View>
  {customLists.length > 0 && (
  <View style={styles.recordsSection}>
- <SectionHeader title="Lists" icon={<List size={18} color={Colors.primary} />} onAdd={() => router.push({ pathname: "/add-to-list", params: { listId: "" } })} />
+ <SectionHeader title="Lists" icon={<List size={18} color={Colors.primary} />} onAdd={() => router.push({ pathname: "/add-to-list", params: { animalId: animal.id } })} />
  <AnimalListsSection lists={animalLists} onRemove={handleRemoveFromList} />
  </View>
  )}
