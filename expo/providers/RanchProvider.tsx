@@ -48,6 +48,11 @@ import {
  deleteRanchNoteInCloud,
  fetchRanchNotes,
  type RemoteRanchNoteRow,
+ pushBreedingRecordToCloud,
+ pushBreedingGroupToCloud,
+ fetchBreedingData,
+ type RemoteBreedingRecordRow,
+ type RemoteBreedingGroupRow,
 } from "@/lib/supabase";
 import { scheduleAllNotifications } from "@/lib/notifications";
 // eslint-disable-next-line rork/general-context-optimization
@@ -67,6 +72,8 @@ import {
  HerdGroup,
  DoctoringEvent,
  RanchNote,
+ BreedingRecord,
+ BreedingGroup,
 } from "@/types";
 import {
  MOCK_ANIMALS,
@@ -117,6 +124,8 @@ const STORAGE_KEYS = {
  deceasedSnapshots: "ranchtrack_deceased_snapshots",
  doctoringEvents: "ranchtrack_doctoring_events",
  ranchNotes: "ranchtrack_ranch_notes",
+ breedingRecords: "ranchtrack_breeding_records",
+ breedingGroups: "ranchtrack_breeding_groups",
  users: "ranchtrack_users",
  currentUserIdValue: "ranchtrack_current_user_id",
  pendingAnimalDeletes: "ranchtrack_pending_animal_deletes",
@@ -2089,6 +2098,7 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
  syncWeightHealthMutation.mutate();
  syncCustomListsMutation.mutate();
  syncRanchNotesMutation.mutate();
+ syncBreedingDataMutation.mutate();
 
     // Periodic background sync every 60 seconds
     const syncInterval = setInterval(() => {
@@ -2101,6 +2111,7 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
         syncWeightHealthMutation.mutate();
         syncCustomListsMutation.mutate();
         syncRanchNotesMutation.mutate();
+        syncBreedingDataMutation.mutate();
       }
     }, 60000);
 
@@ -2165,6 +2176,12 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
       .on("postgres_changes", { event: "*", schema: "public", table: "health_records", filter: `ranch_id=eq.${ranch.id}` },
         () => { syncWeightHealthMutation.mutate(); }
       )
+      .on("postgres_changes", { event: "*", schema: "public", table: "breeding_records", filter: `ranch_id=eq.${ranch.id}` },
+        () => { syncBreedingDataMutation.mutate(); }
+      )
+      .on("postgres_changes", { event: "*", schema: "public", table: "breeding_groups", filter: `ranch_id=eq.${ranch.id}` },
+        () => { syncBreedingDataMutation.mutate(); }
+      )
       .subscribe();
 
     return () => { void supabase.removeChannel(channel); };
@@ -2187,6 +2204,7 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
           syncWeightHealthMutation.mutate();
           syncCustomListsMutation.mutate();
           syncRanchNotesMutation.mutate();
+          syncBreedingDataMutation.mutate();
         }
       }
       appStateRef.current = nextState;
@@ -2461,6 +2479,101 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
  });
 
  // ─── Breeding sync mutation ───────────────────────────────────────────────
+ const syncBreedingDataMutation = useMutation({
+ mutationFn: async () => {
+ const currentRanch = queryClient.getQueryData<Ranch>(["ranch"]) ?? ranch;
+ if (!currentRanch.id || currentRanch.id === MOCK_RANCH.id) return;
+
+ const { records: remoteRecords, groups: remoteGroups, error } =
+ await fetchBreedingData(currentRanch.id);
+
+ if (error) {
+ // Server unreachable — push all local records up
+ const localRecords = queryClient.getQueryData<BreedingRecord[]>(["breedingRecords"]) ?? [];
+ const localGroups = queryClient.getQueryData<BreedingGroup[]>(["breedingGroups"]) ?? [];
+ for (const r of localRecords) void pushBreedingRecordToCloud(r, currentRanch.id, currentUserRole);
+ for (const g of localGroups) void pushBreedingGroupToCloud(g, currentUserRole);
+ return;
+ }
+
+ // ── Merge breeding records ───────────────────────────────────────────
+ const localRecords = queryClient.getQueryData<BreedingRecord[]>(["breedingRecords"]) ?? [];
+ const localRecordById = new Map<string, BreedingRecord>(localRecords.map((r) => [r.id, r]));
+ const remoteSeenRecordIds = new Set<string>();
+ let recordsAdded = 0;
+ let recordsRemoved = 0;
+
+ for (const row of remoteRecords as RemoteBreedingRecordRow[]) {
+ remoteSeenRecordIds.add(row.id);
+ if (row.deleted) {
+ if (localRecordById.delete(row.id)) recordsRemoved += 1;
+ continue;
+ }
+ if (!localRecordById.has(row.id)) {
+ localRecordById.set(row.id, {
+ id: row.id,
+ animalId: row.animal_id,
+ sireId: row.sire_id ?? undefined,
+ lastBredDate: row.last_bred_date,
+ expectedDueDate: row.expected_due_date,
+ status: row.status,
+ businessYearId: row.business_year_id ?? undefined,
+ notes: row.notes,
+ createdAt: row.created_at,
+ updatedAt: row.updated_at,
+ });
+ recordsAdded += 1;
+ }
+ }
+
+ const mergedRecords = Array.from(localRecordById.values());
+ if (recordsAdded > 0 || recordsRemoved > 0) {
+ await saveToStorage(STORAGE_KEYS.breedingRecords, mergedRecords);
+ queryClient.setQueryData(["breedingRecords"], mergedRecords);
+ console.log(`[syncBreeding] added ${recordsAdded}, removed ${recordsRemoved} breeding records`);
+ }
+ const localOnlyRecords = mergedRecords.filter((r) => !remoteSeenRecordIds.has(r.id));
+ for (const r of localOnlyRecords) void pushBreedingRecordToCloud(r, currentRanch.id, currentUserRole);
+
+ // ── Merge breeding groups ────────────────────────────────────────────
+ const localGroups = queryClient.getQueryData<BreedingGroup[]>(["breedingGroups"]) ?? [];
+ const localGroupById = new Map<string, BreedingGroup>(localGroups.map((g) => [g.id, g]));
+ const remoteSeenGroupIds = new Set<string>();
+ let groupsAdded = 0;
+ let groupsRemoved = 0;
+
+ for (const row of remoteGroups as RemoteBreedingGroupRow[]) {
+ remoteSeenGroupIds.add(row.id);
+ if (row.deleted) {
+ if (localGroupById.delete(row.id)) groupsRemoved += 1;
+ continue;
+ }
+ if (!localGroupById.has(row.id)) {
+ localGroupById.set(row.id, {
+ id: row.id,
+ ranchId: currentRanch.id,
+ name: row.name,
+ color: row.color,
+ animalIds: row.animal_ids,
+ businessYearId: row.business_year_id,
+ createdAt: row.created_at,
+ updatedAt: row.updated_at,
+ });
+ groupsAdded += 1;
+ }
+ }
+
+ const mergedGroups = Array.from(localGroupById.values());
+ if (groupsAdded > 0 || groupsRemoved > 0) {
+ await saveToStorage(STORAGE_KEYS.breedingGroups, mergedGroups);
+ queryClient.setQueryData(["breedingGroups"], mergedGroups);
+ console.log(`[syncBreeding] added ${groupsAdded}, removed ${groupsRemoved} groups`);
+ }
+ const localOnlyGroups = mergedGroups.filter((g) => !remoteSeenGroupIds.has(g.id));
+ for (const g of localOnlyGroups) void pushBreedingGroupToCloud(g, currentUserRole);
+ },
+ onError: (e) => console.log("[syncBreeding] error", e),
+ });
 
  // ─── Weight + Health Records sync mutation ───────────────────────────────
  const syncWeightHealthMutation = useMutation({

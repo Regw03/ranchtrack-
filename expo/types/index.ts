@@ -72,6 +72,32 @@ export interface HealthRecord {
   administeredBy?: string;
 }
 
+// ─── Breeding ─────────────────────────────────────────────────────────────────
+
+export interface BreedingRecord {
+  id: string;
+  animalId: string;
+  sireId?: string;
+  lastBredDate: string;
+  expectedDueDate: string;
+  status: string;
+  businessYearId?: string;
+  notes: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface BreedingGroup {
+  id: string;
+  ranchId: string;
+  name: string;
+  color: string;
+  animalIds: string[];
+  businessYearId: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 // ─── Calving ──────────────────────────────────────────────────────────────────
 
 export interface CalvingList {
