@@ -102,7 +102,8 @@ export default function SignInScreen() {
         await loadRanchForUser(userId);
       } catch (e) {
         console.log("[sign-in] loadRanchForUser failed", e);
-        // Still complete onboarding — user may need to join a ranch
+        Alert.alert("Couldn't Load Ranch", "Could not load your ranch. Please try again.");
+        return;
       }
 
       await completeOnboarding();

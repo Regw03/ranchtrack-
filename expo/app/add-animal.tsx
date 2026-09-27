@@ -38,6 +38,12 @@ export default function AddAnimalScreen() {
   const isTagRequired = species !== "horse";
   const hasSameYearDuplicate = tagId.trim() ? isDuplicateTagInSameYear(tagId.trim(), activeBusinessYearId) : false;
 
+  const toAnimalSex = (raw: string): "male" | "female" | "steer" | "heifer" => {
+    if (raw === "gelding" || raw === "colt") return "male";
+    if (raw === "filly") return "female";
+    return raw as "male" | "female" | "steer" | "heifer";
+  };
+
   const doSave = useCallback(async () => {
     if (Platform.OS !== "web") void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     await addAnimal({
@@ -46,7 +52,7 @@ export default function AddAnimalScreen() {
       species,
       breed: breed.trim() || "Unknown",
       birthDate: birthDate.trim() || new Date().getFullYear().toString(),
-      sex: sex as "male" | "female" | "steer" | "heifer",
+      sex: toAnimalSex(sex),
       notes: notes.trim(),
       status: "active",
       markedForSale: false,
@@ -85,7 +91,7 @@ export default function AddAnimalScreen() {
         <Text style={styles.label}>Species</Text>
         <View style={styles.chipRow}>
           {SPECIES_OPTIONS.map((opt) => (
-            <TouchableOpacity key={opt.value} style={[styles.chip, species === opt.value && styles.chipActive]} onPress={() => setSpecies(opt.value as Species)}>
+            <TouchableOpacity key={opt.value} style={[styles.chip, species === opt.value && styles.chipActive]} onPress={() => { setSpecies(opt.value as Species); setSex("female"); }}>
               <Text style={[styles.chipText, species === opt.value && styles.chipTextActive]}>{opt.label}</Text>
             </TouchableOpacity>
           ))}

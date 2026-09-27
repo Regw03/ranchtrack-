@@ -1162,6 +1162,12 @@ export const [RanchProvider, useRanch] = createContextHook(() => {
  photoUrl?: string;
  }) => {
  requireRanch(ranch.id, "log calving event");
+
+ const targetList = allCalvingLists.find((l) => l.id === record.calvingListId);
+ if (!targetList || targetList.businessYearId !== activeBusinessYearId) {
+ throw new Error("This calving list isn't in the active business year. Switch to that business year to log records against it.");
+ }
+
  const now = new Date().toISOString();
 
  // Build the full ISO date from month + day + business year

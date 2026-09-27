@@ -55,6 +55,12 @@ export default function EditAnimalScreen() {
  const genderOptions = useMemo(() => getGenderOptions(species), [species]);
  const canSave = tagId.trim().length > 0 && !isSaving;
 
+ const toAnimalSex = (raw: string): Animal["sex"] => {
+ if (raw === "gelding" || raw === "colt") return "male";
+ if (raw === "filly") return "female";
+ return raw as Animal["sex"];
+ };
+
  const handleSave = useCallback(async () => {
  if (!canSave || !animal) return;
  if (Platform.OS !== "web")
@@ -69,7 +75,7 @@ export default function EditAnimalScreen() {
  species,
  breed: breed.trim(),
  birthDate: birthDate.trim(),
- sex: sex as Animal["sex"],
+ sex: toAnimalSex(sex),
  notes: notes.trim(),
  updatedAt: new Date().toISOString(),
  });
