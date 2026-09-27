@@ -257,7 +257,11 @@ export default function ProcessingGroupDetailScreen() {
  style: "destructive",
  onPress: async () => {
  if (Platform.OS !== "web") void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+ try {
  await removeAnimalFromGroup(id ?? "", animal.id);
+ } catch (e) {
+ Alert.alert("Error", "Could not complete this action. Please try again.");
+ }
  },
  },
  ],
@@ -265,7 +269,11 @@ export default function ProcessingGroupDetailScreen() {
  }, [id, removeAnimalFromGroup]);
 
  const handleAddAnimal = useCallback(async (animalId: string) => {
+ try {
  await addAnimalToGroup(id ?? "", animalId);
+ } catch (e) {
+ Alert.alert("Error", "Could not complete this action. Please try again.");
+ }
  }, [id, addAnimalToGroup]);
 
  const handleDeleteGroup = useCallback(() => {

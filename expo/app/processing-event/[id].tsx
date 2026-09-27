@@ -238,7 +238,11 @@ export default function ProcessingEventDetailScreen() {
  notes?: string,
  ) => {
  if (!event) return;
+ try {
  await setProcessingRecord({ eventId: event.id, animalId, result, notes });
+ } catch (e) {
+ Alert.alert("Error", "Could not complete this action. Please try again.");
+ }
  }, [event, setProcessingRecord]);
 
  const handleDelete = useCallback(() => {

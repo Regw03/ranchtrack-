@@ -260,7 +260,15 @@ export default function AnimalDetailScreen() {
  ]);
  }, [animal, updateAnimal]);
 
- const handleToggleSale = useCallback(() => { if (!animal) return; if (Platform.OS !== "web") void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); void toggleMarkedForSale(animal.id); }, [animal, toggleMarkedForSale]);
+ const handleToggleSale = useCallback(async () => {
+ if (!animal) return;
+ if (Platform.OS !== "web") void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+ try {
+ await toggleMarkedForSale(animal.id);
+ } catch (e) {
+ Alert.alert("Error", "Could not complete this action. Please try again.");
+ }
+ }, [animal, toggleMarkedForSale]);
 
  const handleMarkDeceased = useCallback(() => {
  if (!animal) return;
@@ -268,7 +276,11 @@ export default function AnimalDetailScreen() {
  { text: "Cancel", style: "cancel" },
  { text: "Mark Deceased", style: "destructive", onPress: async () => {
  if (Platform.OS !== "web") void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+ try {
  await markAsDeceased(animal.id);
+ } catch (e) {
+ Alert.alert("Error", "Could not complete this action. Please try again.");
+ }
  }},
  ]);
  }, [animal, markAsDeceased]);
@@ -279,7 +291,11 @@ export default function AnimalDetailScreen() {
  { text: "Cancel", style: "cancel" },
  { text: "Undo", onPress: async () => {
  if (Platform.OS !== "web") void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+ try {
  await undoDeceased(animal.id);
+ } catch (e) {
+ Alert.alert("Error", "Could not complete this action. Please try again.");
+ }
  }},
  ]);
  }, [animal, undoDeceased]);
@@ -290,7 +306,11 @@ export default function AnimalDetailScreen() {
  { text: "Cancel", style: "cancel" },
  { text: "Undo", onPress: async () => {
  if (Platform.OS !== "web") void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+ try {
  await undoSold(animal.id);
+ } catch (e) {
+ Alert.alert("Error", "Could not complete this action. Please try again.");
+ }
  }},
  ]);
  }, [animal, undoSold]);
@@ -298,7 +318,15 @@ export default function AnimalDetailScreen() {
  const handleDelete = useCallback(() => {
  Alert.alert("Remove Animal", `Are you sure you want to remove ${animal ? getAnimalDisplayName(animal) : ""}?`, [
  { text: "Cancel", style: "cancel" },
- { text: "Remove", style: "destructive", onPress: async () => { if (Platform.OS !== "web") void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning); await deleteAnimal(id ?? ""); router.back(); } },
+ { text: "Remove", style: "destructive", onPress: async () => {
+ if (Platform.OS !== "web") void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+ try {
+ await deleteAnimal(id ?? "");
+ router.back();
+ } catch (e) {
+ Alert.alert("Error", "Could not complete this action. Please try again.");
+ }
+ } },
  ]);
  }, [animal, deleteAnimal, id, router]);
 
@@ -311,9 +339,13 @@ export default function AnimalDetailScreen() {
  { text: "Cancel", style: "cancel" },
  { text: "Merge", style: "destructive", onPress: async () => {
  if (Platform.OS !== "web") void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+ try {
  await mergeAnimals({ keepId: animal.id, removeId: targetAnimal.id });
  setShowMergeModal(false);
  setMergeSearch("");
+ } catch (e) {
+ Alert.alert("Error", "Could not complete this action. Please try again.");
+ }
  }},
  ],
  );
@@ -332,21 +364,39 @@ export default function AnimalDetailScreen() {
  const handleDeleteWeightRecord = useCallback((recordId: string) => {
  Alert.alert("Delete Record", "Delete this weight record?", [
  { text: "Cancel", style: "cancel" },
- { text: "Delete", style: "destructive", onPress: () => void deleteWeightRecord(recordId) },
+ { text: "Delete", style: "destructive", onPress: async () => {
+ try {
+ await deleteWeightRecord(recordId);
+ } catch (e) {
+ Alert.alert("Error", "Could not complete this action. Please try again.");
+ }
+ } },
  ]);
  }, [deleteWeightRecord]);
 
  const handleDeleteHealthRecord = useCallback((recordId: string) => {
  Alert.alert("Delete Record", "Delete this health record?", [
  { text: "Cancel", style: "cancel" },
- { text: "Delete", style: "destructive", onPress: () => void deleteHealthRecord(recordId) },
+ { text: "Delete", style: "destructive", onPress: async () => {
+ try {
+ await deleteHealthRecord(recordId);
+ } catch (e) {
+ Alert.alert("Error", "Could not complete this action. Please try again.");
+ }
+ } },
  ]);
  }, [deleteHealthRecord]);
 
  const handleDeleteDoctoringEvent = useCallback((eventId: string) => {
  Alert.alert("Delete Event", "Delete this doctoring event?", [
  { text: "Cancel", style: "cancel" },
- { text: "Delete", style: "destructive", onPress: () => void deleteDoctoringEvent(eventId) },
+ { text: "Delete", style: "destructive", onPress: async () => {
+ try {
+ await deleteDoctoringEvent(eventId);
+ } catch (e) {
+ Alert.alert("Error", "Could not complete this action. Please try again.");
+ }
+ } },
  ]);
  }, [deleteDoctoringEvent]);
 
@@ -423,8 +473,12 @@ export default function AnimalDetailScreen() {
  <View style={styles.recordsSection}>
  <SectionHeader title="Doctoring History" icon={<Stethoscope size={18} color={Colors.warning} />} onAdd={() => router.push({ pathname: "/log-doctoring-event", params: { animalId: animal.id } })} />
  <DoctoringTimeline events={doctoringEvents} onResolve={async (event) => {
+ try {
  await updateDoctoringEvent({ ...event, resolved: true });
  if (Platform.OS !== "web") void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+ } catch (e) {
+ Alert.alert("Error", "Could not complete this action. Please try again.");
+ }
  }} onDelete={handleDeleteDoctoringEvent} />
  </View>
  )}

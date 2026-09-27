@@ -80,8 +80,8 @@ export default function SettingsScreen() {
     isSyncingRanchNotes ||
     processing.isSyncingProcessing;
 
-  const ROLE_LABELS: Record<string, string> = { owner: "Owner", manager: "Manager", worker: "Worker" };
-  const ROLE_COLORS: Record<string, string> = { owner: Colors.accent, manager: Colors.primary, worker: Colors.textSecondary };
+  const ROLE_LABELS: Record<string, string> = { owner: "Owner", manager: "Manager", worker: "Worker", member: "Member" };
+  const ROLE_COLORS: Record<string, string> = { owner: Colors.accent, manager: Colors.primary, worker: Colors.textSecondary, member: Colors.textSecondary };
 
   useEffect(() => {
     (async () => {
@@ -594,7 +594,7 @@ export default function SettingsScreen() {
       {/* Main Content */}
       <View style={styles.ranchHeader}>
         <View style={styles.ranchIcon}><Text style={styles.ranchIconText}>🏜️</Text></View>
-        <Text style={styles.ranchName}>{ranch.name}</Text>
+        <Text style={styles.ranchName} numberOfLines={1}>{ranch.name}</Text>
         <Text style={styles.ranchMembers}>{ranch.members.length} team members</Text>
       </View>
 

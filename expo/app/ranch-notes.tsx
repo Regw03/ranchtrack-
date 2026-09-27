@@ -169,7 +169,11 @@ export default function RanchNotesScreen() {
   }, [deleteRanchNote]);
 
   const handleEdit = useCallback(async (id: string, text: string) => {
-    await updateRanchNote({ id, text });
+    try {
+      await updateRanchNote({ id, text });
+    } catch (e) {
+      Alert.alert("Error", "Could not complete this action. Please try again.");
+    }
   }, [updateRanchNote]);
 
   const handleStartAdding = useCallback(() => {

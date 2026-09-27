@@ -133,7 +133,7 @@ export default function WelcomeScreen() {
               transform: [{ translateY: slideAnim }],
             }}
           >
-            <Text style={styles.title}>Ranch Tracker</Text>
+            <Text style={styles.title}>RanchTrack</Text>
             <Text style={styles.subtitle}>
               Track your herd, calving, and work — fast and simple.
             </Text>

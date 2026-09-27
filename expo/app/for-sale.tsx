@@ -93,7 +93,11 @@ export default function ForSaleScreen() {
 
   const handleToggle = useCallback(async (animal: Animal) => {
     if (Platform.OS !== "web") void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    await toggleMarkedForSale(animal.id);
+    try {
+      await toggleMarkedForSale(animal.id);
+    } catch (e) {
+      Alert.alert("Error", "Could not complete this action. Please try again.");
+    }
   }, [toggleMarkedForSale]);
 
   const handleMarkSold = useCallback(async (animal: Animal) => {
@@ -101,7 +105,11 @@ export default function ForSaleScreen() {
       { text: "Cancel", style: "cancel" },
       { text: "Mark Sold", onPress: async () => {
         if (Platform.OS !== "web") void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-        await markAsSold(animal.id);
+        try {
+          await markAsSold(animal.id);
+        } catch (e) {
+          Alert.alert("Error", "Could not complete this action. Please try again.");
+        }
       }},
     ]);
   }, [markAsSold]);
@@ -111,7 +119,11 @@ export default function ForSaleScreen() {
       { text: "Cancel", style: "cancel" },
       { text: "Undo", onPress: async () => {
         if (Platform.OS !== "web") void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-        await undoSold(animal.id);
+        try {
+          await undoSold(animal.id);
+        } catch (e) {
+          Alert.alert("Error", "Could not complete this action. Please try again.");
+        }
       }},
     ]);
   }, [undoSold]);

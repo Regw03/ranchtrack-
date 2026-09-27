@@ -69,10 +69,25 @@ export default function ListDetailScreen() {
   const subLists = useMemo(() => { if (!list) return []; return getSubLists(list.id); }, [list, getSubLists]);
   const listAnimals = useMemo(() => { if (!list) return []; return list.animalIds.map((aid) => animals.find((a) => a.id === aid)).filter((a): a is Animal => a !== undefined); }, [list, animals]);
 
-  const handleRemoveAnimal = useCallback((animalId: string) => { if (!list) return; void removeAnimalFromList({ listId: list.id, animalId }); }, [list, removeAnimalFromList]);
+  const handleRemoveAnimal = useCallback(async (animalId: string) => {
+    if (!list) return;
+    try {
+      await removeAnimalFromList({ listId: list.id, animalId });
+    } catch (e) {
+      Alert.alert("Error", "Could not complete this action. Please try again.");
+    }
+  }, [list, removeAnimalFromList]);
   const handleDeleteList = useCallback(() => {
     if (!list) return;
-    Alert.alert("Delete List", `Are you sure you want to delete "${list.name}"? This won't delete any animals.`, [{ text: "Cancel", style: "cancel" }, { text: "Delete", style: "destructive", onPress: async () => { if (Platform.OS !== "web") void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning); await deleteList(list.id); router.back(); } }]);
+    Alert.alert("Delete List", `Are you sure you want to delete "${list.name}"? This won't delete any animals.`, [{ text: "Cancel", style: "cancel" }, { text: "Delete", style: "destructive", onPress: async () => {
+      if (Platform.OS !== "web") void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+      try {
+        await deleteList(list.id);
+        router.back();
+      } catch (e) {
+        Alert.alert("Error", "Could not complete this action. Please try again.");
+      }
+    } }]);
   }, [list, deleteList, router]);
 
   if (!list) return (<View style={styles.notFound}><Text style={styles.notFoundText}>List not found</Text></View>);

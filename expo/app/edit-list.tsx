@@ -21,17 +21,22 @@ export default function EditListScreen() {
   const [selectedIcon, setSelectedIcon] = useState(list?.icon ?? LIST_ICONS[0]);
   const [saving, setSaving] = useState(false);
 
+  const trimmedName = name.trim();
+  const hasChanges =
+    list && (trimmedName !== list.name || selectedColor !== list.color || selectedIcon !== list.icon);
+  const canSave = trimmedName.length > 0 && !!hasChanges && !saving;
+
   const handleSave = useCallback(async () => {
     if (!list) return;
-    if (!name.trim()) { Alert.alert("Name Required", "Please enter a name for your list."); return; }
+    if (!trimmedName) { Alert.alert("Name Required", "Please enter a name for your list."); return; }
     if (saving) return;
     setSaving(true);
     try {
       if (Platform.OS !== "web") void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      await updateList({ ...list, name: name.trim(), color: selectedColor, icon: selectedIcon });
+      await updateList({ ...list, name: trimmedName, color: selectedColor, icon: selectedIcon });
       router.back();
     } catch (e) { console.log("Error updating list:", e); Alert.alert("Error", "Failed to update list. Please try again."); } finally { setSaving(false); }
-  }, [list, name, selectedColor, selectedIcon, saving, updateList, router]);
+  }, [list, trimmedName, selectedColor, selectedIcon, saving, updateList, router]);
 
   if (!list) return (<View style={styles.notFound}><Text style={styles.notFoundText}>List not found</Text></View>);
 
@@ -45,7 +50,7 @@ export default function EditListScreen() {
           <View style={styles.section}><Text style={styles.sectionLabel}>Icon</Text><View style={styles.iconGrid}>{LIST_ICONS.map((icon) => (<TouchableOpacity key={icon} style={[styles.iconOption, selectedIcon === icon && styles.iconOptionActive]} onPress={() => { setSelectedIcon(icon); if (Platform.OS !== "web") void Haptics.selectionAsync(); }}><Text style={styles.iconOptionText}>{icon}</Text></TouchableOpacity>))}</View></View>
           <View style={styles.section}><Text style={styles.sectionLabel}>Color</Text><View style={styles.colorGrid}>{LIST_COLORS.map((color) => (<TouchableOpacity key={color} style={[styles.colorOption, { backgroundColor: color }, selectedColor === color && styles.colorOptionActive]} onPress={() => { setSelectedColor(color); if (Platform.OS !== "web") void Haptics.selectionAsync(); }}>{selectedColor === color && <View style={styles.colorCheck} />}</TouchableOpacity>))}</View></View>
         </ScrollView>
-        <View style={styles.footer}><TouchableOpacity style={[styles.saveBtn, !name.trim() && styles.saveBtnDisabled]} onPress={handleSave} activeOpacity={0.8} disabled={!name.trim() || saving}><Text style={styles.saveBtnText}>{saving ? "Saving..." : "Save Changes"}</Text></TouchableOpacity></View>
+        <View style={styles.footer}><TouchableOpacity style={[styles.saveBtn, !canSave && styles.saveBtnDisabled]} onPress={handleSave} activeOpacity={0.8} disabled={!canSave}><Text style={styles.saveBtnText}>{saving ? "Saving..." : "Save Changes"}</Text></TouchableOpacity></View>
       </KeyboardAvoidingView>
     </>
   );

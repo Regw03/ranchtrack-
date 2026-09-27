@@ -176,6 +176,7 @@ export const [SubscriptionProvider, useSubscription] = createContextHook(() => {
         const err = e as PurchasesError;
         if (!err.userCancelled) {
           console.log("[SubscriptionProvider] purchase failed", err);
+          Alert.alert("Purchase Failed", "Purchase failed. Please try again.");
         }
         return null;
       } finally {
@@ -203,9 +204,11 @@ export const [SubscriptionProvider, useSubscription] = createContextHook(() => {
     try {
       const info = await Purchases.restorePurchases();
       setCustomerInfo(info);
+      Alert.alert("Purchases Restored", "Purchases restored.");
       return info;
     } catch (e) {
       console.log("[SubscriptionProvider] restore failed", e);
+      Alert.alert("Restore Failed", "Could not restore purchases. Please try again.");
       return null;
     } finally {
       setIsRestoring(false);

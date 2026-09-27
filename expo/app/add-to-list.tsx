@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useMemo } from "react";
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, TextInput, Image, Platform, KeyboardAvoidingView } from "react-native";
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, TextInput, Image, Platform, KeyboardAvoidingView, Alert } from "react-native";
 import { useLocalSearchParams, useRouter, Stack } from "expo-router";
 import { Search, Check, PlusCircle } from "lucide-react-native";
 import * as Haptics from "expo-haptics";
@@ -26,16 +26,24 @@ export default function AddToListScreen() {
 
   const filteredLists = useMemo(() => { if (!searchQuery) return customLists; const q = searchQuery.toLowerCase(); return customLists.filter((l) => l.name.toLowerCase().includes(q)); }, [customLists, searchQuery]);
 
-  const handleToggleAnimal = useCallback((toggleAnimalId: string) => {
+  const handleToggleAnimal = useCallback(async (toggleAnimalId: string) => {
     if (!list) return;
     if (Platform.OS !== "web") void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    if (list.animalIds.includes(toggleAnimalId)) { void removeAnimalFromList({ listId: list.id, animalId: toggleAnimalId }); } else { void addAnimalToList({ listId: list.id, animalId: toggleAnimalId }); }
+    try {
+      if (list.animalIds.includes(toggleAnimalId)) { await removeAnimalFromList({ listId: list.id, animalId: toggleAnimalId }); } else { await addAnimalToList({ listId: list.id, animalId: toggleAnimalId }); }
+    } catch (e) {
+      Alert.alert("Error", "Could not complete this action. Please try again.");
+    }
   }, [list, addAnimalToList, removeAnimalFromList]);
 
-  const handleToggleList = useCallback((toggleListId: string, isInList: boolean) => {
+  const handleToggleList = useCallback(async (toggleListId: string, isInList: boolean) => {
     if (!animal) return;
     if (Platform.OS !== "web") void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    if (isInList) { void removeAnimalFromList({ listId: toggleListId, animalId: animal.id }); } else { void addAnimalToList({ listId: toggleListId, animalId: animal.id }); }
+    try {
+      if (isInList) { await removeAnimalFromList({ listId: toggleListId, animalId: animal.id }); } else { await addAnimalToList({ listId: toggleListId, animalId: animal.id }); }
+    } catch (e) {
+      Alert.alert("Error", "Could not complete this action. Please try again.");
+    }
   }, [animal, addAnimalToList, removeAnimalFromList]);
 
   const renderAnimalRow = useCallback(({ item }: { item: Animal }) => {
