@@ -85,6 +85,7 @@ interface PlanCardProps {
   pkg?: PurchasesPackage | null;
   onPurchase: (pkg: PurchasesPackage) => void;
   isPurchasing: boolean;
+  canPurchase: boolean;
 }
 
 function PlanCard({
@@ -96,6 +97,7 @@ function PlanCard({
   pkg,
   onPurchase,
   isPurchasing,
+  canPurchase,
 }: PlanCardProps) {
   const Colors = useColors();
   const styles = useMemo(() => createStyles(Colors), [Colors]);
@@ -170,6 +172,10 @@ function PlanCard({
         <View style={[styles.currentPlanBtn, { backgroundColor: config.color + "20", borderColor: config.color + "30" }]}>
           <Text style={[styles.currentPlanText, { color: config.color }]}>Included</Text>
         </View>
+      ) : !canPurchase ? (
+        <View style={[styles.purchaseBtn, styles.purchaseBtnDisabled]}>
+          <Text style={styles.purchaseBtnText}>Only the ranch owner can purchase a subscription</Text>
+        </View>
       ) : pkg ? (
         <TouchableOpacity
           style={[styles.purchaseBtn, { backgroundColor: config.color }]}
@@ -215,6 +221,7 @@ export default function PaywallScreen() {
     isPurchasing,
   } = useSubscription();
   const { currentUserRole, setRanchTier } = useRanch();
+  const canPurchase = currentUserRole === "owner";
 
   const [billing, setBilling] = useState<BillingPeriod>("monthly");
 
@@ -364,6 +371,7 @@ export default function PaywallScreen() {
           annualPrice="Free"
           onPurchase={() => {}}
           isPurchasing={false}
+          canPurchase={canPurchase}
         />
         <PlanCard
           tier="pro"
@@ -374,6 +382,7 @@ export default function PaywallScreen() {
           pkg={activeProPkg}
           onPurchase={handlePurchase}
           isPurchasing={isPurchasing}
+          canPurchase={canPurchase}
         />
         <PlanCard
           tier="plus"
@@ -384,6 +393,7 @@ export default function PaywallScreen() {
           pkg={activePlusPkg}
           onPurchase={handlePurchase}
           isPurchasing={isPurchasing}
+          canPurchase={canPurchase}
         />
       </View>
 

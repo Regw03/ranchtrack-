@@ -612,35 +612,37 @@ export default function SettingsScreen() {
         </View>
       </View>
 
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Invite Code</Text>
-        <TouchableOpacity style={styles.inviteCard} onPress={handleCopyInvite} activeOpacity={0.7}>
-          <View style={styles.inviteCodeContainer}>
-            <Text style={styles.inviteCode}>{ranch.inviteCode}</Text>
-            {ranch.inviteExpiry && new Date(ranch.inviteExpiry) > new Date() ? (
-              <Text style={styles.inviteExpiry}>
-                Expires {new Date(ranch.inviteExpiry).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
-              </Text>
-            ) : (
-              <Text style={[styles.inviteExpiry, { color: Colors.error }]}>Expired — generate a new code</Text>
-            )}
-          </View>
-          <View style={styles.inviteCopyBtn}><Copy size={18} color={Colors.primary} /><Text style={styles.inviteCopyText}>Copy</Text></View>
-        </TouchableOpacity>
-        {hasAccess && canInviteTeammates && (
-          <TouchableOpacity
-            style={styles.generateCodeBtn}
-            onPress={handleGenerateCode}
-            disabled={isGeneratingInviteCode}
-            activeOpacity={0.85}
-          >
-            {isGeneratingInviteCode
-              ? <ActivityIndicator size="small" color={Colors.primary} />
-              : <><RefreshCw size={15} color={Colors.primary} /><Text style={styles.generateCodeText}>Generate New Code (48hr)</Text></>
-            }
+      {canInviteTeammates && (
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Invite Code</Text>
+          <TouchableOpacity style={styles.inviteCard} onPress={handleCopyInvite} activeOpacity={0.7}>
+            <View style={styles.inviteCodeContainer}>
+              <Text style={styles.inviteCode}>{ranch.inviteCode}</Text>
+              {ranch.inviteExpiry && new Date(ranch.inviteExpiry) > new Date() ? (
+                <Text style={styles.inviteExpiry}>
+                  Expires {new Date(ranch.inviteExpiry).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
+                </Text>
+              ) : (
+                <Text style={[styles.inviteExpiry, { color: Colors.error }]}>Expired — generate a new code</Text>
+              )}
+            </View>
+            <View style={styles.inviteCopyBtn}><Copy size={18} color={Colors.primary} /><Text style={styles.inviteCopyText}>Copy</Text></View>
           </TouchableOpacity>
-        )}
-      </View>
+          {hasAccess && (
+            <TouchableOpacity
+              style={styles.generateCodeBtn}
+              onPress={handleGenerateCode}
+              disabled={isGeneratingInviteCode}
+              activeOpacity={0.85}
+            >
+              {isGeneratingInviteCode
+                ? <ActivityIndicator size="small" color={Colors.primary} />
+                : <><RefreshCw size={15} color={Colors.primary} /><Text style={styles.generateCodeText}>Generate New Code (48hr)</Text></>
+              }
+            </TouchableOpacity>
+          )}
+        </View>
+      )}
 
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Team Members</Text>
