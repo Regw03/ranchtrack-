@@ -200,7 +200,7 @@ export default function ProcessingEventDetailScreen() {
  deleteProcessingEvent,
  processingRecords,
  } = useProcessing();
- const { animals } = useRanch();
+ const { animals, customLists, createList, addAnimalToList } = useRanch();
  const styles = useMemo(() => createStyles(Colors), [Colors]);
 
  const event = useMemo(
@@ -232,6 +232,30 @@ export default function ProcessingEventDetailScreen() {
  [event, group, processingRecords],
  );
 
+ const addAnimalToPregCheckList = useCallback(async (animalId: string, result: "bred" | "open") => {
+ try {
+ const listName = result === "bred" ? "Bred" : "Open";
+ let targetList = customLists.find((l) => l.name === listName);
+ if (!targetList) {
+ const { newList } = await createList({
+ name: listName,
+ color: result === "bred" ? "#3D8B5E" : "#C44D3D",
+ icon: result === "bred" ? "🤰" : "🚫",
+ listType: "custom",
+ animalIds: [],
+ });
+ targetList = newList;
+ }
+ if (!targetList.animalIds.includes(animalId)) {
+ await addAnimalToList({ listId: targetList.id, animalId });
+ }
+ } catch (e) {
+ // Background convenience action — failure here shouldn't surface as an
+ // error for the (already-successful) preg check result itself.
+ console.log("[processing-event] auto-list add failed", e);
+ }
+ }, [customLists, createList, addAnimalToList]);
+
  const handleSetResult = useCallback(async (
  animalId: string,
  result: ProcessingResult,
@@ -242,8 +266,13 @@ export default function ProcessingEventDetailScreen() {
  await setProcessingRecord({ eventId: event.id, animalId, result, notes });
  } catch (e) {
  Alert.alert("Error", "Could not complete this action. Please try again.");
+ return;
  }
- }, [event, setProcessingRecord]);
+
+ if (event.type === "preg_check" && (result === "bred" || result === "open")) {
+ void addAnimalToPregCheckList(animalId, result);
+ }
+ }, [event, setProcessingRecord, addAnimalToPregCheckList]);
 
  const handleDelete = useCallback(() => {
  if (!event) return;
